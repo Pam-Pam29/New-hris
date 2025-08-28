@@ -1,0 +1,377 @@
+// Backend Service Layer - Easy switching between Firebase and other backends
+// This service layer abstracts the backend implementation details
+
+import { SERVICE_CONFIG, db } from '../config/firebase';
+
+// Generic interface for any backend service
+export interface IBackendService {
+  // Employee operations
+  getEmployees(): Promise<any[]>;
+  getEmployeeById(id: string): Promise<any | null>;
+  createEmployee(employee: any): Promise<any>;
+  updateEmployee(id: string, employee: any): Promise<any>;
+  deleteEmployee(id: string): Promise<boolean>;
+  searchEmployees(query: string): Promise<any[]>;
+  
+  // Time management operations
+  getAttendanceRecords(): Promise<any[]>;
+  createAttendanceRecord(record: any): Promise<any>;
+  updateAttendanceRecord(id: string, record: any): Promise<any>;
+  deleteAttendanceRecord(id: string): Promise<boolean>;
+  
+  // Payroll operations
+  getPayrollRecords(): Promise<any[]>;
+  createPayrollRecord(record: any): Promise<any>;
+  updatePayrollRecord(id: string, record: any): Promise<any>;
+  deletePayrollRecord(id: string): Promise<boolean>;
+}
+
+// Firebase implementation
+export class FirebaseBackendService implements IBackendService {
+  private db: any;
+
+  constructor(db: any) {
+    this.db = db;
+  }
+
+  // Employee operations
+  async getEmployees(): Promise<any[]> {
+    try {
+      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
+      const employeesRef = collection(this.db, 'employees');
+      const q = query(employeesRef, orderBy('name'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      return [];
+    }
+  }
+
+  async getEmployeeById(id: string): Promise<any | null> {
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const employeeRef = doc(this.db, 'employees', id);
+      const employeeSnap = await getDoc(employeeRef);
+      
+      if (employeeSnap.exists()) {
+        return { id: employeeSnap.id, ...employeeSnap.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching employee:', error);
+      return null;
+    }
+  }
+
+  async createEmployee(employee: any): Promise<any> {
+    try {
+      const { collection, addDoc } = await import('firebase/firestore');
+      const employeesRef = collection(this.db, 'employees');
+      const docRef = await addDoc(employeesRef, employee);
+      
+      return { id: docRef.id, ...employee };
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      throw new Error('Failed to create employee');
+    }
+  }
+
+  async updateEmployee(id: string, employee: any): Promise<any> {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const employeeRef = doc(this.db, 'employees', id);
+      await updateDoc(employeeRef, employee);
+      
+      const updatedEmployee = await this.getEmployeeById(id);
+      if (!updatedEmployee) throw new Error('Employee not found');
+      
+      return updatedEmployee;
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      throw new Error('Failed to update employee');
+    }
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const employeeRef = doc(this.db, 'employees', id);
+      await deleteDoc(employeeRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      return false;
+    }
+  }
+
+  async searchEmployees(query: string): Promise<any[]> {
+    try {
+      const employees = await this.getEmployees();
+      const lowercaseQuery = query.toLowerCase();
+      
+      return employees.filter(employee =>
+        employee.name?.toLowerCase().includes(lowercaseQuery) ||
+        employee.email?.toLowerCase().includes(lowercaseQuery) ||
+        employee.role?.toLowerCase().includes(lowercaseQuery) ||
+        employee.department?.toLowerCase().includes(lowercaseQuery)
+      );
+    } catch (error) {
+      console.error('Error searching employees:', error);
+      return [];
+    }
+  }
+
+  // Time management operations
+  async getAttendanceRecords(): Promise<any[]> {
+    try {
+      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
+      const attendanceRef = collection(this.db, 'attendance');
+      const q = query(attendanceRef, orderBy('date', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error fetching attendance records:', error);
+      return [];
+    }
+  }
+
+  async createAttendanceRecord(record: any): Promise<any> {
+    try {
+      const { collection, addDoc } = await import('firebase/firestore');
+      const attendanceRef = collection(this.db, 'attendance');
+      const docRef = await addDoc(attendanceRef, record);
+      
+      return { id: docRef.id, ...record };
+    } catch (error) {
+      console.error('Error creating attendance record:', error);
+      throw new Error('Failed to create attendance record');
+    }
+  }
+
+  async updateAttendanceRecord(id: string, record: any): Promise<any> {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const attendanceRef = doc(this.db, 'attendance', id);
+      await updateDoc(attendanceRef, record);
+      
+      return { id, ...record };
+    } catch (error) {
+      console.error('Error updating attendance record:', error);
+      throw new Error('Failed to update attendance record');
+    }
+  }
+
+  async deleteAttendanceRecord(id: string): Promise<boolean> {
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const attendanceRef = doc(this.db, 'attendance', id);
+      await deleteDoc(attendanceRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting attendance record:', error);
+      return false;
+    }
+  }
+
+  // Payroll operations
+  async getPayrollRecords(): Promise<any[]> {
+    try {
+      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
+      const payrollRef = collection(this.db, 'payroll');
+      const q = query(payrollRef, orderBy('date', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error fetching payroll records:', error);
+      return [];
+    }
+  }
+
+  async createPayrollRecord(record: any): Promise<any> {
+    try {
+      const { collection, addDoc } = await import('firebase/firestore');
+      const payrollRef = collection(this.db, 'payroll');
+      const docRef = await addDoc(payrollRef, record);
+      
+      return { id: docRef.id, ...record };
+    } catch (error) {
+      console.error('Error creating payroll record:', error);
+      throw new Error('Failed to create payroll record');
+    }
+  }
+
+  async updatePayrollRecord(id: string, record: any): Promise<any> {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const payrollRef = doc(this.db, 'payroll', id);
+      await updateDoc(payrollRef, record);
+      
+      return { id, ...record };
+    } catch (error) {
+      console.error('Error updating payroll record:', error);
+      throw new Error('Failed to update payroll record');
+    }
+  }
+
+  async deletePayrollRecord(id: string): Promise<boolean> {
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const payrollRef = doc(this.db, 'payroll', id);
+      await deleteDoc(payrollRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting payroll record:', error);
+      return false;
+    }
+  }
+}
+
+// Mock implementation for development/testing
+export class MockBackendService implements IBackendService {
+  private employees: any[] = [];
+  private attendanceRecords: any[] = [];
+  private payrollRecords: any[] = [];
+
+  // Employee operations
+  async getEmployees(): Promise<any[]> {
+    return Promise.resolve(this.employees);
+  }
+
+  async getEmployeeById(id: string): Promise<any | null> {
+    const employee = this.employees.find(emp => emp.id === id);
+    return Promise.resolve(employee || null);
+  }
+
+  async createEmployee(employee: any): Promise<any> {
+    const newEmployee = { ...employee, id: Date.now().toString() };
+    this.employees.push(newEmployee);
+    return Promise.resolve(newEmployee);
+  }
+
+  async updateEmployee(id: string, employee: any): Promise<any> {
+    const index = this.employees.findIndex(emp => emp.id === id);
+    if (index === -1) throw new Error('Employee not found');
+    
+    this.employees[index] = { ...this.employees[index], ...employee };
+    return Promise.resolve(this.employees[index]);
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    const index = this.employees.findIndex(emp => emp.id === id);
+    if (index === -1) return false;
+    
+    this.employees.splice(index, 1);
+    return Promise.resolve(true);
+  }
+
+  async searchEmployees(query: string): Promise<any[]> {
+    const lowercaseQuery = query.toLowerCase();
+    const filtered = this.employees.filter(employee =>
+      employee.name?.toLowerCase().includes(lowercaseQuery) ||
+      employee.email?.toLowerCase().includes(lowercaseQuery) ||
+      employee.role?.toLowerCase().includes(lowercaseQuery) ||
+      employee.department?.toLowerCase().includes(lowercaseQuery)
+    );
+    return Promise.resolve(filtered);
+  }
+
+  // Time management operations
+  async getAttendanceRecords(): Promise<any[]> {
+    return Promise.resolve(this.attendanceRecords);
+  }
+
+  async createAttendanceRecord(record: any): Promise<any> {
+    const newRecord = { ...record, id: Date.now().toString() };
+    this.attendanceRecords.push(newRecord);
+    return Promise.resolve(newRecord);
+  }
+
+  async updateAttendanceRecord(id: string, record: any): Promise<any> {
+    const index = this.attendanceRecords.findIndex(rec => rec.id === id);
+    if (index === -1) throw new Error('Attendance record not found');
+    
+    this.attendanceRecords[index] = { ...this.attendanceRecords[index], ...record };
+    return Promise.resolve(this.attendanceRecords[index]);
+  }
+
+  async deleteAttendanceRecord(id: string): Promise<boolean> {
+    const index = this.attendanceRecords.findIndex(rec => rec.id === id);
+    if (index === -1) return false;
+    
+    this.attendanceRecords.splice(index, 1);
+    return Promise.resolve(true);
+  }
+
+  // Payroll operations
+  async getPayrollRecords(): Promise<any[]> {
+    return Promise.resolve(this.payrollRecords);
+  }
+
+  async createPayrollRecord(record: any): Promise<any> {
+    const newRecord = { ...record, id: Date.now().toString() };
+    this.payrollRecords.push(newRecord);
+    return Promise.resolve(newRecord);
+  }
+
+  async updatePayrollRecord(id: string, record: any): Promise<any> {
+    const index = this.payrollRecords.findIndex(rec => rec.id === id);
+    if (index === -1) throw new Error('Payroll record not found');
+    
+    this.payrollRecords[index] = { ...this.payrollRecords[index], ...record };
+    return Promise.resolve(this.payrollRecords[index]);
+  }
+
+  async deletePayrollRecord(id: string): Promise<boolean> {
+    const index = this.payrollRecords.findIndex(rec => rec.id === id);
+    if (index === -1) return false;
+    
+    this.payrollRecords.splice(index, 1);
+    return Promise.resolve(true);
+  }
+}
+
+// Service factory - easily switch between implementations
+export class BackendServiceFactory {
+  static createService(type: 'firebase' | 'mock', db?: any): IBackendService {
+    switch (type) {
+      case 'firebase':
+        if (!db) throw new Error('Firebase DB instance required');
+        return new FirebaseBackendService(db);
+      case 'mock':
+        return new MockBackendService();
+      default:
+        return new MockBackendService();
+    }
+  }
+}
+
+// Default export - automatically chooses the best service based on configuration
+export const backendService = (() => {
+  const config = SERVICE_CONFIG;
+  
+  if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+    console.log('Using Firebase Backend Service');
+    return BackendServiceFactory.createService('firebase', config.firebase.db);
+  } else {
+    console.log('Using Mock Backend Service');
+    return BackendServiceFactory.createService('mock');
+  }
+})();
+
+// Easy switching function
+export const switchBackend = (type: 'firebase' | 'mock', db?: any): IBackendService => {
+  return BackendServiceFactory.createService(type, db);
+};
