@@ -1,41 +1,63 @@
 // Backend Service Layer - Easy switching between Firebase and other backends
 // This service layer abstracts the backend implementation details
 
-import { getServiceConfig, initializeFirebase } from '../config/firebase';
+import { getServiceConfig } from '../config/firebase';
+import { Firestore } from 'firebase/firestore';
+
+interface Employee {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  department?: string;
+  // Add other employee properties here
+}
+
+interface AttendanceRecord {
+  id: string;
+  date?: string;
+  // Add other attendance record properties here
+}
+
+interface PayrollRecord {
+  id: string;
+  date?: string;
+  // Add other payroll record properties here
+}
 
 // Generic interface for any backend service
 export interface IBackendService {
   // Employee operations
-  getEmployees(): Promise<any[]>;
-  getEmployeeById(id: string): Promise<any | null>;
-  createEmployee(employee: any): Promise<any>;
-  updateEmployee(id: string, employee: any): Promise<any>;
+  getEmployees(): Promise<Employee[]>;
+  getEmployeeById(id: string): Promise<Employee | null>;
+  createEmployee(employee: Employee): Promise<Employee>;
+  updateEmployee(id: string, employee: Employee): Promise<Employee>;
   deleteEmployee(id: string): Promise<boolean>;
-  searchEmployees(query: string): Promise<any[]>;
+  searchEmployees(query: string): Promise<Employee[]>;
 
   // Time management operations
-  getAttendanceRecords(): Promise<any[]>;
-  createAttendanceRecord(record: any): Promise<any>;
-  updateAttendanceRecord(id: string, record: any): Promise<any>;
+  getAttendanceRecords(): Promise<AttendanceRecord[]>;
+  createAttendanceRecord(record: AttendanceRecord): Promise<AttendanceRecord>;
+  updateAttendanceRecord(id: string, record: AttendanceRecord): Promise<AttendanceRecord>;
   deleteAttendanceRecord(id: string): Promise<boolean>;
 
   // Payroll operations
-  getPayrollRecords(): Promise<any[]>;
-  createPayrollRecord(record: any): Promise<any>;
-  updatePayrollRecord(id: string, record: any): Promise<any>;
+  getPayrollRecords(): Promise<PayrollRecord[]>;
+  createPayrollRecord(record: PayrollRecord): Promise<PayrollRecord>;
+  updatePayrollRecord(id: string, record: PayrollRecord): Promise<PayrollRecord>;
   deletePayrollRecord(id: string): Promise<boolean>;
 }
 
 // Firebase implementation
 export class FirebaseBackendService implements IBackendService {
-  private db: any;
+  private db: Firestore;
 
-  constructor(db: any) {
+  constructor(db: Firestore) {
     this.db = db;
   }
 
   // Employee operations
-  async getEmployees(): Promise<any[]> {
+  async getEmployees(): Promise<Employee[]> {
     try {
       const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
@@ -52,7 +74,7 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async getEmployeeById(id: string): Promise<any | null> {
+  async getEmployeeById(id: string): Promise<Employee | null> {
     try {
       const { doc, getDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
@@ -68,7 +90,7 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async createEmployee(employee: any): Promise<any> {
+  async createEmployee(employee: Employee): Promise<Employee> {
     try {
       const { collection, addDoc } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
@@ -81,11 +103,11 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async updateEmployee(id: string, employee: any): Promise<any> {
+  async updateEmployee(id: string, employee: Employee): Promise<Employee> {
     try {
       const { doc, updateDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
-      await updateDoc(employeeRef, employee);
+      await updateDoc(employeeRef, employee as any);
 
       const updatedEmployee = await this.getEmployeeById(id);
       if (!updatedEmployee) throw new Error('Employee not found');
@@ -109,7 +131,7 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async searchEmployees(query: string): Promise<any[]> {
+  async searchEmployees(query: string): Promise<Employee[]> {
     try {
       const employees = await this.getEmployees();
       const lowercaseQuery = query.toLowerCase();
@@ -127,7 +149,7 @@ export class FirebaseBackendService implements IBackendService {
   }
 
   // Time management operations
-  async getAttendanceRecords(): Promise<any[]> {
+  async getAttendanceRecords(): Promise<AttendanceRecord[]> {
     try {
       const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
       const attendanceRef = collection(this.db, 'attendance');
@@ -144,7 +166,7 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async createAttendanceRecord(record: any): Promise<any> {
+  async createAttendanceRecord(record: AttendanceRecord): Promise<AttendanceRecord> {
     try {
       const { collection, addDoc } = await import('firebase/firestore');
       const attendanceRef = collection(this.db, 'attendance');
@@ -157,11 +179,11 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async updateAttendanceRecord(id: string, record: any): Promise<any> {
+  async updateAttendanceRecord(id: string, record: AttendanceRecord): Promise<AttendanceRecord> {
     try {
       const { doc, updateDoc } = await import('firebase/firestore');
       const attendanceRef = doc(this.db, 'attendance', id);
-      await updateDoc(attendanceRef, record);
+      await updateDoc(attendanceRef, record as any);
 
       return { id, ...record };
     } catch (error) {
@@ -183,7 +205,7 @@ export class FirebaseBackendService implements IBackendService {
   }
 
   // Payroll operations
-  async getPayrollRecords(): Promise<any[]> {
+  async getPayrollRecords(): Promise<PayrollRecord[]> {
     try {
       const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
       const payrollRef = collection(this.db, 'payroll');
@@ -200,7 +222,7 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async createPayrollRecord(record: any): Promise<any> {
+  async createPayrollRecord(record: PayrollRecord): Promise<PayrollRecord> {
     try {
       const { collection, addDoc } = await import('firebase/firestore');
       const payrollRef = collection(this.db, 'payroll');
@@ -213,11 +235,11 @@ export class FirebaseBackendService implements IBackendService {
     }
   }
 
-  async updatePayrollRecord(id: string, record: any): Promise<any> {
+  async updatePayrollRecord(id: string, record: PayrollRecord): Promise<PayrollRecord> {
     try {
       const { doc, updateDoc } = await import('firebase/firestore');
       const payrollRef = doc(this.db, 'payroll', id);
-      await updateDoc(payrollRef, record);
+      await updateDoc(payrollRef, record as any);
 
       return { id, ...record };
     } catch (error) {
@@ -241,27 +263,27 @@ export class FirebaseBackendService implements IBackendService {
 
 // Mock implementation for development/testing
 export class MockBackendService implements IBackendService {
-  private employees: any[] = [];
-  private attendanceRecords: any[] = [];
-  private payrollRecords: any[] = [];
+  private employees: Employee[] = [];
+  private attendanceRecords: AttendanceRecord[] = [];
+  private payrollRecords: PayrollRecord[] = [];
 
   // Employee operations
-  async getEmployees(): Promise<any[]> {
+  async getEmployees(): Promise<Employee[]> {
     return Promise.resolve(this.employees);
   }
 
-  async getEmployeeById(id: string): Promise<any | null> {
+  async getEmployeeById(id: string): Promise<Employee | null> {
     const employee = this.employees.find(emp => emp.id === id);
     return Promise.resolve(employee || null);
   }
 
-  async createEmployee(employee: any): Promise<any> {
+  async createEmployee(employee: Employee): Promise<Employee> {
     const newEmployee = { ...employee, id: Date.now().toString() };
     this.employees.push(newEmployee);
     return Promise.resolve(newEmployee);
   }
 
-  async updateEmployee(id: string, employee: any): Promise<any> {
+  async updateEmployee(id: string, employee: Employee): Promise<Employee> {
     const index = this.employees.findIndex(emp => emp.id === id);
     if (index === -1) throw new Error('Employee not found');
 
@@ -277,7 +299,7 @@ export class MockBackendService implements IBackendService {
     return Promise.resolve(true);
   }
 
-  async searchEmployees(query: string): Promise<any[]> {
+  async searchEmployees(query: string): Promise<Employee[]> {
     const lowercaseQuery = query.toLowerCase();
     const filtered = this.employees.filter(employee =>
       employee.name?.toLowerCase().includes(lowercaseQuery) ||
@@ -289,17 +311,17 @@ export class MockBackendService implements IBackendService {
   }
 
   // Time management operations
-  async getAttendanceRecords(): Promise<any[]> {
+  async getAttendanceRecords(): Promise<AttendanceRecord[]> {
     return Promise.resolve(this.attendanceRecords);
   }
 
-  async createAttendanceRecord(record: any): Promise<any> {
+  async createAttendanceRecord(record: AttendanceRecord): Promise<AttendanceRecord> {
     const newRecord = { ...record, id: Date.now().toString() };
     this.attendanceRecords.push(newRecord);
     return Promise.resolve(newRecord);
   }
 
-  async updateAttendanceRecord(id: string, record: any): Promise<any> {
+  async updateAttendanceRecord(id: string, record: AttendanceRecord): Promise<AttendanceRecord> {
     const index = this.attendanceRecords.findIndex(rec => rec.id === id);
     if (index === -1) throw new Error('Attendance record not found');
 
@@ -316,17 +338,17 @@ export class MockBackendService implements IBackendService {
   }
 
   // Payroll operations
-  async getPayrollRecords(): Promise<any[]> {
+  async getPayrollRecords(): Promise<PayrollRecord[]> {
     return Promise.resolve(this.payrollRecords);
   }
 
-  async createPayrollRecord(record: any): Promise<any> {
+  async createPayrollRecord(record: PayrollRecord): Promise<PayrollRecord> {
     const newRecord = { ...record, id: Date.now().toString() };
     this.payrollRecords.push(newRecord);
     return Promise.resolve(newRecord);
   }
 
-  async updatePayrollRecord(id: string, record: any): Promise<any> {
+  async updatePayrollRecord(id: string, record: PayrollRecord): Promise<PayrollRecord> {
     const index = this.payrollRecords.findIndex(rec => rec.id === id);
     if (index === -1) throw new Error('Payroll record not found');
 
@@ -345,7 +367,7 @@ export class MockBackendService implements IBackendService {
 
 // Service factory - easily switch between implementations
 export class BackendServiceFactory {
-  static createService(type: 'firebase' | 'mock', db?: any): IBackendService {
+  static createService(type: 'firebase' | 'mock', db?: Firestore): IBackendService {
     switch (type) {
       case 'firebase':
         if (!db) throw new Error('Firebase DB instance required');
@@ -382,6 +404,6 @@ let backendService: IBackendService = new MockBackendService();
 export { backendService };
 
 // Easy switching function
-export const switchBackend = (type: 'firebase' | 'mock', db?: any): IBackendService => {
+export const switchBackend = (type: 'firebase' | 'mock', db?: Firestore): IBackendService => {
   return BackendServiceFactory.createService(type, db);
 };

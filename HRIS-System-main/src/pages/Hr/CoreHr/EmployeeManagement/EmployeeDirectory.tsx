@@ -27,7 +27,7 @@ interface Employee {
 }
 
 // Import the async employee service function
-import { getEmployeeService } from '../../../../services/employeeService';
+import { getEmployeeService, IEmployeeService } from '../../../../services/employeeService';
 
 export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -35,7 +35,7 @@ export default function EmployeeDirectory() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [employeeService, setEmployeeService] = useState<any>(null);
+  const [employeeService, setEmployeeService] = useState<IEmployeeService | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({

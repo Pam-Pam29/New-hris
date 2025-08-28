@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { TypographyH2 } from '@/components/ui/typography';
-import { AtomicTanstackTable } from '@/components/TanstackTable/TanstackTable';
+import React, { useState, useEffect, useMemo, FormEvent } from 'react';
+import { Button } from '../../../../components/ui/button';
+import { TypographyH2 } from '../../../../components/ui/typography';
+import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
 import { ColumnDef } from "@tanstack/react-table";
-import { StatCard } from '@/components/molecules/StatCard';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StatCard } from '../../../../components/molecules/StatCard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 import { PlusCircle, Package, Users, AlertTriangle, CheckCircle, UserPlus, ArrowRightLeft } from 'lucide-react';
 import { AssetForm } from './component/AssetForm';
 import { AssetAssignmentDialog } from './component/AssetAssignmentDialog';
 import { AssetDetailsDrawer } from './component/AssetDetailsDrawer';
+import { employeeService } from '../../../../services/employeeService';
+import { Employee } from '../EmployeeManagement/types';
 
 // Asset type definition
 interface Asset {
@@ -26,62 +28,41 @@ interface Asset {
   nextMaintenance?: string;
 }
 
-// Mock data
-const mockAssets: Asset[] = [
-  {
-    id: 1,
-    name: 'MacBook Pro 16"',
-    category: 'IT Equipment',
-    serialNumber: 'MBP001',
-    status: 'Assigned',
-    assignedTo: 'Jane Doe',
-    purchaseDate: '2023-01-15',
-    purchasePrice: 2500,
-    location: 'Lagos Office',
-    condition: 'Excellent',
-    lastMaintenance: '2023-06-15',
-    nextMaintenance: '2024-06-15'
-  },
-  {
-    id: 2,
-    name: 'Dell Monitor 27"',
-    category: 'IT Equipment',
-    serialNumber: 'MON001',
-    status: 'Available',
-    purchaseDate: '2023-02-10',
-    purchasePrice: 400,
-    location: 'Lagos Office',
-    condition: 'Good'
-  },
-  {
-    id: 3,
-    name: 'Office Chair - Ergonomic',
-    category: 'Furniture',
-    serialNumber: 'CHR001',
-    status: 'Assigned',
-    assignedTo: 'John Smith',
-    purchaseDate: '2022-11-20',
-    purchasePrice: 350,
-    location: 'Abuja Office',
-    condition: 'Good'
-  },
-  {
-    id: 4,
-    name: 'iPhone 14 Pro',
-    category: 'Mobile Device',
-    serialNumber: 'IPH001',
-    status: 'Under Repair',
-    assignedTo: 'Sarah Lee',
-    purchaseDate: '2023-03-05',
-    purchasePrice: 1200,
-    location: 'Lagos Office',
-    condition: 'Fair',
-    lastMaintenance: '2023-12-01'
-  }
-];
+interface StatCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  description: string;
+}
+
+interface AssetFormProps {
+  form: {
+    name: string;
+    serialNumber: string;
+    category: string;
+    status: string;
+    assignedTo: string;
+    purchaseDate: string;
+    purchasePrice: number;
+    location: string;
+    condition: string;
+    nextMaintenance: string;
+  };
+  setForm: (form: any) => void;
+  handleSubmit: (e: FormEvent) => void;
+  sending: boolean;
+  employees: { value: string; label: string }[];
+}
+
+interface AssetDetailsDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  asset: Asset | null;
+  onAssignClick: (asset: Asset) => void;
+}
 
 export default function AssetManagement() {
-  const [assets, setAssets] = useState<Asset[]>(mockAssets);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -103,14 +84,22 @@ export default function AssetManagement() {
     condition: 'Excellent',
     nextMaintenance: ''
   });
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const employeeData = await employeeService.getEmployees();
+        setEmployees(employeeData);
+      } catch (error) {
+        console.error('Error fetching employees:', error);
+      }
+    };
+    loadEmployees();
+  }, []);
 
   // Mock employee data for assignment dropdown
-  const mockEmployees = [
-    { value: 'Jane Doe', label: 'Jane Doe' },
-    { value: 'John Smith', label: 'John Smith' },
-    { value: 'Sarah Lee', label: 'Sarah Lee' },
-    { value: 'Michael Brown', label: 'Michael Brown' }
-  ];
+  const mockEmployees = employees.map(employee => ({ value: employee.name, label: employee.name }));
 
   // Handle form submission
   function handleSubmit(e: React.FormEvent) {
@@ -135,7 +124,7 @@ export default function AssetManagement() {
       setAssets(prev => [...prev, newAsset]);
       setSending(false);
       setDialogOpen(false);
-      
+
       // Reset form
       setForm({
         name: '',
@@ -154,24 +143,24 @@ export default function AssetManagement() {
 
   // Asset assignment handlers
   function handleAssignAsset(assetId: number, employeeName: string) {
-    setAssets(prev => prev.map(asset => 
-      asset.id === assetId 
+    setAssets(prev => prev.map(asset =>
+      asset.id === assetId
         ? { ...asset, status: 'Assigned' as const, assignedTo: employeeName }
         : asset
     ));
   }
 
   function handleUnassignAsset(assetId: number) {
-    setAssets(prev => prev.map(asset => 
-      asset.id === assetId 
+    setAssets(prev => prev.map(asset =>
+      asset.id === assetId
         ? { ...asset, status: 'Available' as const, assignedTo: undefined }
         : asset
     ));
   }
 
   function handleTransferAsset(assetId: number, newEmployeeName: string) {
-    setAssets(prev => prev.map(asset => 
-      asset.id === assetId 
+    setAssets(prev => prev.map(asset =>
+      asset.id === assetId
         ? { ...asset, assignedTo: newEmployeeName }
         : asset
     ));
@@ -266,19 +255,19 @@ export default function AssetManagement() {
           const asset = row.original;
           const isAvailable = asset.status === 'Available';
           const isAssigned = asset.status === 'Assigned';
-          
+
           return (
             <div className="flex gap-2">
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 variant="outline"
                 onClick={() => openDetailsDrawer(asset)}
               >
                 View Details
               </Button>
               {(isAvailable || isAssigned) && (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="outline"
                   onClick={() => openAssignmentDialog(asset)}
                   className="text-violet-600 border-violet-200 hover:bg-violet-50"
@@ -352,9 +341,10 @@ export default function AssetManagement() {
           globalFilterPlaceholder="Search assets..."
           pageSizeOptions={[10, 20, 50]}
           initialPageSize={10}
-          tableClassName="min-w-full divide-y divide-border"
+          className="min-w-full divide-y divide-border"
           rowClassName={(row: { index: number }) =>
-            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`}
+            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`
+          }
           headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
           filterDropdowns={
             <>

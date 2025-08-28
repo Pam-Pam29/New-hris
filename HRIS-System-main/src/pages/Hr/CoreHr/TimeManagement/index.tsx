@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { backendService } from '../../../../services/backendService';
+import { useState, useEffect } from 'react';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
@@ -11,16 +10,19 @@ import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
 import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
 
-const mockAttendance = [
-  { id: 1, employee: 'Jane Doe', date: '2025-08-28', clockIn: '09:00', clockOut: '17:00', status: 'Present' },
-  { id: 2, employee: 'John Smith', date: '2025-08-28', clockIn: '09:10', clockOut: '17:05', status: 'Late' },
-  { id: 3, employee: 'Mary Johnson', date: '2025-08-28', clockIn: '', clockOut: '', status: 'Absent' },
-  { id: 4, employee: 'David Wilson', date: '2025-08-28', clockIn: '08:55', clockOut: '17:00', status: 'Present' },
-  { id: 5, employee: 'Sarah Brown', date: '2025-08-28', clockIn: '09:15', clockOut: '17:10', status: 'Late' },
-  { id: 6, employee: 'Jane Doe', date: '2025-08-27', clockIn: '09:01', clockOut: '17:00', status: 'Present' },
-  { id: 7, employee: 'John Smith', date: '2025-08-27', clockIn: '', clockOut: '', status: 'Absent' },
-  { id: 8, employee: 'Mary Johnson', date: '2025-08-27', clockIn: '09:05', clockOut: '17:15', status: 'Present' },
-];
+import { db, initializeFirebase } from '../../../../config/firebase';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+
+interface AttendanceRecord {
+  id: string;
+  employee: string;
+  date: string;
+  clockIn: string;
+  clockOut: string;
+  status: string;
+  notes: string;
+  reason: string;
+}
 
 const employees = [
   'Jane Doe', 'John Smith', 'Mary Johnson', 'David Wilson', 'Sarah Brown'
@@ -33,21 +35,10 @@ const statusConfig = {
   Absent: { color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
 
-interface AttendanceRecord {
-  id: number;
-  employee: string;
-  date: string;
-  clockIn: string;
-  clockOut: string;
-  status: string;
-}
-
 export default function TimeManagement() {
   // State for attendance records from backend
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(mockAttendance);
-  const [loading, setLoading] = useState(false);
-
-  // Filter state
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [filteredAttendanceRecords, setFilteredAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
@@ -59,35 +50,109 @@ export default function TimeManagement() {
     clockIn: '',
     clockOut: '',
     notes: '',
-    reason: ''
+    reason: 'forgot_clock_in'
   });
 
   // Load attendance records from backend
   useEffect(() => {
-    loadAttendanceRecords();
+    const initializeAndLoad = async () => {
+      await initializeFirebase();
+      loadAttendanceRecords();
+    };
+    initializeAndLoad();
   }, []);
 
   const loadAttendanceRecords = async () => {
     try {
-      setLoading(true);
-      const records = await backendService.getAttendanceRecords();
-      // Use mock data if backend returns empty array
-      setAttendanceRecords(records.length > 0 ? records : mockAttendance);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const attendanceCollection = collection(db as any, 'attendance_records');
+      const attendanceSnapshot = await getDocs(attendanceCollection);
+      const attendanceList = attendanceSnapshot.docs.map(doc => ({
+        id: doc.id,
+        employee: doc.data().employee,
+        date: doc.data().date,
+        clockIn: doc.data().clockIn,
+        clockOut: doc.data().clockOut,
+        status: doc.data().status,
+        notes: doc.data().notes,
+        reason: doc.data().reason,
+      } as AttendanceRecord));
+
+      // Add test data if no records found (for development)
+      const finalAttendanceList = attendanceList.length === 0 ? [
+        {
+          id: 'test-1',
+          employee: 'Jane Doe',
+          date: '2024-08-29',
+          clockIn: '09:00',
+          clockOut: '17:30',
+          status: 'Present',
+          notes: '',
+          reason: ''
+        },
+        {
+          id: 'test-2',
+          employee: 'John Smith',
+          date: '2024-08-29',
+          clockIn: '09:15',
+          clockOut: '17:00',
+          status: 'Late',
+          notes: 'Traffic delay',
+          reason: 'traffic'
+        },
+        {
+          id: 'test-3',
+          employee: 'Mary Johnson',
+          date: '2024-08-29',
+          clockIn: '',
+          clockOut: '',
+          status: 'Absent',
+          notes: 'Sick leave',
+          reason: 'sick'
+        }
+      ] : attendanceList;
+
+      setAttendanceRecords(finalAttendanceList);
+      setFilteredAttendanceRecords(finalAttendanceList);
+      console.log('Attendance Records:', finalAttendanceList);
     } catch (error) {
       console.error('Error loading attendance records:', error);
-      // Fallback to mock data on error
-      setAttendanceRecords(mockAttendance);
-    } finally {
-      setLoading(false);
+
+      // Fallback test data if Firebase fails
+      const testData = [
+        {
+          id: 'test-1',
+          employee: 'Jane Doe',
+          date: '2024-08-29',
+          clockIn: '09:00',
+          clockOut: '17:30',
+          status: 'Present',
+          notes: '',
+          reason: ''
+        },
+        {
+          id: 'test-2',
+          employee: 'John Smith',
+          date: '2024-08-29',
+          clockIn: '09:15',
+          clockOut: '17:00',
+          status: 'Late',
+          notes: 'Traffic delay',
+          reason: 'traffic'
+        }
+      ];
+      setAttendanceRecords(testData);
+      setFilteredAttendanceRecords(testData);
     }
   };
 
-  // Filter logic
-  const filtered = attendanceRecords.filter(row =>
-    (!selectedEmployee || row.employee === selectedEmployee) &&
-    (!selectedStatus || row.status === selectedStatus) &&
-    (!selectedDate || row.date === selectedDate)
-  );
+  // Filter logic - This is now handled in the button click
+  //const filtered = filteredAttendanceRecords;
+  //attendanceRecords.filter(row =>
+  //  (!selectedEmployee || row.employee === selectedEmployee) &&
+  //  (!selectedStatus || row.status === selectedStatus) &&
+  //  (!selectedDate || row.date === selectedDate)
+  //);
 
   // Summary stats
   const summary = statuses.map(status => ({
@@ -100,8 +165,8 @@ export default function TimeManagement() {
     setAdjustForm({
       clockIn: attendance.clockIn || '',
       clockOut: attendance.clockOut || '',
-      notes: '',
-      reason: ''
+      notes: attendance.notes || '',
+      reason: attendance.reason || ''
     });
     setShowAdjustDialog(true);
   };
@@ -109,16 +174,13 @@ export default function TimeManagement() {
   const handleAdjustSubmit = async () => {
     try {
       if (selectedAttendance) {
-        const updatedAttendance = {
-          ...selectedAttendance,
+        const attendanceDocRef = doc(db, 'attendance_records', selectedAttendance.id);
+        await updateDoc(attendanceDocRef, {
           clockIn: adjustForm.clockIn,
           clockOut: adjustForm.clockOut,
           notes: adjustForm.notes,
           reason: adjustForm.reason
-        };
-
-        // Update in backend
-        await backendService.updateAttendanceRecord(selectedAttendance.id, updatedAttendance);
+        });
 
         // Refresh the records
         await loadAttendanceRecords();
@@ -161,13 +223,13 @@ export default function TimeManagement() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Employee</label>
-              <Select value={selectedEmployee || ''} onValueChange={setSelectedEmployee}>
+              <Select value={selectedEmployee || 'all_employees'} onValueChange={(value) => setSelectedEmployee(value === 'all_employees' ? null : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Employees" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Employees</SelectItem>
-                  {employees.map(employee => (
+                  <SelectItem value="all_employees">All Employees</SelectItem>
+                  {employees.filter(employee => employee !== '').map(employee => (
                     <SelectItem key={employee} value={employee}>{employee}</SelectItem>
                   ))}
                 </SelectContent>
@@ -175,12 +237,12 @@ export default function TimeManagement() {
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Status</label>
-              <Select value={selectedStatus || ''} onValueChange={setSelectedStatus}>
+              <Select value={selectedStatus || 'all_statuses'} onValueChange={(value) => setSelectedStatus(value === 'all_statuses' ? null : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all_statuses">All Statuses</SelectItem>
                   {statuses.map(status => (
                     <SelectItem key={status} value={status}>{status}</SelectItem>
                   ))}
@@ -197,7 +259,15 @@ export default function TimeManagement() {
               />
             </div>
             <div className="flex items-end">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={() => {
+                // Trigger the filter logic
+                const filteredRecords = attendanceRecords.filter(row =>
+                  (!selectedEmployee || row.employee === selectedEmployee) &&
+                  (!selectedStatus || row.status === selectedStatus) &&
+                  (!selectedDate || row.date === selectedDate)
+                );
+                setFilteredAttendanceRecords(filteredRecords);
+              }}>
                 <Filter className="h-4 w-4 mr-2" />
                 Apply Filters
               </Button>
@@ -250,7 +320,7 @@ export default function TimeManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {filtered.map((row) => {
+                {filteredAttendanceRecords.map((row) => {
                   const config = statusConfig[row.status as keyof typeof statusConfig];
                   return (
                     <tr key={row.id} className="hover:bg-muted/50 transition-colors">
@@ -309,54 +379,93 @@ export default function TimeManagement() {
 
       {/* Enhanced Adjust Time Dialog */}
       <Dialog open={showAdjustDialog} onOpenChange={setShowAdjustDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
+                <Edit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
               Adjust Attendance Time
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+
+          <div className="space-y-6 py-4">
             {/* Employee and Date Info */}
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="text-sm font-medium text-muted-foreground mb-1">Employee</div>
-              <div className="font-semibold">{selectedAttendance?.employee}</div>
-              <div className="text-sm font-medium text-muted-foreground mb-1 mt-2">Date</div>
-              <div className="font-semibold">{selectedAttendance?.date}</div>
+            <div className="p-4 bg-gradient-to-r from-muted/50 to-muted/30 rounded-lg border">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Employee</div>
+                  <div className="font-semibold text-lg">{selectedAttendance?.employee}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Date</div>
+                  <div className="font-semibold text-lg">{selectedAttendance?.date}</div>
+                </div>
+              </div>
             </div>
 
-            {/* Clock In Time */}
-            <div className="space-y-2">
-              <Label htmlFor="clockIn">Clock In Time</Label>
-              <Input
-                id="clockIn"
-                type="time"
-                value={adjustForm.clockIn}
-                onChange={(e) => setAdjustForm(prev => ({ ...prev, clockIn: e.target.value }))}
-                placeholder="09:00"
-              />
+            {/* Current Times Display */}
+            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="text-center">
+                <div className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">Current Clock In</div>
+                <div className="font-mono text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  {selectedAttendance?.clockIn || 'Not set'}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">Current Clock Out</div>
+                <div className="font-mono text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  {selectedAttendance?.clockOut || 'Not set'}
+                </div>
+              </div>
             </div>
 
-            {/* Clock Out Time */}
-            <div className="space-y-2">
-              <Label htmlFor="clockOut">Clock Out Time</Label>
-              <Input
-                id="clockOut"
-                type="time"
-                value={adjustForm.clockOut}
-                onChange={(e) => setAdjustForm(prev => ({ ...prev, clockOut: e.target.value }))}
-                placeholder="17:00"
-              />
+            {/* Time Adjustment Inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Clock In Time */}
+              <div className="space-y-2">
+                <Label htmlFor="clockIn" className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  New Clock In Time
+                </Label>
+                <Input
+                  id="clockIn"
+                  type="time"
+                  value={adjustForm.clockIn}
+                  onChange={(e) => setAdjustForm(prev => ({ ...prev, clockIn: e.target.value }))}
+                  className="font-mono text-lg"
+                  placeholder="09:00"
+                />
+              </div>
+
+              {/* Clock Out Time */}
+              <div className="space-y-2">
+                <Label htmlFor="clockOut" className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  New Clock Out Time
+                </Label>
+                <Input
+                  id="clockOut"
+                  type="time"
+                  value={adjustForm.clockOut}
+                  onChange={(e) => setAdjustForm(prev => ({ ...prev, clockOut: e.target.value }))}
+                  className="font-mono text-lg"
+                  placeholder="17:00"
+                />
+              </div>
             </div>
 
             {/* Reason for Adjustment */}
             <div className="space-y-2">
-              <Label htmlFor="reason">Reason for Adjustment</Label>
+              <Label htmlFor="reason" className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Reason for Adjustment
+              </Label>
               <Select
                 value={adjustForm.reason}
                 onValueChange={(value) => setAdjustForm(prev => ({ ...prev, reason: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a reason" />
                 </SelectTrigger>
                 <SelectContent>
@@ -371,19 +480,20 @@ export default function TimeManagement() {
 
             {/* Additional Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Additional Notes (Optional)</Label>
+              <Label htmlFor="notes" className="text-sm font-medium">Additional Notes (Optional)</Label>
               <Textarea
                 id="notes"
                 value={adjustForm.notes}
                 onChange={(e) => setAdjustForm(prev => ({ ...prev, notes: e.target.value }))}
                 placeholder="Provide additional details about the adjustment..."
                 rows={3}
+                className="resize-none"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleAdjustSubmit} className="flex-1">
+            <div className="flex gap-3 pt-6 border-t">
+              <Button onClick={handleAdjustSubmit} className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700">
                 <Save className="h-4 w-4 mr-2" />
                 Save Changes
               </Button>

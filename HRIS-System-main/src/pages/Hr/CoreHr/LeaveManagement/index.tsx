@@ -1,13 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { LeaveDetailsDrawer } from './components/LeaveDetailsDrawer';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Button } from '../../../../components/ui/button';
+import { LeaveDetailsDrawer, LeaveDetailsDrawerProps } from './components/LeaveDetailsDrawer';
 import { LeaveTypeManagement } from './components/LeaveTypeManagement';
-import { LeaveRequestForm } from './components/LeaveRequestForm';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { mockLeaveTypes } from './components/LeaveTypeManagement';
-import { mockLeaveEntitlements, getLeaveBalance } from './leaveBalanceUtils';
-import { AtomicTanstackTable } from '@/components/TanstackTable/TanstackTable';
+import { Dialog, DialogContent } from '../../../../components/ui/dialog';
+import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
 import { ColumnDef } from '@tanstack/react-table';
+import { employeeService } from '../../../../services/employeeService';
+import { Employee } from '../EmployeeManagement/types';
 
 interface LeaveRequest {
   id: number;
@@ -23,39 +22,32 @@ interface LeaveRequest {
   approvedDate?: string;
 }
 
-const mockLeaveRequests: LeaveRequest[] = [
-  {
-    id: 1,
-    employeeName: 'Jane Doe',
-    employeeId: 101,
-    type: 'Annual',
-    startDate: '2025-08-01',
-    endDate: '2025-08-10',
-    status: 'Pending',
-    reason: 'Family vacation',
-    submittedDate: '2025-07-10',
-  },
-  {
-    id: 2,
-    employeeName: 'John Smith',
-    employeeId: 102,
-    type: 'Sick',
-    startDate: '2025-07-20',
-    endDate: '2025-07-22',
-    status: 'Approved',
-    reason: 'Flu',
-    submittedDate: '2025-07-18',
-    approver: 'HR Manager',
-    approvedDate: '2025-07-19',
-  },
-];
+const mockLeaveEntitlements: any[] = [];
+
+interface LeaveManagementProps {
+  entitlements: any[];
+}
 
 export default function LeaveManagement() {
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [requests, setRequests] = useState<LeaveRequest[]>(mockLeaveRequests);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      setLoading(true);
+      try {
+        await employeeService.getEmployees();
+      } catch (error) {
+        console.error('Error fetching employees:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadEmployees();
+  }, []);
 
   // Columns for Tanstack Table
   const columns = useMemo<ColumnDef<LeaveRequest>[]>(() => [
@@ -125,114 +117,6 @@ export default function LeaveManagement() {
   }, [requests, statusFilter]);
 
   const [leaveTypeDialogOpen, setLeaveTypeDialogOpen] = useState(false);
-  const [leaveRequestDialogOpen, setLeaveRequestDialogOpen] = useState(false);
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-
-  function handleCreateLeaveRequest(data: any) {
-    setSubmittingRequest(true);
-    setTimeout(() => {
-      setRequests(prev => [
-        ...prev,
-        {
-          id: prev.length ? Math.max(...prev.map(r => r.id)) + 1 : 1,
-          employeeName: data.employeeName,
-          employeeId: prev.length ? prev[prev.length - 1].employeeId + 1 : 100,
-          type: data.type,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          status: 'Pending',
-          reason: data.reason,
-          submittedDate: new Date().toISOString().split('T')[0],
-        }
-      ]);
-      setSubmittingRequest(false);
-      setLeaveRequestDialogOpen(false);
-    }, 800);
-  }
-
-  // Build summary data for leave balances
-  const employeeMap = Object.fromEntries(requests.map(r => [r.employeeId, r.employeeName]));
-  const summaryRows = mockLeaveEntitlements.map(ent => {
-    const taken = requests
-      .filter(r => r.employeeId === ent.employeeId && r.type === ent.type && r.status === 'Approved')
-      .reduce((sum, r) => {
-        const start = new Date(r.startDate);
-        const end = new Date(r.endDate);
-        const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return sum + (diff > 0 ? diff : 1);
-      }, 0);
-    const balance = getLeaveBalance(mockLeaveEntitlements, requests, ent.employeeId, ent.type);
-    return {
-      employeeId: ent.employeeId,
-      employeeName: employeeMap[ent.employeeId] || `ID ${ent.employeeId}`,
-      type: ent.type,
-      entitled: ent.entitled,
-      taken,
-      balance: balance ?? '-'
-    };
-  });
-
-  return (
-    <div className="p-8 min-h-screen bg-background text-foreground">
-
-      <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
-      <div className="flex justify-between mb-4">
-
-        <Button className="bg-violet-600 text-white" onClick={() => setLeaveTypeDialogOpen(true)}>
-          Manage Leave Types
-        </Button>
-      </div>
-
-      <Dialog open={leaveTypeDialogOpen} onOpenChange={setLeaveTypeDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <LeaveTypeManagement />
-        </DialogContent>
-      </Dialog>
-      {/* Leave Requests Table using AtomicTanstackTable */}
-      <div className="overflow-x-auto rounded-xl shadow border border-border bg-card">
-        <AtomicTanstackTable
-          data={filteredRequests}
-          columns={columns}
-          showGlobalFilter
-          globalFilterPlaceholder="Search leave requests..."
-          pageSizeOptions={[10, 20, 50]}
-          initialPageSize={10}
-          tableClassName="min-w-full divide-y divide-border"
-          rowClassName={(row: { index: number }) =>
-            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`}
-          headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
-          filterDropdowns={
-            <>
-              {/* Example filter: by status */}
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400 mr-2"
-              >
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-              {/* Additional filters can be added here */}
-            </>
-          }
-        />
-      </div>
-      {/* Details Drawer/Modal */}
-      <LeaveDetailsDrawer
-        open={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-        request={selectedRequest}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        loading={loading}
-        requests={requests}
-        entitlements={mockLeaveEntitlements}
-      />
-    </div>
-  );
 
   function handleApprove() {
     if (!selectedRequest) return;
@@ -267,4 +151,67 @@ export default function LeaveManagement() {
       setDetailsOpen(false);
     }, 1000);
   }
+
+  return (
+    <div className="p-8 min-h-screen bg-background text-foreground">
+
+      <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
+      <div className="flex justify-between mb-4">
+
+        <Button className="bg-violet-600 text-white" onClick={() => setLeaveTypeDialogOpen(true)}>
+          Manage Leave Types
+        </Button>
+      </div>
+
+      <Dialog open={leaveTypeDialogOpen} onOpenChange={setLeaveTypeDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <LeaveTypeManagement />
+        </DialogContent>
+      </Dialog>
+      {/* Leave Requests Table using AtomicTanstackTable */}
+      <div className="overflow-x-auto rounded-xl shadow border border-border bg-card">
+        <AtomicTanstackTable
+          data={filteredRequests}
+          columns={columns}
+          showGlobalFilter
+          globalFilterPlaceholder="Search leave requests..."
+          pageSizeOptions={[10, 20, 50]}
+          initialPageSize={10}
+          className="min-w-full divide-y divide-border"
+          rowClassName={(row: { index: number }) =>
+            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`
+          }
+          headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
+          filterDropdowns={
+            <>
+              {/* Example filter: by status */}
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400 mr-2"
+              >
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+              {/* Additional filters can be added here */}
+            </>
+          }
+        />
+      </div>
+      {/* Details Drawer/Modal */}
+      <LeaveDetailsDrawer
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        request={selectedRequest}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        loading={loading}
+        requests={filteredRequests}
+        entitlements={[]}
+      />
+    </div>
+  );
 }

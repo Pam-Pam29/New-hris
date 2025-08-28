@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
@@ -23,21 +23,24 @@ import {
   User
 } from 'lucide-react';
 
-// Mock data
-const mockEmployees = [
-  { id: 1, name: 'Jane Doe', department: 'Engineering', position: 'Senior Developer', rating: 4.8, goals: 3, completed: 2, status: 'Exceeding' },
-  { id: 2, name: 'John Smith', department: 'Marketing', position: 'Marketing Manager', rating: 4.2, goals: 4, completed: 3, status: 'Meeting' },
-  { id: 3, name: 'Mary Johnson', department: 'Sales', position: 'Sales Representative', rating: 3.9, goals: 3, completed: 1, status: 'Needs Improvement' },
-  { id: 4, name: 'David Wilson', department: 'HR', position: 'HR Specialist', rating: 4.5, goals: 2, completed: 2, status: 'Exceeding' },
-  { id: 5, name: 'Sarah Brown', department: 'Finance', position: 'Financial Analyst', rating: 4.1, goals: 3, completed: 2, status: 'Meeting' },
-];
+import { db } from '../../../../config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-const mockGoals = [
-  { id: 1, employee: 'Jane Doe', goal: 'Complete advanced React certification', deadline: '2025-08-15', progress: 75, status: 'In Progress' },
-  { id: 2, employee: 'John Smith', goal: 'Increase social media engagement by 25%', deadline: '2025-07-30', progress: 60, status: 'In Progress' },
-  { id: 3, employee: 'Mary Johnson', goal: 'Achieve 120% of sales quota', deadline: '2025-08-31', progress: 45, status: 'In Progress' },
-  { id: 4, employee: 'David Wilson', goal: 'Implement new employee onboarding system', deadline: '2025-07-20', progress: 100, status: 'Completed' },
-];
+// Define interface for performance review data
+interface PerformanceReview {
+  id: string;
+  employeeId: string;
+  name: string;
+  department: string;
+  position: string;
+  rating: number;
+  feedback: string;
+  goals: string;
+  nextSteps: string;
+  status: string;
+  completedGoals: number;
+  totalGoals: number;
+}
 
 const departments = ['All Departments', 'Engineering', 'Marketing', 'Sales', 'HR', 'Finance'];
 const performanceStatuses = ['All Statuses', 'Exceeding', 'Meeting', 'Needs Improvement'];
@@ -46,6 +49,7 @@ export default function PerformanceManagement() {
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [performanceReviews, setPerformanceReviews] = useState<PerformanceReview[]>([]);
 
   // Review dialog state
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -57,20 +61,47 @@ export default function PerformanceManagement() {
     nextSteps: ''
   });
 
+  useEffect(() => {
+    const fetchPerformanceReviews = async () => {
+      const performanceReviewsCollection = collection(db, 'performance_reviews');
+      const performanceReviewsSnapshot = await getDocs(performanceReviewsCollection);
+      const performanceReviewsList = performanceReviewsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          employeeId: data.employeeId,
+          name: data.name,
+          department: data.department,
+          position: data.position,
+          rating: data.rating,
+          feedback: data.feedback,
+          goals: data.goals,
+          nextSteps: data.nextSteps,
+          status: data.status,
+          completedGoals: data.completedGoals,
+          totalGoals: data.totalGoals,
+        } as PerformanceReview;
+      });
+      setPerformanceReviews(performanceReviewsList);
+    };
+
+    fetchPerformanceReviews();
+  }, []);
+
   // Filter logic
-  const filteredEmployees = mockEmployees.filter(emp =>
-    (!selectedDepartment || selectedDepartment === 'All Departments' || emp.department === selectedDepartment) &&
-    (!selectedStatus || selectedStatus === 'All Statuses' || emp.status === selectedStatus) &&
-    (!selectedEmployee || emp.name === selectedEmployee)
+  const filteredPerformanceReviews = performanceReviews.filter(review =>
+    (!selectedDepartment || selectedDepartment === 'All Departments' || review.department === selectedDepartment) &&
+    (!selectedStatus || selectedStatus === 'All Statuses' || review.status === selectedStatus) &&
+    (!selectedEmployee || review.name === selectedEmployee)
   );
 
   // Summary stats
-  const totalEmployees = mockEmployees.length;
-  const averageRating = (mockEmployees.reduce((sum, emp) => sum + emp.rating, 0) / totalEmployees).toFixed(1);
-  const exceedingCount = mockEmployees.filter(emp => emp.status === 'Exceeding').length;
-  const needsImprovementCount = mockEmployees.filter(emp => emp.status === 'Needs Improvement').length;
-  const totalGoals = mockGoals.length;
-  const completedGoals = mockGoals.filter(goal => goal.status === 'Completed').length;
+  const totalEmployees = performanceReviews.length;
+  const averageRating = totalEmployees > 0 ? (performanceReviews.reduce((sum, review) => sum + review.rating, 0) / totalEmployees).toFixed(1) : '0';
+  const exceedingCount = performanceReviews.filter(review => review.status === 'Exceeding').length;
+  const needsImprovementCount = performanceReviews.filter(review => review.status === 'Needs Improvement').length;
+  const totalGoals = performanceReviews.reduce((sum, review) => sum + review.totalGoals, 0);
+  const completedGoals = performanceReviews.reduce((sum, review) => sum + review.completedGoals, 0);
 
   return (
     <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -131,7 +162,7 @@ export default function PerformanceManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
-                  {mockEmployees.map(emp => <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>)}
+                  {performanceReviews.map(emp => <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -245,26 +276,26 @@ export default function PerformanceManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {filteredEmployees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                {filteredPerformanceReviews.map((review) => (
+                  <tr key={review.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-muted rounded-full">
                           <User className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <span className="font-medium">{emp.name}</span>
+                        <span className="font-medium">{review.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">{emp.department}</td>
-                    <td className="px-4 py-3">{emp.position}</td>
+                    <td className="px-4 py-3">{review.department}</td>
+                    <td className="px-4 py-3">{review.position}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{emp.rating}</span>
+                        <span className="font-medium">{review.rating}</span>
                         <div className="flex gap-1">
                           {[...Array(5)].map((_, i) => (
                             <Star
                               key={i}
-                              className={`h-3 w-3 ${i < Math.floor(emp.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                              className={`h-3 w-3 ${i < Math.floor(review.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
                             />
                           ))}
                         </div>
@@ -272,11 +303,11 @@ export default function PerformanceManagement() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">{emp.completed}/{emp.goals}</span>
+                        <span className="text-sm text-muted-foreground">{review.completedGoals}/{review.totalGoals}</span>
                         <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
                           <div
                             className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                            style={{ width: `${(emp.completed / emp.goals) * 100}%` }}
+                            style={{ width: `${(review.completedGoals / review.totalGoals) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -284,12 +315,12 @@ export default function PerformanceManagement() {
                     <td className="px-4 py-3">
                       <Badge
                         className={
-                          emp.status === 'Exceeding' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                            emp.status === 'Meeting' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
+                          review.status === 'Exceeding' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
+                            review.status === 'Meeting' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
                               'bg-orange-100 text-orange-800 border-orange-200 px-3 py-1'
                         }
                       >
-                        {emp.status}
+                        {review.status}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -328,58 +359,7 @@ export default function PerformanceManagement() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {mockGoals.map((goal) => (
-              <Card key={goal.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-card to-card/80">
-                <CardContent className="p-8">
-                  {/* Header with Employee Name and Status */}
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex-1 pr-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                          <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <h4 className="font-semibold text-lg text-foreground">{goal.employee}</h4>
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed pr-4">{goal.goal}</p>
-                    </div>
-                    <Badge
-                      className={
-                        goal.status === 'Completed' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                          'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1'
-                      }
-                    >
-                      {goal.status}
-                    </Badge>
-                  </div>
-
-                  {/* Progress Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Progress</span>
-                      <span className="text-lg font-bold text-foreground">{goal.progress}%</span>
-                    </div>
-                    <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${goal.status === 'Completed' ? 'bg-green-500' : 'bg-blue-500'
-                          }`}
-                        style={{ width: `${goal.progress}%` }}
-                      />
-                    </div>
-
-                    {/* Deadline */}
-                    <div className="flex items-center gap-3 pt-2">
-                      <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                        <Calendar className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Deadline</p>
-                        <p className="text-sm font-medium text-foreground">{goal.deadline}</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {/* Goals will be displayed here in the future */}
           </div>
         </CardContent>
       </Card>
@@ -399,7 +379,7 @@ export default function PerformanceManagement() {
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockEmployees.map(emp => <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>)}
+                    {performanceReviews.map(emp => <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

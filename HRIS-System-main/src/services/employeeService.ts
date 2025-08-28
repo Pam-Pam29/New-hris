@@ -1,5 +1,6 @@
 import { Employee } from '../pages/Hr/CoreHr/EmployeeManagement/types';
 import { getServiceConfig, initializeFirebase } from '../config/firebase';
+import { Firestore } from 'firebase/firestore';
 
 // Abstract interface for employee operations
 export interface IEmployeeService {
@@ -13,9 +14,9 @@ export interface IEmployeeService {
 
 // Firebase implementation
 export class FirebaseEmployeeService implements IEmployeeService {
-  private db: any;
+  private db: Firestore;
 
-  constructor(db: any) {
+  constructor(db: Firestore) {
     this.db = db;
   }
 
@@ -26,12 +27,22 @@ export class FirebaseEmployeeService implements IEmployeeService {
       const q = query(employeesRef, orderBy('name'));
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc, index) => ({
-        // Create unique numeric ID from Firebase string ID
-        id: this.hashStringToNumber(doc.id) + index,
-        firebaseId: doc.id, // Keep the original Firebase ID for operations
-        ...doc.data()
-      })) as Employee[];
+      return querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        return {
+          id: this.hashStringToNumber(doc.id) + index,
+          firebaseId: doc.id, // Keep the original Firebase ID for operations
+          name: data.name,
+          role: data.role,
+          department: data.department,
+          employmentType: data.employmentType,
+          status: data.status,
+          email: data.email || '', // Provide default value if email is undefined
+          phone: data.phone || '', // Provide default value if phone is undefined
+          address: data.address || '', // Provide default value if address is undefined
+          hireDate: data.hireDate || '', // Provide default value if hireDate is undefined
+        } as Employee;
+      });
     } catch (error) {
       console.error('Error fetching employees:', error);
       return [];
@@ -179,7 +190,7 @@ export class MockEmployeeService implements IEmployeeService {
 
 // Service factory
 export class EmployeeServiceFactory {
-  static createService(type: 'firebase' | 'mock', db?: any): IEmployeeService {
+  static createService(type: 'firebase' | 'mock', db?: Firestore): IEmployeeService {
     switch (type) {
       case 'firebase':
         if (!db) throw new Error('Firebase DB instance required');

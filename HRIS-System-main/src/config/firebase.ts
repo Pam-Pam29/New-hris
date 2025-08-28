@@ -42,7 +42,7 @@ const initializeFirebase = async (): Promise<boolean> => {
       analytics = getAnalytics(app);
 
       firebaseInitialized = true;
-      console.log('✅ Firebase initialized successfully');
+      console.log('✅ Firebase initialized successfully', db);
       return true;
     } catch (error) {
       console.warn('⚠️ Firebase not available. Please install Firebase: npm install firebase');
