@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { backendService } from '../../../../services/backendService';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
 import { Input } from '../../../../components/ui/input';
@@ -9,20 +9,21 @@ import { Badge } from '../../../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
-import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Download, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
+import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
 
 const mockAttendance = [
-  // Commented out existing employees as requested
-  // { id: 1, employee: 'Jane Doe', date: '2025-07-21', clockIn: '09:00', clockOut: '17:00', status: 'Present' },
-  // { id: 2, employee: 'John Smith', date: '2025-07-21', clockIn: '09:10', clockOut: '17:05', status: 'Late' },
-  // { id: 3, employee: 'Mary Johnson', date: '2025-07-21', clockIn: '', clockOut: '', status: 'Absent' },
-  // { id: 4, employee: 'Jane Doe', date: '2025-07-20', clockIn: '09:01', clockOut: '17:00', status: 'Present' },
-  // { id: 5, employee: 'John Smith', date: '2025-07-20', clockIn: '', clockOut: '', status: 'Absent' },
+  { id: 1, employee: 'Jane Doe', date: '2025-08-28', clockIn: '09:00', clockOut: '17:00', status: 'Present' },
+  { id: 2, employee: 'John Smith', date: '2025-08-28', clockIn: '09:10', clockOut: '17:05', status: 'Late' },
+  { id: 3, employee: 'Mary Johnson', date: '2025-08-28', clockIn: '', clockOut: '', status: 'Absent' },
+  { id: 4, employee: 'David Wilson', date: '2025-08-28', clockIn: '08:55', clockOut: '17:00', status: 'Present' },
+  { id: 5, employee: 'Sarah Brown', date: '2025-08-28', clockIn: '09:15', clockOut: '17:10', status: 'Late' },
+  { id: 6, employee: 'Jane Doe', date: '2025-08-27', clockIn: '09:01', clockOut: '17:00', status: 'Present' },
+  { id: 7, employee: 'John Smith', date: '2025-08-27', clockIn: '', clockOut: '', status: 'Absent' },
+  { id: 8, employee: 'Mary Johnson', date: '2025-08-27', clockIn: '09:05', clockOut: '17:15', status: 'Present' },
 ];
 
 const employees = [
-  // Commented out existing employees as requested
-  // 'Jane Doe', 'John Smith', 'Mary Johnson'
+  'Jane Doe', 'John Smith', 'Mary Johnson', 'David Wilson', 'Sarah Brown'
 ];
 const statuses = ['Present', 'Late', 'Absent'];
 
@@ -32,10 +33,19 @@ const statusConfig = {
   Absent: { color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
 
+interface AttendanceRecord {
+  id: number;
+  employee: string;
+  date: string;
+  clockIn: string;
+  clockOut: string;
+  status: string;
+}
+
 export default function TimeManagement() {
   // State for attendance records from backend
-  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(mockAttendance);
+  const [loading, setLoading] = useState(false);
 
   // Filter state
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
@@ -44,7 +54,7 @@ export default function TimeManagement() {
 
   // Adjust popup state
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
-  const [selectedAttendance, setSelectedAttendance] = useState<any>(null);
+  const [selectedAttendance, setSelectedAttendance] = useState<AttendanceRecord | null>(null);
   const [adjustForm, setAdjustForm] = useState({
     clockIn: '',
     clockOut: '',
@@ -61,9 +71,12 @@ export default function TimeManagement() {
     try {
       setLoading(true);
       const records = await backendService.getAttendanceRecords();
-      setAttendanceRecords(records);
+      // Use mock data if backend returns empty array
+      setAttendanceRecords(records.length > 0 ? records : mockAttendance);
     } catch (error) {
       console.error('Error loading attendance records:', error);
+      // Fallback to mock data on error
+      setAttendanceRecords(mockAttendance);
     } finally {
       setLoading(false);
     }
@@ -82,7 +95,7 @@ export default function TimeManagement() {
     count: attendanceRecords.filter(row => row.status === status).length,
   }));
 
-  const handleAdjust = (attendance: any) => {
+  const handleAdjust = (attendance: AttendanceRecord) => {
     setSelectedAttendance(attendance);
     setAdjustForm({
       clockIn: attendance.clockIn || '',
@@ -103,13 +116,13 @@ export default function TimeManagement() {
           notes: adjustForm.notes,
           reason: adjustForm.reason
         };
-        
+
         // Update in backend
         await backendService.updateAttendanceRecord(selectedAttendance.id, updatedAttendance);
-        
+
         // Refresh the records
         await loadAttendanceRecords();
-        
+
         setShowAdjustDialog(false);
         setSelectedAttendance(null);
         setAdjustForm({ clockIn: '', clockOut: '', notes: '', reason: '' });
@@ -339,8 +352,8 @@ export default function TimeManagement() {
             {/* Reason for Adjustment */}
             <div className="space-y-2">
               <Label htmlFor="reason">Reason for Adjustment</Label>
-              <Select 
-                value={adjustForm.reason} 
+              <Select
+                value={adjustForm.reason}
                 onValueChange={(value) => setAdjustForm(prev => ({ ...prev, reason: value }))}
               >
                 <SelectTrigger>

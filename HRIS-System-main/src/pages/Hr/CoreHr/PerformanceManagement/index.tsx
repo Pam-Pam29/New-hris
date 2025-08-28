@@ -1,22 +1,19 @@
 import React, { useState } from 'react';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
-import { Input } from '../../../../components/ui/input';
 import { Badge } from '../../../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 
-import { 
-  TrendingUp, 
-  Target, 
-  Users, 
-  Award, 
-  BarChart3, 
-  Calendar, 
-  Star, 
-  CheckCircle, 
-  Clock, 
+import {
+  TrendingUp,
+  Target,
+  Users,
+  Award,
+  BarChart3,
+  Calendar,
+  Star,
   AlertTriangle,
   Plus,
   Filter,
@@ -49,6 +46,16 @@ export default function PerformanceManagement() {
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+
+  // Review dialog state
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    employee: '',
+    rating: 5,
+    feedback: '',
+    goals: '',
+    nextSteps: ''
+  });
 
   // Filter logic
   const filteredEmployees = mockEmployees.filter(emp =>
@@ -255,31 +262,31 @@ export default function PerformanceManagement() {
                         <span className="font-medium">{emp.rating}</span>
                         <div className="flex gap-1">
                           {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              className={`h-3 w-3 ${i < Math.floor(emp.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
+                            <Star
+                              key={i}
+                              className={`h-3 w-3 ${i < Math.floor(emp.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
                             />
                           ))}
                         </div>
                       </div>
                     </td>
-                                         <td className="px-4 py-3">
-                       <div className="flex items-center gap-2">
-                         <span className="text-sm text-muted-foreground">{emp.completed}/{emp.goals}</span>
-                         <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                           <div 
-                             className="h-full bg-blue-500 rounded-full transition-all duration-300" 
-                             style={{ width: `${(emp.completed / emp.goals) * 100}%` }}
-                           />
-                         </div>
-                       </div>
-                     </td>
                     <td className="px-4 py-3">
-                      <Badge 
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">{emp.completed}/{emp.goals}</span>
+                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                            style={{ width: `${(emp.completed / emp.goals) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
                         className={
                           emp.status === 'Exceeding' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                          emp.status === 'Meeting' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
-                          'bg-orange-100 text-orange-800 border-orange-200 px-3 py-1'
+                            emp.status === 'Meeting' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
+                              'bg-orange-100 text-orange-800 border-orange-200 px-3 py-1'
                         }
                       >
                         {emp.status}
@@ -335,16 +342,16 @@ export default function PerformanceManagement() {
                       </div>
                       <p className="text-sm text-muted-foreground leading-relaxed pr-4">{goal.goal}</p>
                     </div>
-                    <Badge 
+                    <Badge
                       className={
                         goal.status === 'Completed' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                        'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1'
+                          'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1'
                       }
                     >
                       {goal.status}
                     </Badge>
                   </div>
-                  
+
                   {/* Progress Section */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -352,14 +359,13 @@ export default function PerformanceManagement() {
                       <span className="text-lg font-bold text-foreground">{goal.progress}%</span>
                     </div>
                     <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          goal.status === 'Completed' ? 'bg-green-500' : 'bg-blue-500'
-                        }`}
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${goal.status === 'Completed' ? 'bg-green-500' : 'bg-blue-500'
+                          }`}
                         style={{ width: `${goal.progress}%` }}
                       />
                     </div>
-                    
+
                     {/* Deadline */}
                     <div className="flex items-center gap-3 pt-2">
                       <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full">
@@ -388,7 +394,7 @@ export default function PerformanceManagement() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Employee</label>
-                <Select value={reviewForm.employee} onValueChange={(value) => setReviewForm({...reviewForm, employee: value})}>
+                <Select value={reviewForm.employee} onValueChange={(value) => setReviewForm({ ...reviewForm, employee: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
@@ -399,44 +405,44 @@ export default function PerformanceManagement() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Rating (1-5)</label>
-                <Select value={reviewForm.rating.toString()} onValueChange={(value) => setReviewForm({...reviewForm, rating: parseInt(value)})}>
+                <Select value={reviewForm.rating.toString()} onValueChange={(value) => setReviewForm({ ...reviewForm, rating: parseInt(value) })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1,2,3,4,5].map(rating => <SelectItem key={rating} value={rating.toString()}>{rating}</SelectItem>)}
+                    {[1, 2, 3, 4, 5].map(rating => <SelectItem key={rating} value={rating.toString()}>{rating}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Performance Feedback</label>
-              <textarea 
+              <textarea
                 className="w-full p-3 border border-border rounded-md resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Provide detailed feedback on employee performance..."
                 value={reviewForm.feedback}
-                onChange={(e) => setReviewForm({...reviewForm, feedback: e.target.value})}
+                onChange={(e) => setReviewForm({ ...reviewForm, feedback: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Goals & Objectives</label>
-              <textarea 
+              <textarea
                 className="w-full p-3 border border-border rounded-md resize-none h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Set goals and objectives for the next period..."
                 value={reviewForm.goals}
-                onChange={(e) => setReviewForm({...reviewForm, goals: e.target.value})}
+                onChange={(e) => setReviewForm({ ...reviewForm, goals: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Next Steps</label>
-              <textarea 
+              <textarea
                 className="w-full p-3 border border-border rounded-md resize-none h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Outline action items and next steps..."
                 value={reviewForm.nextSteps}
-                onChange={(e) => setReviewForm({...reviewForm, nextSteps: e.target.value})}
+                onChange={(e) => setReviewForm({ ...reviewForm, nextSteps: e.target.value })}
               />
             </div>
 
@@ -444,13 +450,13 @@ export default function PerformanceManagement() {
               <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => {
                   // Handle form submission here
                   console.log('Review submitted:', reviewForm);
                   setReviewDialogOpen(false);
-                  setReviewForm({employee: '', rating: 5, feedback: '', goals: '', nextSteps: ''});
+                  setReviewForm({ employee: '', rating: 5, feedback: '', goals: '', nextSteps: '' });
                 }}
               >
                 Submit Review
