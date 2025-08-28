@@ -26,8 +26,8 @@ interface Employee {
   notes?: string;
 }
 
-// Import the proper employee service
-import { employeeService } from '../../../../services/employeeService';
+// Import the async employee service function
+import { getEmployeeService } from '../../../../services/employeeService';
 
 export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -35,6 +35,7 @@ export default function EmployeeDirectory() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [employeeService, setEmployeeService] = useState<any>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -44,18 +45,20 @@ export default function EmployeeDirectory() {
     department: ''
   });
 
-  // Load employees from service
+  // Initialize employee service and load employees
   useEffect(() => {
-    loadEmployees();
+    initializeService();
   }, []);
 
-  const loadEmployees = async () => {
+  const initializeService = async () => {
     try {
       setLoading(true);
-      const data = await employeeService.getEmployees();
+      const service = await getEmployeeService();
+      setEmployeeService(service);
+      const data = await service.getEmployees();
       setEmployees(data);
     } catch (error) {
-      console.error('Error loading employees:', error);
+      console.error('Error initializing service or loading employees:', error);
     } finally {
       setLoading(false);
     }
@@ -63,7 +66,7 @@ export default function EmployeeDirectory() {
 
   const handleAddEmployee = async () => {
     try {
-      if (formData.name && formData.role && formData.department) {
+      if (formData.name && formData.role && formData.department && employeeService) {
         const newEmployee = await employeeService.createEmployee({
           ...formData,
           employmentType: 'Full-time',
@@ -80,7 +83,7 @@ export default function EmployeeDirectory() {
 
   const handleUpdateEmployee = async () => {
     try {
-      if (selectedEmployee && formData.name && formData.role && formData.department) {
+      if (selectedEmployee && formData.name && formData.role && formData.department && employeeService) {
         const updatedEmployee = await employeeService.updateEmployee(selectedEmployee.id.toString(), formData);
         setEmployees((prev: Employee[]) => prev.map((emp: Employee) => emp.id === selectedEmployee.id ? updatedEmployee : emp));
         setShowEditDialog(false);
@@ -93,7 +96,7 @@ export default function EmployeeDirectory() {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this employee?')) {
+    if (window.confirm('Are you sure you want to delete this employee?') && employeeService) {
       try {
         const success = await employeeService.deleteEmployee(id);
         if (success) {
@@ -133,9 +136,9 @@ export default function EmployeeDirectory() {
             <span style={{ fontSize: '1.5rem' }}>👥</span>
           </div>
           <div>
-            <h1 style={{ 
-              fontSize: '1.875rem', 
-              fontWeight: 'bold', 
+            <h1 style={{
+              fontSize: '1.875rem',
+              fontWeight: 'bold',
               background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -149,11 +152,11 @@ export default function EmployeeDirectory() {
       </div>
 
       {/* Stats Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-        gap: '1.5rem', 
-        marginBottom: '2rem' 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1.5rem',
+        marginBottom: '2rem'
       }}>
         <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{employees.length}</div>
@@ -174,11 +177,11 @@ export default function EmployeeDirectory() {
       </div>
 
       {/* Actions Bar */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: '2rem' 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2rem'
       }}>
         <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
           Showing {employees.length} employees
@@ -226,8 +229,8 @@ export default function EmployeeDirectory() {
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+              {employees.map((employee, index) => (
+                <tr key={`emp-${employee.id}-${index}`} style={{ borderTop: '1px solid #e5e7eb' }}>
                   <td style={{ padding: '1rem 1.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <img
@@ -557,4 +560,4 @@ export default function EmployeeDirectory() {
       )}
     </div>
   );
-} 
+}

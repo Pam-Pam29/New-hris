@@ -1,5 +1,5 @@
 import { Employee } from '../pages/Hr/CoreHr/EmployeeManagement/types';
-import { SERVICE_CONFIG, db } from '../config/firebase';
+import { getServiceConfig, initializeFirebase } from '../config/firebase';
 
 // Abstract interface for employee operations
 export interface IEmployeeService {
@@ -25,9 +25,11 @@ export class FirebaseEmployeeService implements IEmployeeService {
       const employeesRef = collection(this.db, 'employees');
       const q = query(employeesRef, orderBy('name'));
       const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(doc => ({
-        id: parseInt(doc.id) || 0, // Convert string ID to number for compatibility
+
+      return querySnapshot.docs.map((doc, index) => ({
+        // Create unique numeric ID from Firebase string ID
+        id: this.hashStringToNumber(doc.id) + index,
+        firebaseId: doc.id, // Keep the original Firebase ID for operations
         ...doc.data()
       })) as Employee[];
     } catch (error) {
@@ -36,14 +38,28 @@ export class FirebaseEmployeeService implements IEmployeeService {
     }
   }
 
+  // Helper function to convert string to unique number
+  private hashStringToNumber(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  }
+
   async getEmployeeById(id: string): Promise<Employee | null> {
     try {
       const { doc, getDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
       const employeeSnap = await getDoc(employeeRef);
-      
+
       if (employeeSnap.exists()) {
-        return { id: parseInt(employeeSnap.id) || 0, ...employeeSnap.data() } as Employee;
+        return {
+          id: employeeSnap.id.length > 10 ? Date.now() + Math.random() : parseInt(employeeSnap.id) || Date.now(),
+          ...employeeSnap.data()
+        } as Employee;
       }
       return null;
     } catch (error) {
@@ -57,8 +73,11 @@ export class FirebaseEmployeeService implements IEmployeeService {
       const { collection, addDoc } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
       const docRef = await addDoc(employeesRef, employee);
-      
-      return { id: parseInt(docRef.id) || 0, ...employee } as Employee;
+
+      return {
+        id: docRef.id.length > 10 ? Date.now() + Math.random() : parseInt(docRef.id) || Date.now(),
+        ...employee
+      } as Employee;
     } catch (error) {
       console.error('Error creating employee:', error);
       throw new Error('Failed to create employee');
@@ -70,10 +89,10 @@ export class FirebaseEmployeeService implements IEmployeeService {
       const { doc, updateDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
       await updateDoc(employeeRef, employee);
-      
+
       const updatedEmployee = await this.getEmployeeById(id);
       if (!updatedEmployee) throw new Error('Employee not found');
-      
+
       return updatedEmployee;
     } catch (error) {
       console.error('Error updating employee:', error);
@@ -97,7 +116,7 @@ export class FirebaseEmployeeService implements IEmployeeService {
     try {
       const employees = await this.getEmployees();
       const lowercaseQuery = query.toLowerCase();
-      
+
       return employees.filter(employee =>
         employee.name.toLowerCase().includes(lowercaseQuery) ||
         employee.email?.toLowerCase().includes(lowercaseQuery) ||
@@ -111,39 +130,9 @@ export class FirebaseEmployeeService implements IEmployeeService {
   }
 }
 
-// Mock service for development/testing (can easily switch to this)
+// Mock service for development/testing
 export class MockEmployeeService implements IEmployeeService {
-  private employees: Employee[] = [
-    // Comment out existing mock employees as requested
-    // {
-    //   id: 1,
-    //   avatar: 'https://randomuser.me/api/portraits/women/1.jpg',
-    //   name: "Jane Doe",
-    //   email: "jane.doe@example.com",
-    //   role: "Software Engineer",
-    //   department: "Engineering",
-    //   employmentType: "Full-time",
-    //   status: "Active",
-    //   dateStarted: "2022-01-15",
-    //   phone: "555-123-4567",
-    //   address: "123 Main St, Springfield",
-    //   location: "Lagos",
-    //   gender: "Female",
-    //   dob: "1990-05-10",
-    //   nationalId: "A123456789",
-    //   manager: "John Smith",
-    //   documents: [
-    //     { name: "Offer Letter.pdf", url: "#" },
-    //     { name: "ID Card.jpg", url: "#" }
-    //   ],
-    //   emergencyContact: {
-    //     name: "Mary Doe",
-    //     phone: "555-987-6543",
-    //     relationship: "Mother"
-    //   },
-    //   notes: "Excellent performer."
-    // }
-  ];
+  private employees: Employee[] = [];
 
   async getEmployees(): Promise<Employee[]> {
     return Promise.resolve(this.employees);
@@ -163,7 +152,7 @@ export class MockEmployeeService implements IEmployeeService {
   async updateEmployee(id: string, employee: Partial<Employee>): Promise<Employee> {
     const index = this.employees.findIndex(emp => emp.id.toString() === id);
     if (index === -1) throw new Error('Employee not found');
-    
+
     this.employees[index] = { ...this.employees[index], ...employee };
     return Promise.resolve(this.employees[index]);
   }
@@ -171,7 +160,7 @@ export class MockEmployeeService implements IEmployeeService {
   async deleteEmployee(id: string): Promise<boolean> {
     const index = this.employees.findIndex(emp => emp.id.toString() === id);
     if (index === -1) return false;
-    
+
     this.employees.splice(index, 1);
     return Promise.resolve(true);
   }
@@ -188,7 +177,7 @@ export class MockEmployeeService implements IEmployeeService {
   }
 }
 
-// Service factory - easily switch between implementations
+// Service factory
 export class EmployeeServiceFactory {
   static createService(type: 'firebase' | 'mock', db?: any): IEmployeeService {
     switch (type) {
@@ -203,15 +192,35 @@ export class EmployeeServiceFactory {
   }
 }
 
-// Default export - automatically chooses the best service based on configuration
-export const employeeService = (() => {
-  const config = SERVICE_CONFIG;
-  
-  if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-    console.log('Using Firebase Employee Service');
-    return EmployeeServiceFactory.createService('firebase', config.firebase.db);
-  } else {
-    console.log('Using Mock Employee Service');
-    return EmployeeServiceFactory.createService('mock');
+// Async function to get the properly configured employee service
+export const getEmployeeService = async (): Promise<IEmployeeService> => {
+  try {
+    await initializeFirebase(); // Wait for Firebase to be ready
+    const config = await getServiceConfig();
+
+    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+      console.log('Using Firebase Employee Service');
+      return EmployeeServiceFactory.createService('firebase', config.firebase.db);
+    } else {
+      console.log('Using Mock Employee Service');
+      return EmployeeServiceFactory.createService('mock');
+    }
+  } catch (error) {
+    console.warn('Failed to initialize Firebase Employee Service, falling back to Mock');
+    return new MockEmployeeService();
+  }
+};
+
+// For compatibility - but this will start as mock until Firebase is ready
+let employeeService: IEmployeeService = new MockEmployeeService();
+
+// Initialize the service asynchronously
+(async () => {
+  try {
+    employeeService = await getEmployeeService();
+  } catch (error) {
+    console.error('Error initializing employee service:', error);
   }
 })();
+
+export { employeeService };

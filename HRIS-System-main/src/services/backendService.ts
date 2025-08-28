@@ -1,7 +1,7 @@
 // Backend Service Layer - Easy switching between Firebase and other backends
 // This service layer abstracts the backend implementation details
 
-import { SERVICE_CONFIG, db } from '../config/firebase';
+import { getServiceConfig, initializeFirebase } from '../config/firebase';
 
 // Generic interface for any backend service
 export interface IBackendService {
@@ -12,13 +12,13 @@ export interface IBackendService {
   updateEmployee(id: string, employee: any): Promise<any>;
   deleteEmployee(id: string): Promise<boolean>;
   searchEmployees(query: string): Promise<any[]>;
-  
+
   // Time management operations
   getAttendanceRecords(): Promise<any[]>;
   createAttendanceRecord(record: any): Promise<any>;
   updateAttendanceRecord(id: string, record: any): Promise<any>;
   deleteAttendanceRecord(id: string): Promise<boolean>;
-  
+
   // Payroll operations
   getPayrollRecords(): Promise<any[]>;
   createPayrollRecord(record: any): Promise<any>;
@@ -41,7 +41,7 @@ export class FirebaseBackendService implements IBackendService {
       const employeesRef = collection(this.db, 'employees');
       const q = query(employeesRef, orderBy('name'));
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -57,7 +57,7 @@ export class FirebaseBackendService implements IBackendService {
       const { doc, getDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
       const employeeSnap = await getDoc(employeeRef);
-      
+
       if (employeeSnap.exists()) {
         return { id: employeeSnap.id, ...employeeSnap.data() };
       }
@@ -73,7 +73,7 @@ export class FirebaseBackendService implements IBackendService {
       const { collection, addDoc } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
       const docRef = await addDoc(employeesRef, employee);
-      
+
       return { id: docRef.id, ...employee };
     } catch (error) {
       console.error('Error creating employee:', error);
@@ -86,10 +86,10 @@ export class FirebaseBackendService implements IBackendService {
       const { doc, updateDoc } = await import('firebase/firestore');
       const employeeRef = doc(this.db, 'employees', id);
       await updateDoc(employeeRef, employee);
-      
+
       const updatedEmployee = await this.getEmployeeById(id);
       if (!updatedEmployee) throw new Error('Employee not found');
-      
+
       return updatedEmployee;
     } catch (error) {
       console.error('Error updating employee:', error);
@@ -113,7 +113,7 @@ export class FirebaseBackendService implements IBackendService {
     try {
       const employees = await this.getEmployees();
       const lowercaseQuery = query.toLowerCase();
-      
+
       return employees.filter(employee =>
         employee.name?.toLowerCase().includes(lowercaseQuery) ||
         employee.email?.toLowerCase().includes(lowercaseQuery) ||
@@ -133,7 +133,7 @@ export class FirebaseBackendService implements IBackendService {
       const attendanceRef = collection(this.db, 'attendance');
       const q = query(attendanceRef, orderBy('date', 'desc'));
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -149,7 +149,7 @@ export class FirebaseBackendService implements IBackendService {
       const { collection, addDoc } = await import('firebase/firestore');
       const attendanceRef = collection(this.db, 'attendance');
       const docRef = await addDoc(attendanceRef, record);
-      
+
       return { id: docRef.id, ...record };
     } catch (error) {
       console.error('Error creating attendance record:', error);
@@ -162,7 +162,7 @@ export class FirebaseBackendService implements IBackendService {
       const { doc, updateDoc } = await import('firebase/firestore');
       const attendanceRef = doc(this.db, 'attendance', id);
       await updateDoc(attendanceRef, record);
-      
+
       return { id, ...record };
     } catch (error) {
       console.error('Error updating attendance record:', error);
@@ -189,7 +189,7 @@ export class FirebaseBackendService implements IBackendService {
       const payrollRef = collection(this.db, 'payroll');
       const q = query(payrollRef, orderBy('date', 'desc'));
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -205,7 +205,7 @@ export class FirebaseBackendService implements IBackendService {
       const { collection, addDoc } = await import('firebase/firestore');
       const payrollRef = collection(this.db, 'payroll');
       const docRef = await addDoc(payrollRef, record);
-      
+
       return { id: docRef.id, ...record };
     } catch (error) {
       console.error('Error creating payroll record:', error);
@@ -218,7 +218,7 @@ export class FirebaseBackendService implements IBackendService {
       const { doc, updateDoc } = await import('firebase/firestore');
       const payrollRef = doc(this.db, 'payroll', id);
       await updateDoc(payrollRef, record);
-      
+
       return { id, ...record };
     } catch (error) {
       console.error('Error updating payroll record:', error);
@@ -264,7 +264,7 @@ export class MockBackendService implements IBackendService {
   async updateEmployee(id: string, employee: any): Promise<any> {
     const index = this.employees.findIndex(emp => emp.id === id);
     if (index === -1) throw new Error('Employee not found');
-    
+
     this.employees[index] = { ...this.employees[index], ...employee };
     return Promise.resolve(this.employees[index]);
   }
@@ -272,7 +272,7 @@ export class MockBackendService implements IBackendService {
   async deleteEmployee(id: string): Promise<boolean> {
     const index = this.employees.findIndex(emp => emp.id === id);
     if (index === -1) return false;
-    
+
     this.employees.splice(index, 1);
     return Promise.resolve(true);
   }
@@ -302,7 +302,7 @@ export class MockBackendService implements IBackendService {
   async updateAttendanceRecord(id: string, record: any): Promise<any> {
     const index = this.attendanceRecords.findIndex(rec => rec.id === id);
     if (index === -1) throw new Error('Attendance record not found');
-    
+
     this.attendanceRecords[index] = { ...this.attendanceRecords[index], ...record };
     return Promise.resolve(this.attendanceRecords[index]);
   }
@@ -310,7 +310,7 @@ export class MockBackendService implements IBackendService {
   async deleteAttendanceRecord(id: string): Promise<boolean> {
     const index = this.attendanceRecords.findIndex(rec => rec.id === id);
     if (index === -1) return false;
-    
+
     this.attendanceRecords.splice(index, 1);
     return Promise.resolve(true);
   }
@@ -329,7 +329,7 @@ export class MockBackendService implements IBackendService {
   async updatePayrollRecord(id: string, record: any): Promise<any> {
     const index = this.payrollRecords.findIndex(rec => rec.id === id);
     if (index === -1) throw new Error('Payroll record not found');
-    
+
     this.payrollRecords[index] = { ...this.payrollRecords[index], ...record };
     return Promise.resolve(this.payrollRecords[index]);
   }
@@ -337,7 +337,7 @@ export class MockBackendService implements IBackendService {
   async deletePayrollRecord(id: string): Promise<boolean> {
     const index = this.payrollRecords.findIndex(rec => rec.id === id);
     if (index === -1) return false;
-    
+
     this.payrollRecords.splice(index, 1);
     return Promise.resolve(true);
   }
@@ -358,10 +358,10 @@ export class BackendServiceFactory {
   }
 }
 
-// Default export - automatically chooses the best service based on configuration
-export const backendService = (() => {
-  const config = SERVICE_CONFIG;
-  
+// Async function to get the properly configured backend service
+export const getBackendService = async (): Promise<IBackendService> => {
+  const config = await getServiceConfig();
+
   if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
     console.log('Using Firebase Backend Service');
     return BackendServiceFactory.createService('firebase', config.firebase.db);
@@ -369,7 +369,17 @@ export const backendService = (() => {
     console.log('Using Mock Backend Service');
     return BackendServiceFactory.createService('mock');
   }
+};
+
+// For immediate use (but will be mock initially)
+let backendService: IBackendService = new MockBackendService();
+
+// Initialize the service asynchronously
+(async () => {
+  backendService = await getBackendService();
 })();
+
+export { backendService };
 
 // Easy switching function
 export const switchBackend = (type: 'firebase' | 'mock', db?: any): IBackendService => {
