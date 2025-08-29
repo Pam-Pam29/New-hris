@@ -2,13 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900;
-}
 
-dark body {
-  @apply bg-gray-900 text-gray-100;
-}
 
 
 @layer base {
@@ -25,7 +19,7 @@ dark body {
     --secondary: 220 60% 45%;
     --secondary-foreground: 0 0% 100%;
     --muted: 240 5% 90%;
-    --muted-foreground: 0 0% 10%;
+    --muted-foreground: 0 0% 40%;
     --accent: 220 20% 90%;
     --accent-foreground: 0 0% 10%;
     --destructive: 0 84.2% 60.2%;
@@ -51,11 +45,11 @@ dark body {
     --popover-foreground: 0 0% 90%;
     --primary: 220 70% 50%;
     /* blue primary in dark mode */
-    --primary-foreground: 0 0% 10%;
+    --primary-foreground: 0 0% 100%;
     /* dark text on blue */
     --secondary: 220 60% 45%;
     /* blue as secondary in dark mode */
-    --secondary-foreground: 0 0% 90%;
+    --secondary-foreground: 0 0% 100%;
     /* light text on blue */
     --muted: 240 5% 20%;
     --muted-foreground: 0 0% 90%;

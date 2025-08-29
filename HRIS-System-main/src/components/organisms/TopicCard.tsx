@@ -1,10 +1,23 @@
 import React from 'react';
 import { BookOpen, CheckCircle, Clock, ArrowRight } from 'lucide-react';
-import { Card, CardContent } from '../molecules/Card';
-import { ProgressBar } from '../molecules/ProgressBar';
-import { Badge } from '../atoms/Badge';
-import { Button } from '../molecules/Button';
-import { MigrationTopic } from '../../types';
+import { Card, CardContent } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+
+// Local types to avoid missing imports
+interface MigrationSubtopic {
+  id: string;
+  title: string;
+  progress?: {
+    completed?: boolean;
+  };
+}
+
+export interface MigrationTopic {
+  id: string;
+  title: string;
+  subtopics: MigrationSubtopic[];
+}
 
 interface TopicCardProps {
   topic: MigrationTopic;
@@ -18,21 +31,21 @@ export function TopicCard({ topic, onTopicClick }: TopicCardProps) {
   const isComplete = progress === 100;
 
   return (
-    <Card hover onClick={() => onTopicClick(topic.id)}>
+    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onTopicClick(topic.id)}>
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
-            <div className="bg-gradient-to-r from-blue-100 to-indigo-100 p-3 rounded-xl">
-              <BookOpen className="w-6 h-6 text-blue-600" />
+            <div className="bg-primary/10 p-3 rounded-xl">
+              <BookOpen className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900">{topic.title}</h3>
-              <p className="text-gray-600">
+              <h3 className="text-xl font-bold text-foreground">{topic.title}</h3>
+              <p className="text-muted-foreground">
                 {completedSubtopics} of {totalSubtopics} lessons completed
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-3">
             {isComplete ? (
               <Badge variant="success">
@@ -45,18 +58,19 @@ export function TopicCard({ topic, onTopicClick }: TopicCardProps) {
                 In Progress
               </Badge>
             )}
-            <ArrowRight className="w-5 h-5 text-gray-400" />
+            <ArrowRight className="w-5 h-5 text-muted-foreground" />
           </div>
         </div>
-        
-        <ProgressBar 
-          progress={progress} 
-          showLabel={false}
-          variant={isComplete ? 'success' : 'default'}
-        />
-        
+
+        <div className="h-2 w-full rounded-full bg-muted">
+          <div
+            className="h-2 rounded-full bg-primary"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
         <div className="mt-4 flex justify-between items-center">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             {Math.round(progress)}% complete
           </span>
           <Button size="sm" variant="outline">

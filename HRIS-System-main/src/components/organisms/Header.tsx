@@ -1,7 +1,8 @@
 import { Avatar } from '../ui/avatar';
 import { Button } from '../ui/button';
-import { Plane, User, Settings, Menu, LogOut } from 'lucide-react';
+import { Plane, Settings, Menu, LogOut, Sun, Moon } from 'lucide-react';
 import React, { useState } from 'react';
+import { useTheme } from '../atoms/ThemeProvider';
 
 interface HeaderProps {
   title?: string;
@@ -16,6 +17,7 @@ const user = { name: 'Jane Doe', email: 'jane.doe@example.com' };
 
 export function Header({ title, subtitle, showUserInfo = true, actions, callToAction }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -24,19 +26,19 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
   };
 
   return (
-    <header className="bg-white dark:bg-zinc-900 shadow-sm border-b border-gray-100 dark:border-zinc-800">
+    <header className="bg-background border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between py-4">
           {/* Logo and Title */}
           <div className="flex items-center space-x-4">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2.5 rounded-xl">
+            <div className="bg-gradient-to-r from-primary/80 to-primary p-2.5 rounded-xl">
               <Plane className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              <h1 className="text-xl font-bold text-foreground">
                 {title || 'Migrant Guide'}
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
+              <p className="text-sm text-muted-foreground">
                 {subtitle || 'Powered by Clan Finance'}
               </p>
             </div>
@@ -53,10 +55,13 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
             {showUserInfo && user && (
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-300">{user.email}</p>
+                  <p className="text-sm font-medium text-foreground">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <Avatar />
+                <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label="Toggle theme">
+                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </Button>
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
                   <LogOut className="w-4 h-4" />
                 </Button>
@@ -81,17 +86,20 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
         </div>
         {/* Mobile Menu Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 py-4 px-2 rounded-b-xl shadow-lg z-50">
+          <div className="md:hidden bg-background border-t border-border py-4 px-2 rounded-b-xl shadow-lg z-50">
             {actions && <div className="mb-4">{actions}</div>}
             {showUserInfo && user && (
               <div className="flex items-center space-x-3 mb-4">
                 <Avatar />
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-300">{user.email}</p>
+                  <p className="text-sm font-medium text-foreground">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
               </div>
             )}
+            <Button variant="outline" size="sm" className="w-full mb-2" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />} Toggle theme
+            </Button>
             <Button variant="outline" size="sm" className="w-full mb-2">
               <Settings className="w-4 h-4 mr-2" /> Settings
             </Button>
