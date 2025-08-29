@@ -50,7 +50,11 @@ const mockCompanies = [
   { name: 'Gamma LLC', icon: Shield },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -62,17 +66,17 @@ export function Sidebar() {
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
 
   return (
-    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-64'} bg-background border-r flex flex-col text-foreground transition-all duration-200`}>
+    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-64'} bg-background border-r border-border flex flex-col text-foreground transition-all duration-200 shadow-sm dark:shadow-accent/5 z-50`}>
       {/* Company Switcher and Collapse Toggle */}
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-muted mb-2 ${collapsed ? 'justify-center' : ''}`}>
         <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
           <Popover.Trigger asChild>
             <button
-              className={`flex items-center gap-2 focus:outline-none ${collapsed ? 'p-0' : 'p-2'} bg-muted rounded-lg`}
+              className={`flex items-center gap-2 focus:outline-none ${collapsed ? 'p-0' : 'p-2'} bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 rounded-lg transition-colors`}
               aria-label="Switch company"
               onClick={() => setCompanyPopoverOpen((o) => !o)}
             >
-              <selectedCompany.icon className="w-6 h-6 text-primary" />
+              <selectedCompany.icon className="w-6 h-6 text-primary dark:text-primary-foreground" />
               {!collapsed && <span className="font-semibold text-lg truncate">{selectedCompany.name}</span>}
               {!collapsed && <ChevronDown className="w-4 h-4 text-muted-foreground" />}
             </button>
@@ -82,10 +86,10 @@ export function Sidebar() {
               {mockCompanies.map((company) => (
                 <li key={company.name}>
                   <button
-                    className={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-muted transition-colors ${selectedCompany.name === company.name ? 'bg-muted font-semibold' : ''}`}
+                    className={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-accent/50 dark:hover:bg-accent/30 transition-colors ${selectedCompany.name === company.name ? 'bg-accent/80 dark:bg-accent/40 font-semibold' : ''}`}
                     onClick={() => { setSelectedCompany(company); setCompanyPopoverOpen(false); }}
                   >
-                    <company.icon className="w-5 h-5 text-primary" />
+                    <company.icon className="w-5 h-5 text-primary dark:text-primary-foreground" />
                     <span>{company.name}</span>
                   </button>
                 </li>
@@ -94,18 +98,23 @@ export function Sidebar() {
           </Popover.Content>
         </Popover>
         <button
-          className="p-1 rounded hover:bg-muted transition-colors"
+          className="p-1 rounded hover:bg-accent/50 dark:hover:bg-accent/30 transition-colors"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setCollapsed((c) => !c)}
         >
-          {collapsed ? <ChevronRight className="w-4 h-4 text-muted-foreground" /> : <ChevronLeft className="w-4 h-4 text-muted-foreground" />}
+          {collapsed ? <ChevronRight className="w-4 h-4 text-muted-foreground hover:text-foreground" /> : <ChevronLeft className="w-4 h-4 text-muted-foreground hover:text-foreground" />}
         </button>
       </div>
       <nav className={`flex-1 overflow-y-auto p-4 pt-0 ${collapsed ? 'px-2' : ''}`}>
         <div className={`flex flex-col ${collapsed ? 'gap-2' : 'gap-2'}`}>
           {/* Dashboard Link */}
           <ul className={`flex flex-col gap-1 mb-1 items-start`}>
-            <SidebarNavLink link={dashboardLink} isActive={location.pathname === '/' || location.pathname.startsWith('/dashboard')} collapsed={collapsed} />
+            <SidebarNavLink 
+              link={dashboardLink} 
+              isActive={location.pathname === '/' || location.pathname.startsWith('/dashboard')} 
+              collapsed={collapsed} 
+              onClick={onClose}
+            />
           </ul>
           {/* Sectioned Navigation */}
           {navStructure.map((section) => (
@@ -119,7 +128,13 @@ export function Sidebar() {
                 {section.links.map((link) => {
                   const isActive = location.pathname.startsWith(link.href);
                   return (
-                    <SidebarNavLink key={link.href} link={link} isActive={isActive} collapsed={collapsed} />
+                    <SidebarNavLink 
+                      key={link.href} 
+                      link={link} 
+                      isActive={isActive} 
+                      collapsed={collapsed} 
+                      onClick={onClose}
+                    />
                   );
                 })}
               </ul>
@@ -129,35 +144,37 @@ export function Sidebar() {
           {/* Help, Support, Settings links */}
           <div className="flex flex-col gap-1 mt-4">
             <ul className={`flex flex-col gap-1 items-start`}>
-              <SidebarNavLink link={{ label: 'Help', href: '/help', icon: HelpCircle }} isActive={location.pathname === '/help'} collapsed={collapsed} />
-              <SidebarNavLink link={{ label: 'Support', href: '/support', icon: LifeBuoy }} isActive={location.pathname === '/support'} collapsed={collapsed} />
-              <SidebarNavLink link={{ label: 'Settings', href: '/settings', icon: Settings }} isActive={location.pathname === '/settings'} collapsed={collapsed} />
+              <SidebarNavLink link={{ label: 'Help', href: '/help', icon: HelpCircle }} isActive={location.pathname === '/help'} collapsed={collapsed} onClick={onClose} />
+              <SidebarNavLink link={{ label: 'Support', href: '/support', icon: LifeBuoy }} isActive={location.pathname === '/support'} collapsed={collapsed} onClick={onClose} />
+              <SidebarNavLink link={{ label: 'Settings', href: '/settings', icon: Settings }} isActive={location.pathname === '/settings'} collapsed={collapsed} onClick={onClose} />
+              <SidebarNavLink link={{ label: 'Security', href: '/auth/mfa', icon: Shield }} isActive={location.pathname === '/auth/mfa'} collapsed={collapsed} onClick={onClose} />
             </ul>
           </div>
         </div>
       </nav>
       {/* User info and dark mode toggle */}
-      <div className={`p-4 flex flex-col gap-2 border-t mt-auto ${collapsed ? 'items-center' : ''}`}>
+      <div className={`p-4 flex flex-col gap-2 border-t border-border mt-auto ${collapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 justify-between w-full ${collapsed ? 'flex-col gap-2' : ''}`}>
           <div className={`flex items-center gap-3 flex-1 ${collapsed ? 'justify-center' : ''}`}>
-            <Avatar>
+            <Avatar className="border border-border dark:border-accent/30">
               <User className="w-6 h-6" />
             </Avatar>
             {!collapsed && (
               <div className="flex-1">
-                <TypographySmall>Jane Doe</TypographySmall>
-                <TypographyMuted>HR Manager</TypographyMuted>
+                <TypographySmall className="font-medium">Jane Doe</TypographySmall>
+                <TypographyMuted className="dark:text-muted-foreground">HR Manager</TypographyMuted>
               </div>
             )}
           </div>
           {mounted && (
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
+              className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border"
               aria-label="Toggle dark mode"
               onClick={toggleTheme}
             >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {theme === "dark" ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
             </Button>
           )}
         </div>
@@ -167,23 +184,30 @@ export function Sidebar() {
 }
 
 // SidebarNavLink: helper for nav links with icon, active state, and collapsed mode
-function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean }) {
+function SidebarNavLink({ link, isActive, collapsed, onClick }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean; onClick?: () => void }) {
   return (
     <NavigationMenuItem>
       <a
         href={link.href}
+        onClick={(e) => {
+          if (onClick) {
+            e.preventDefault();
+            onClick();
+            window.location.href = link.href;
+          }
+        }}
         className={
           `flex items-center gap-3 rounded-md font-medium transition-colors
           ${collapsed ? 'justify-center w-10 h-10 p-0' : 'px-3 py-2 text-sm w-full'}
-          ${isActive ? 'bg-muted font-semibold' : 'hover:bg-muted'}
-          ${isActive ? 'text-primary' : 'text-foreground'}
+          ${isActive ? 'bg-accent/80 dark:bg-accent/30 font-semibold' : 'hover:bg-accent/50 hover:dark:bg-accent/20'}
+          ${isActive ? 'text-primary dark:text-primary' : 'text-foreground'}
           `
         }
         title={collapsed ? link.label : undefined}
       >
-        <link.icon className="w-5 h-5 text-muted-foreground" />
+        <link.icon className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
         {!collapsed && link.label}
       </a>
     </NavigationMenuItem>
   );
-} 
+}

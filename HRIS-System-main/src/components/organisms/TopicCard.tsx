@@ -62,9 +62,9 @@ export function TopicCard({ topic, onTopicClick }: TopicCardProps) {
           </div>
         </div>
 
-        <div className="h-2 w-full rounded-full bg-muted">
+        <div className="h-2 w-full rounded-full bg-muted dark:bg-muted/50">
           <div
-            className="h-2 rounded-full bg-primary"
+            className="h-2 rounded-full bg-primary dark:bg-primary/90"
             style={{ width: `${progress}%` }}
           />
         </div>

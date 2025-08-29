@@ -1,15 +1,15 @@
 // Firebase configuration for HRIS System
 // This file allows easy switching between Firebase and other backend services
 
-// Your Firebase configuration
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyC6ovwlhX4Mr8WpHoS045wLxHA7t8fRXPI",
-  authDomain: "hris-system-baa22.firebaseapp.com",
-  projectId: "hris-system-baa22",
-  storageBucket: "hris-system-baa22.firebasestorage.app",
-  messagingSenderId: "563898942372",
-  appId: "1:563898942372:web:8c5ebae1dfaf072858b731",
-  measurementId: "G-1DJP5DJX92"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase services (with error handling for missing dependencies)
@@ -31,15 +31,31 @@ const initializeFirebase = async (): Promise<boolean> => {
   firebaseInitPromise = (async () => {
     try {
       const { initializeApp } = await import('firebase/app');
-      const { getFirestore } = await import('firebase/firestore');
+      const { getFirestore, enableIndexedDbPersistence } = await import('firebase/firestore');
       const { getAuth } = await import('firebase/auth');
       const { getAnalytics } = await import('firebase/analytics');
+      const { getStorage } = await import('firebase/storage');
 
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       auth = getAuth(app);
       analytics = getAnalytics(app);
+      const storage = getStorage(app);
+      
+      // Enable offline persistence
+      try {
+        await enableIndexedDbPersistence(db);
+        console.log('✅ Offline persistence enabled');
+      } catch (err: any) {
+        if (err.code === 'failed-precondition') {
+          console.warn('⚠️ Multiple tabs open, persistence can only be enabled in one tab at a time');
+        } else if (err.code === 'unimplemented') {
+          console.warn('⚠️ The current browser does not support offline persistence');
+        } else {
+          console.error('❌ Error enabling offline persistence:', err);
+        }
+      }
 
       firebaseInitialized = true;
       console.log('✅ Firebase initialized successfully', db);
@@ -77,9 +93,13 @@ export const getServiceConfig = async () => {
   // Wait for Firebase to initialize
   await initializeFirebase();
 
+  // Check environment variable for service preference
+  const preferredService = import.meta.env.VITE_DEFAULT_SERVICE || 'mock';
+  const useFirebase = (preferredService === 'firebase' && isFirebaseConfigured());
+
   return {
-    // Set to 'firebase' to use Firebase, 'mock' for development
-    defaultService: isFirebaseConfigured() ? 'firebase' : 'mock' as 'firebase' | 'mock',
+    // Use environment variable or fallback based on Firebase configuration
+    defaultService: useFirebase ? 'firebase' : 'mock' as 'firebase' | 'mock',
 
     // Firebase configuration
     firebase: {

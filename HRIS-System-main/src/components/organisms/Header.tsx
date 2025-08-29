@@ -59,13 +59,13 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <Avatar />
-                <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label="Toggle theme">
-                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                <Button variant="outline" size="sm" className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border" onClick={toggleTheme} aria-label="Toggle theme">
+                  {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4" />
+                <Button variant="outline" size="sm" className="hover:bg-destructive/10 dark:hover:bg-destructive/20" onClick={handleLogout}>
+                  <LogOut className="w-4 h-4 text-destructive dark:text-destructive" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="outline" size="sm" className="hover:bg-accent/50 dark:hover:bg-accent/30">
                   <Settings className="w-4 h-4" />
                 </Button>
               </div>
@@ -86,25 +86,25 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
         </div>
         {/* Mobile Menu Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-background border-t border-border py-4 px-2 rounded-b-xl shadow-lg z-50">
+          <div className="md:hidden bg-background border-t border-border py-4 px-2 rounded-b-xl shadow-lg dark:shadow-accent/10 z-50">
             {actions && <div className="mb-4">{actions}</div>}
             {showUserInfo && user && (
               <div className="flex items-center space-x-3 mb-4">
-                <Avatar />
+                <Avatar className="border border-border dark:border-accent/30" />
                 <div>
                   <p className="text-sm font-medium text-foreground">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
               </div>
             )}
-            <Button variant="outline" size="sm" className="w-full mb-2" onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />} Toggle theme
+            <Button variant="outline" size="sm" className="w-full mb-2 bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun className="w-4 h-4 mr-2 text-amber-500" /> : <Moon className="w-4 h-4 mr-2 text-indigo-500" />} Toggle theme
             </Button>
-            <Button variant="outline" size="sm" className="w-full mb-2">
+            <Button variant="outline" size="sm" className="w-full mb-2 hover:bg-accent/50 dark:hover:bg-accent/30">
               <Settings className="w-4 h-4 mr-2" /> Settings
             </Button>
-            <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" /> Logout
+            <Button variant="outline" size="sm" className="w-full hover:bg-destructive/10 dark:hover:bg-destructive/20" onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2 text-destructive dark:text-destructive" /> Logout
             </Button>
           </div>
         )}
