@@ -50,11 +50,7 @@ const mockCompanies = [
   { name: 'Gamma LLC', icon: Shield },
 ];
 
-interface SidebarProps {
-  onClose?: () => void;
-}
-
-export function Sidebar({ onClose }: SidebarProps) {
+export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -66,7 +62,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
 
   return (
-    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-64'} bg-background border-r border-border flex flex-col text-foreground transition-all duration-200 shadow-sm dark:shadow-accent/5 z-50`}>
+    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-64'} bg-background border-r border-border flex flex-col text-foreground transition-all duration-200 shadow-sm dark:shadow-accent/5`}>
       {/* Company Switcher and Collapse Toggle */}
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-muted mb-2 ${collapsed ? 'justify-center' : ''}`}>
         <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
@@ -109,12 +105,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         <div className={`flex flex-col ${collapsed ? 'gap-2' : 'gap-2'}`}>
           {/* Dashboard Link */}
           <ul className={`flex flex-col gap-1 mb-1 items-start`}>
-            <SidebarNavLink 
-              link={dashboardLink} 
-              isActive={location.pathname === '/' || location.pathname.startsWith('/dashboard')} 
-              collapsed={collapsed} 
-              onClick={onClose}
-            />
+            <SidebarNavLink link={dashboardLink} isActive={location.pathname === '/' || location.pathname.startsWith('/dashboard')} collapsed={collapsed} />
           </ul>
           {/* Sectioned Navigation */}
           {navStructure.map((section) => (
@@ -128,13 +119,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                 {section.links.map((link) => {
                   const isActive = location.pathname.startsWith(link.href);
                   return (
-                    <SidebarNavLink 
-                      key={link.href} 
-                      link={link} 
-                      isActive={isActive} 
-                      collapsed={collapsed} 
-                      onClick={onClose}
-                    />
+                    <SidebarNavLink key={link.href} link={link} isActive={isActive} collapsed={collapsed} />
                   );
                 })}
               </ul>
@@ -144,10 +129,9 @@ export function Sidebar({ onClose }: SidebarProps) {
           {/* Help, Support, Settings links */}
           <div className="flex flex-col gap-1 mt-4">
             <ul className={`flex flex-col gap-1 items-start`}>
-              <SidebarNavLink link={{ label: 'Help', href: '/help', icon: HelpCircle }} isActive={location.pathname === '/help'} collapsed={collapsed} onClick={onClose} />
-              <SidebarNavLink link={{ label: 'Support', href: '/support', icon: LifeBuoy }} isActive={location.pathname === '/support'} collapsed={collapsed} onClick={onClose} />
-              <SidebarNavLink link={{ label: 'Settings', href: '/settings', icon: Settings }} isActive={location.pathname === '/settings'} collapsed={collapsed} onClick={onClose} />
-              <SidebarNavLink link={{ label: 'Security', href: '/auth/mfa', icon: Shield }} isActive={location.pathname === '/auth/mfa'} collapsed={collapsed} onClick={onClose} />
+              <SidebarNavLink link={{ label: 'Help', href: '/help', icon: HelpCircle }} isActive={location.pathname === '/help'} collapsed={collapsed} />
+              <SidebarNavLink link={{ label: 'Support', href: '/support', icon: LifeBuoy }} isActive={location.pathname === '/support'} collapsed={collapsed} />
+              <SidebarNavLink link={{ label: 'Settings', href: '/settings', icon: Settings }} isActive={location.pathname === '/settings'} collapsed={collapsed} />
             </ul>
           </div>
         </div>
@@ -184,18 +168,11 @@ export function Sidebar({ onClose }: SidebarProps) {
 }
 
 // SidebarNavLink: helper for nav links with icon, active state, and collapsed mode
-function SidebarNavLink({ link, isActive, collapsed, onClick }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean; onClick?: () => void }) {
+function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean }) {
   return (
     <NavigationMenuItem>
       <a
         href={link.href}
-        onClick={(e) => {
-          if (onClick) {
-            e.preventDefault();
-            onClick();
-            window.location.href = link.href;
-          }
-        }}
         className={
           `flex items-center gap-3 rounded-md font-medium transition-colors
           ${collapsed ? 'justify-center w-10 h-10 p-0' : 'px-3 py-2 text-sm w-full'}

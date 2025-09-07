@@ -21,30 +21,27 @@ npm run dev
 
 ## Recent Changes Made
 
-### 1. Performance Optimizations
-- ✅ **Code Splitting and Lazy Loading** for route components to improve initial load times
-- ✅ **Responsive Design** for mobile devices with adaptive layouts
+### 1. Onboarding Page
+- ✅ **Commented out** the onboarding page and its navigation links
+- The onboarding functionality is temporarily disabled but can be easily re-enabled
 
-### 2. User Experience Improvements
-- ✅ **Loading States** for asynchronous operations with visual feedback
-- ✅ **Offline Support** for Firestore with IndexedDB persistence
-- ✅ **Offline Indicator** to show when the application is working offline
-- ✅ **Global Search** functionality across multiple collections
+### 2. Payroll Management
+- ✅ **Commented out** all payroll pages except the main Payroll page
+- The main Payroll page is now accessible and functional
+- Other payroll features (Wallet, Benefits, Pension, Tax) are commented out but can be re-enabled
 
-### 3. Security Enhancements
-- ✅ **Multi-Factor Authentication** with phone verification
-- ✅ **Security Settings Page** for managing MFA
-
-### 4. Development Infrastructure
-- ✅ **Unit and Integration Tests** with Jest and React Testing Library
-- ✅ **CI/CD Pipeline** with GitHub Actions for automated deployment
-
-### 5. Previous Updates
-- ✅ **Onboarding Page** (commented out but can be re-enabled)
-- ✅ **Payroll Management** (main page accessible, other features commented out)
+### 3. Employee Management
 - ✅ **Enhanced Firebase Integration** with easy backend switching capability
-- ✅ **Improved service architecture** with abstract interfaces
-- ✅ **Enhanced Time Management** with comprehensive features
+- ✅ **Commented out existing mock employees** from the popup as requested
+- ✅ **Improved service architecture** with abstract interfaces for easy backend switching
+- The system now supports both Firebase and Mock services with automatic detection
+
+### 4. Time Management
+- ✅ **Enhanced clock in/out adjustment popup** with comprehensive features:
+  - Clock in/out time inputs
+  - Reason selection dropdown
+  - Additional notes field
+  - Improved UI with better styling and icons
 
 ## 🔥 Firebase Integration
 
@@ -95,31 +92,6 @@ The system automatically detects and uses the best available service:
 - ⏸️ Benefits (commented out)
 - ⏸️ Pension (commented out)
 - ⏸️ Tax (commented out)
-
-### Technical Features
-- ✅ Responsive Design (mobile-first approach)
-- ✅ Code Splitting (lazy loading of route components)
-- ✅ Loading States (visual feedback during async operations)
-- ✅ Offline Support (IndexedDB persistence for Firestore)
-- ✅ Global Search (search across multiple collections)
-- ✅ Multi-Factor Authentication (phone verification)
-- ✅ Automated Testing (Jest and React Testing Library)
-- ✅ CI/CD Pipeline (GitHub Actions for automated deployment)
-
-## Testing
-
-The project includes comprehensive unit and integration tests using Jest and React Testing Library.
-
-```bash
-# Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate test coverage report
-npm run test:coverage
-```
 
 ## Switching Backends
 

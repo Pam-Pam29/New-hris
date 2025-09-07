@@ -3,9 +3,15 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/atoms/Select';
 import { Button } from '@/components/ui/button';
 
+import { Asset } from '../types';
+
+type AssetFormData = Omit<Asset, 'id'> & {
+  id?: string;
+};
+
 interface AssetFormProps {
-  form: any;
-  setForm: React.Dispatch<React.SetStateAction<any>>;
+  form: AssetFormData;
+  setForm: React.Dispatch<React.SetStateAction<AssetFormData>>;
   handleSubmit: (e: React.FormEvent) => void;
   sending: boolean;
   employees: { value: string; label: string }[];

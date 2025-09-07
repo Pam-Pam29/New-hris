@@ -156,33 +156,24 @@ export default function PolicyManagement() {
   const acknowledgmentRate = totalAckRequired > 0 ? Math.round((totalAckReceived / totalAckRequired) * 100) : 0;
 
   // Handle form submission
-  function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
 
-    setTimeout(() => {
-      const newPolicy: Policy = {
-        id: policies.length + 1,
-        title: form.title,
-        category: form.category,
-        version: form.version,
-        status: form.status as Policy['status'],
-        description: form.description,
+    try {
+      const service = await getPolicyService();
+      const newPolicy = await service.createPolicy({
+        ...form,
         createdBy: 'Current User',
-        createdDate: new Date().toISOString().split('T')[0],
-        lastModified: new Date().toISOString().split('T')[0],
-        effectiveDate: form.effectiveDate,
-        acknowledgmentRequired: form.acknowledgmentRequired,
+        createdDate: new Date().toISOString(),
+        lastModified: new Date().toISOString(),
         acknowledgmentCount: 0,
         totalEmployees: 50,
         tags: form.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-      };
+      });
 
-      setPolicies(prev => [...prev, newPolicy]);
-      setSending(false);
+      setPolicies(prev => [newPolicy, ...prev]);
       setDialogOpen(false);
-      
-      // Reset form
       setForm({
         title: '',
         category: '',
@@ -193,7 +184,12 @@ export default function PolicyManagement() {
         tags: '',
         acknowledgmentRequired: false
       });
-    }, 1200);
+    } catch (error) {
+      console.error('Error creating policy:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create policy');
+    } finally {
+      setSending(false);
+    }
   }
 
   // Filter options
@@ -297,20 +293,27 @@ export default function PolicyManagement() {
   );
 
   // Handle edit form submit
-  function handleEditSubmit(e: React.FormEvent) {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
-    setTimeout(() => {
-      setPolicies(prev => prev.map(p => p.id === editForm.id ? {
-        ...p,
+
+    try {
+      const service = await getPolicyService();
+      const updatedPolicy = await service.updatePolicy(editForm.id, {
         ...editForm,
-        tags: editForm.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0),
-        lastModified: new Date().toISOString().split('T')[0],
-      } : p));
-      setSending(false);
+        lastModified: new Date().toISOString(),
+        tags: editForm.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0)
+      });
+
+      setPolicies(prev => prev.map(p => p.id === editForm.id ? updatedPolicy : p));
       setEditDialogOpen(false);
       setEditForm(null);
-    }, 1200);
+    } catch (error) {
+      console.error('Error updating policy:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update policy');
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -447,17 +450,24 @@ export default function PolicyManagement() {
   );
 
   // Add handlePublish function
-  function handlePublish(policyId: number) {
+  const handlePublish = async (policyId: number) => {
     setSending(true);
-    setTimeout(() => {
-      setPolicies(prev => prev.map((p: Policy) =>
-        p.id === policyId && (p.status === 'Draft' || p.status === 'Under Review')
-          ? { ...p, status: 'Published', publishedDate: new Date().toISOString().split('T')[0], lastModified: new Date().toISOString().split('T')[0] }
-          : p
-      ));
-      setSending(false);
+    try {
+      const service = await getPolicyService();
+      const updatedPolicy = await service.updatePolicy(policyId, {
+        status: 'Published',
+        publishedDate: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      });
+
+      setPolicies(prev => prev.map(p => p.id === policyId ? updatedPolicy : p));
       setDetailsDrawerOpen(false);
       setSelectedPolicy(null);
-    }, 1200);
+    } catch (error) {
+      console.error('Error publishing policy:', error);
+      setError(error instanceof Error ? error.message : 'Failed to publish policy');
+    } finally {
+      setSending(false);
+    }
   }
 }

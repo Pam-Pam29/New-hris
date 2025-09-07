@@ -3,30 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-interface Policy {
-  id: number;
-  title: string;
-  category: string;
-  version: string;
-  status: 'Draft' | 'Under Review' | 'Approved' | 'Published' | 'Archived';
-  description: string;
-  createdBy: string;
-  createdDate: string;
-  lastModified: string;
-  approvedBy?: string;
-  approvedDate?: string;
-  publishedDate?: string;
-  effectiveDate?: string;
-  expiryDate?: string;
-  acknowledgmentRequired: boolean;
-  acknowledgmentCount: number;
-  totalEmployees: number;
-  tags: string[];
-  // Optional article-style fields for enhanced display
-  summary?: string;
-  purpose?: string;
-  keyPoints?: string[];
-}
+import { Policy } from '../types';
 
 interface PolicyDetailsDrawerProps {
   open: boolean;

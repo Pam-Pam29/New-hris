@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { TypographyH2 } from "../../components/ui/typography";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import FirebaseConnectionTest from "../../components/FirebaseConnectionTest";
 
 const stats = [
 	{
@@ -43,13 +44,13 @@ const stats = [
 
 function StatCard({ label, value, description }: { label: string; value: string; description: string }) {
 	return (
-		<Card className="w-full shadow-sm bg-card text-card-foreground hover:shadow-md transition-shadow">
-			<CardHeader className="pb-2">
-				<CardTitle className="text-xs sm:text-sm md:text-base font-medium text-muted-foreground">{label}</CardTitle>
+		<Card className="w-full shadow-sm bg-card text-card-foreground">
+			<CardHeader>
+				<CardTitle className="text-base font-medium text-muted-foreground">{label}</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<div className="text-xl sm:text-2xl md:text-3xl font-bold mb-1">{value}</div>
-				<div className="text-[10px] sm:text-xs text-muted-foreground">{description}</div>
+				<div className="text-3xl font-bold mb-1">{value}</div>
+				<div className="text-xs text-muted-foreground">{description}</div>
 			</CardContent>
 		</Card>
 	);
@@ -57,7 +58,7 @@ function StatCard({ label, value, description }: { label: string; value: string;
 
 function StatCardGroup() {
 	return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 			{stats.slice(0, 4).map((stat) => (
 				<StatCard key={stat.label} {...stat} />
 			))}
@@ -67,7 +68,7 @@ function StatCardGroup() {
 
 function ExtraStatCardGroup() {
 	return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-4 md:mt-6">
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
 			{stats.slice(4).map((stat) => (
 				<StatCard key={stat.label} {...stat} />
 			))}
@@ -77,12 +78,12 @@ function ExtraStatCardGroup() {
 
 function QuickActions() {
 	return (
-		<div className="flex flex-wrap gap-2 md:gap-3 mt-6 md:mt-8">
-			<Button className="bg-green-500 hover:bg-green-600 text-white text-xs md:text-sm px-3 py-1 h-auto">Add New Employee</Button>
-			<Button className="bg-blue-500 hover:bg-blue-600 text-white text-xs md:text-sm px-3 py-1 h-auto">Post a Job</Button>
-			<Button className="bg-orange-500 hover:bg-orange-600 text-white text-xs md:text-sm px-3 py-1 h-auto">Approve Leave</Button>
+		<div className="flex flex-wrap gap-3 mt-8">
+			<Button className="bg-green-500 hover:bg-green-600 text-white">Add New Employee</Button>
+			<Button className="hover:bg-pink-600 text-white">Post a Job</Button>
+			<Button className="bg-orange-500 hover:bg-orange-600 text-white">Approve Leave</Button>
 			<Button
-                className="bg-violet-600 text-white hover:bg-violet-700 text-xs md:text-sm px-3 py-1 h-auto"
+                className="bg-violet-600 text-white hover:bg-violet-700"
                 variant="outline"
             >
                 Run Payroll
@@ -93,16 +94,16 @@ function QuickActions() {
 
 function RecentActivity() {
 	return (
-		<Card className="w-full md:w-1/2 mt-8 overflow-hidden">
-			<CardHeader className="pb-2">
-				<CardTitle className="text-sm md:text-base font-medium">Recent Activity</CardTitle>
+		<Card className="w-full mt-8">
+			<CardHeader>
+				<CardTitle className="text-lg font-medium text-green-500">Recent Activity</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<ul className="text-xs md:text-sm text-muted-foreground space-y-3">
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Jane Doe was hired as Software Engineer</li>
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Payroll processed for May</li>
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">John Smith approved leave request</li>
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Policy updated: Remote Work</li>
+				<ul className="text-sm text-muted-foreground space-y-2">
+					<li>Jane Doe was hired as Software Engineer</li>
+					<li>Payroll processed for May</li>
+					<li>John Smith approved leave request</li>
+					<li>Policy updated: Remote Work</li>
 				</ul>
 			</CardContent>
 		</Card>
@@ -111,15 +112,15 @@ function RecentActivity() {
 
 function UpcomingEvents() {
 	return (
-		<Card className="w-full md:w-1/2 mt-8 overflow-hidden">
-			<CardHeader className="pb-2">
-				<CardTitle className="text-sm md:text-base font-medium">Upcoming Events</CardTitle>
+		<Card className="w-full mt-8">
+			<CardHeader>
+				<CardTitle className="text-base font-medium">Upcoming Events</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<ul className="text-xs md:text-sm text-muted-foreground space-y-3">
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Interview: Sarah Lee (Tomorrow)</li>
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Company Holiday: June 12</li>
-					<li className="p-1 hover:bg-accent/20 rounded-md transition-colors">Birthday: Michael Brown (Friday)</li>
+				<ul className="text-sm text-muted-foreground space-y-2">
+					<li>Interview: Sarah Lee (Tomorrow)</li>
+					<li>Company Holiday: June 12</li>
+					<li>Birthday: Michael Brown (Friday)</li>
 				</ul>
 			</CardContent>
 		</Card>
@@ -138,17 +139,17 @@ const headcountData = [
 
 function HeadcountTrendChart() {
 	return (
-		<Card className="w-full mt-8 overflow-hidden">
-			<CardHeader className="pb-2">
-				<CardTitle className="text-sm md:text-base font-medium">Headcount Trend</CardTitle>
+		<Card className="w-full mt-8">
+			<CardHeader>
+				<CardTitle className="text-base font-medium">Headcount Trend</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<div className="h-48 sm:h-56 md:h-64 w-full">
+				<div className="h-64 w-full">
 					<ResponsiveContainer width="100%" height="100%">
-						<LineChart data={headcountData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+						<LineChart data={headcountData}>
 							<CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-							<XAxis dataKey="month" className="text-xs" tick={{ fontSize: 12 }} />
-							<YAxis className="text-xs" tick={{ fontSize: 12 }} width={30} />
+							<XAxis dataKey="month" className="text-xs" />
+							<YAxis className="text-xs" />
 							<Tooltip
 								contentStyle={{
 									backgroundColor: 'hsl(var(--card))',
@@ -161,8 +162,7 @@ function HeadcountTrendChart() {
 								dataKey="employees"
 								stroke="hsl(271 91% 65%)"
 								strokeWidth={2}
-								dot={{ fill: 'hsl(271 91% 65%)', strokeWidth: 2, r: 3 }}
-								activeDot={{ r: 5 }}
+								dot={{ fill: 'hsl(271 91% 65%)', strokeWidth: 2, r: 4 }}
 							/>
 						</LineChart>
 					</ResponsiveContainer>
@@ -174,18 +174,18 @@ function HeadcountTrendChart() {
 
 export default function Dashboard() {
 	return (
-		<div className="p-3 md:p-6 text-foreground max-w-full overflow-x-hidden">
-			<div className="max-w-7xl mx-auto">
-				<h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">HR Dashboard</h1>
-
-				<StatCardGroup />
-				<ExtraStatCardGroup />
-				<QuickActions />
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-6 md:mt-8">
-					<RecentActivity />
-					<UpcomingEvents />
-				</div>
-				<HeadcountTrendChart />
+		<div className="p-8 min-h-screen bg-background text-foreground">
+			<TypographyH2 className="mb-6 text-white text-center">Welcome to the HR Dashboard</TypographyH2>
+			<StatCardGroup />
+			<ExtraStatCardGroup />
+			<QuickActions />
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+				<RecentActivity />
+				<UpcomingEvents />
+			</div>
+			<HeadcountTrendChart />
+			<div className="mt-8">
+				<FirebaseConnectionTest />
 			</div>
 		</div>
 	);

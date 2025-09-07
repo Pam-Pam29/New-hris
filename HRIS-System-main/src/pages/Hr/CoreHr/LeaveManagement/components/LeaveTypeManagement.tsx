@@ -1,26 +1,32 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AtomicTanstackTable } from '@/components/TanstackTable/TanstackTable';
 import { ColumnDef } from '@tanstack/react-table';
-
-export interface LeaveType {
-  id: number;
-  name: string;
-  description?: string;
-  days: number;
-  active: boolean;
-}
-
-export const mockLeaveTypes: LeaveType[] = [
-  { id: 1, name: 'Annual', description: 'Paid annual leave', days: 20, active: true },
-  { id: 2, name: 'Sick', description: 'Sick leave for illness', days: 10, active: true },
-  { id: 3, name: 'Maternity', description: 'Maternity leave', days: 90, active: true },
-  { id: 4, name: 'Unpaid', description: 'Unpaid leave', days: 0, active: false },
-];
+import { getLeaveService } from '../services/leaveService';
+import { LeaveType } from '../types';
 
 export const LeaveTypeManagement: React.FC = () => {
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>(mockLeaveTypes);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLeaveTypes = async () => {
+      try {
+        const service = await getLeaveService();
+        const types = await service.getLeaveTypes();
+        setLeaveTypes(types);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching leave types:', err);
+        setError('Failed to load leave types');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaveTypes();
+  }, []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editType, setEditType] = useState<LeaveType | null>(null);
   const [form, setForm] = useState({ name: '', description: '', days: 0, active: true });
@@ -67,8 +73,15 @@ export const LeaveTypeManagement: React.FC = () => {
     setForm({ name: type.name, description: type.description || '', days: type.days, active: type.active });
     setDialogOpen(true);
   }
-  function handleDelete(id: number) {
-    setLeaveTypes(prev => prev.filter(t => t.id !== id));
+  async function handleDelete(id: string) {
+    try {
+      const service = await getLeaveService();
+      await service.deleteLeaveType(id);
+      setLeaveTypes(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Error deleting leave type:', err);
+      // TODO: Add error notification
+    }
   }
   function handleDialogClose() {
     setDialogOpen(false);
@@ -79,17 +92,22 @@ export const LeaveTypeManagement: React.FC = () => {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   }
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (editType) {
-      setLeaveTypes(prev => prev.map(t => t.id === editType.id ? { ...t, ...form } : t));
-    } else {
-      setLeaveTypes(prev => [
-        ...prev,
-        { id: prev.length ? Math.max(...prev.map(t => t.id)) + 1 : 1, ...form }
-      ]);
+    try {
+      const service = await getLeaveService();
+      if (editType) {
+        const updatedType = await service.updateLeaveType(editType.id, form);
+        setLeaveTypes(prev => prev.map(t => t.id === editType.id ? updatedType : t));
+      } else {
+        const newType = await service.createLeaveType(form);
+        setLeaveTypes(prev => [...prev, newType]);
+      }
+      handleDialogClose();
+    } catch (err) {
+      console.error('Error saving leave type:', err);
+      // TODO: Add error notification
     }
-    handleDialogClose();
   }
 
   return (
@@ -98,18 +116,26 @@ export const LeaveTypeManagement: React.FC = () => {
         <h2 className="text-xl font-semibold">Leave Types</h2>
         <Button className="bg-violet-600 text-white" onClick={() => setDialogOpen(true)}>Add Leave Type</Button>
       </div>
-      <AtomicTanstackTable
-        data={leaveTypes}
-        columns={columns}
-        showGlobalFilter
-        globalFilterPlaceholder="Search leave types..."
-        pageSizeOptions={[5, 10, 20]}
-        initialPageSize={5}
-        tableClassName="min-w-full divide-y divide-border"
-        rowClassName={(row: { index: number }) =>
-          `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`}
-        headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
-      />
+      {loading ? (
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+        </div>
+      ) : error ? (
+        <div className="text-red-500 text-center py-4">{error}</div>
+      ) : (
+        <AtomicTanstackTable
+          data={leaveTypes}
+          columns={columns}
+          showGlobalFilter
+          globalFilterPlaceholder="Search leave types..."
+          pageSizeOptions={[5, 10, 20]}
+          initialPageSize={5}
+          tableClassName="min-w-full divide-y divide-border"
+          rowClassName={(row: { index: number }) =>
+            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`}
+          headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
+        />
+      )}
       <Dialog open={dialogOpen} onOpenChange={open => { if (!open) handleDialogClose(); else setDialogOpen(true); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>

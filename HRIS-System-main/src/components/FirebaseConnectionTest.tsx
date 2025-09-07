@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { initializeFirebase, isFirebaseConfigured } from '../config/firebase';
-import { LoadingState } from './ui/loading-state';
 
 const FirebaseConnectionTest = () => {
   const [status, setStatus] = useState<'checking' | 'connected' | 'error'>('checking');
@@ -78,29 +77,28 @@ const FirebaseConnectionTest = () => {
   };
 
   return (
-    <div className="p-3 md:p-4 border rounded-lg shadow-md bg-card dark:bg-card/95 max-w-full md:max-w-md mx-auto my-2 md:my-4">
-      <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4 text-foreground dark:text-foreground/90">
+    <div className="p-4 border rounded-lg shadow-md bg-card dark:bg-card/95 max-w-md mx-auto my-4">
+      <h2 className="text-xl font-semibold mb-4 text-foreground dark:text-foreground/90">
         Firebase Connection Status
       </h2>
       
-      <LoadingState 
-        isLoading={status === 'checking'}
-        loadingText="Testing Firebase connection..."
-        error={status === 'error' ? message : null}
-        className="py-2"
-      >
-        <div className="mb-3 md:mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 md:w-3 h-2.5 md:h-3 rounded-full bg-green-500" />
-            <span className="font-medium text-sm md:text-base text-foreground dark:text-foreground/90">Connected</span>
-          </div>
-          <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground dark:text-muted-foreground/90">{message}</p>
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          <div 
+            className={`w-3 h-3 rounded-full ${status === 'checking' ? 'bg-amber-500 animate-pulse' : 
+              status === 'connected' ? 'bg-green-500' : 'bg-red-500'}`}
+          />
+          <span className="font-medium text-foreground dark:text-foreground/90">
+            {status === 'checking' ? 'Checking...' : 
+             status === 'connected' ? 'Connected' : 'Error'}
+          </span>
         </div>
-      </LoadingState>
+        <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground/90">{message}</p>
+      </div>
 
-      <div className="mt-3 md:mt-4 border-t pt-3 md:pt-4 dark:border-accent/20">
-        <h3 className="text-xs md:text-sm font-medium mb-1 md:mb-2 text-foreground dark:text-foreground/90">Connection Details:</h3>
-        <ul className="text-xs space-y-1 text-muted-foreground dark:text-muted-foreground/80 max-h-24 md:max-h-32 overflow-y-auto">
+      <div className="mt-4 border-t pt-4 dark:border-accent/20">
+        <h3 className="text-sm font-medium mb-2 text-foreground dark:text-foreground/90">Connection Details:</h3>
+        <ul className="text-xs space-y-1 text-muted-foreground dark:text-muted-foreground/90">
           {details.map((detail, index) => (
             <li key={index} className="font-mono">{detail}</li>
           ))}
@@ -110,7 +108,7 @@ const FirebaseConnectionTest = () => {
       <button
         onClick={testFirebaseConnection}
         disabled={status === 'checking'}
-        className={`mt-3 md:mt-4 px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-colors
+        className={`mt-4 px-4 py-2 rounded-md text-sm font-medium transition-colors
           ${status === 'checking' ? 
             'bg-muted text-muted-foreground cursor-not-allowed' : 
             'bg-primary hover:bg-primary/90 dark:bg-primary/90 dark:hover:bg-primary/80 text-primary-foreground'}`}

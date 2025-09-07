@@ -10,30 +10,16 @@ import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
 import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
 
-import { db, initializeFirebase } from '../../../../config/firebase';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-
-interface AttendanceRecord {
-  id: string;
-  employee: string;
-  date: string;
-  clockIn: string;
-  clockOut: string;
-  status: string;
-  notes: string;
-  reason: string;
-}
-
-const employees = [
-  'Jane Doe', 'John Smith', 'Mary Johnson', 'David Wilson', 'Sarah Brown'
-];
-const statuses = ['Present', 'Late', 'Absent'];
+import { getTimeService } from './services/timeService';
+import { AttendanceRecord } from './types';
 
 const statusConfig = {
   Present: { color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
   Late: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: AlertTriangle },
   Absent: { color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
+
+const statuses = Object.keys(statusConfig);
 
 export default function TimeManagement() {
   // State for attendance records from backend
@@ -42,6 +28,9 @@ export default function TimeManagement() {
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
+
+  // Get unique employees from attendance records
+  const employees = Array.from(new Set(attendanceRecords.map(record => record.employee)));
 
   // Adjust popup state
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
@@ -55,94 +44,19 @@ export default function TimeManagement() {
 
   // Load attendance records from backend
   useEffect(() => {
-    const initializeAndLoad = async () => {
-      await initializeFirebase();
-      loadAttendanceRecords();
-    };
-    initializeAndLoad();
+    loadAttendanceRecords();
   }, []);
 
   const loadAttendanceRecords = async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const attendanceCollection = collection(db as any, 'attendance_records');
-      const attendanceSnapshot = await getDocs(attendanceCollection);
-      const attendanceList = attendanceSnapshot.docs.map(doc => ({
-        id: doc.id,
-        employee: doc.data().employee,
-        date: doc.data().date,
-        clockIn: doc.data().clockIn,
-        clockOut: doc.data().clockOut,
-        status: doc.data().status,
-        notes: doc.data().notes,
-        reason: doc.data().reason,
-      } as AttendanceRecord));
-
-      // Add test data if no records found (for development)
-      const finalAttendanceList = attendanceList.length === 0 ? [
-        {
-          id: 'test-1',
-          employee: 'Jane Doe',
-          date: '2024-08-29',
-          clockIn: '09:00',
-          clockOut: '17:30',
-          status: 'Present',
-          notes: '',
-          reason: ''
-        },
-        {
-          id: 'test-2',
-          employee: 'John Smith',
-          date: '2024-08-29',
-          clockIn: '09:15',
-          clockOut: '17:00',
-          status: 'Late',
-          notes: 'Traffic delay',
-          reason: 'traffic'
-        },
-        {
-          id: 'test-3',
-          employee: 'Mary Johnson',
-          date: '2024-08-29',
-          clockIn: '',
-          clockOut: '',
-          status: 'Absent',
-          notes: 'Sick leave',
-          reason: 'sick'
-        }
-      ] : attendanceList;
-
-      setAttendanceRecords(finalAttendanceList);
-      setFilteredAttendanceRecords(finalAttendanceList);
-      console.log('Attendance Records:', finalAttendanceList);
+      const timeService = await getTimeService();
+      const records = await timeService.getAttendanceRecords();
+      setAttendanceRecords(records);
+      setFilteredAttendanceRecords(records);
     } catch (error) {
       console.error('Error loading attendance records:', error);
-
-      // Fallback test data if Firebase fails
-      const testData = [
-        {
-          id: 'test-1',
-          employee: 'Jane Doe',
-          date: '2024-08-29',
-          clockIn: '09:00',
-          clockOut: '17:30',
-          status: 'Present',
-          notes: '',
-          reason: ''
-        },
-        {
-          id: 'test-2',
-          employee: 'John Smith',
-          date: '2024-08-29',
-          clockIn: '09:15',
-          clockOut: '17:00',
-          status: 'Late',
-          notes: 'Traffic delay',
-          reason: 'traffic'
-        }
-      ];
-      setAttendanceRecords(testData);
-      setFilteredAttendanceRecords(testData);
+      setAttendanceRecords([]);
+      setFilteredAttendanceRecords([]);
     }
   };
 
@@ -174,8 +88,8 @@ export default function TimeManagement() {
   const handleAdjustSubmit = async () => {
     try {
       if (selectedAttendance) {
-        const attendanceDocRef = doc(db, 'attendance_records', selectedAttendance.id);
-        await updateDoc(attendanceDocRef, {
+        const timeService = await getTimeService();
+        await timeService.updateAttendanceRecord(selectedAttendance.id, {
           clockIn: adjustForm.clockIn,
           clockOut: adjustForm.clockOut,
           notes: adjustForm.notes,

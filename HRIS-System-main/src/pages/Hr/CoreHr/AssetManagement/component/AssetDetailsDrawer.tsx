@@ -15,19 +15,9 @@ interface AssetHistoryEntry {
   notes?: string;
 }
 
-interface Asset {
-  id: number;
-  name: string;
-  category: string;
-  serialNumber: string;
-  status: 'Available' | 'Assigned' | 'Under Repair' | 'Retired';
-  assignedTo?: string;
-  purchaseDate: string;
-  purchasePrice: number;
-  location: string;
-  condition: 'Excellent' | 'Good' | 'Fair' | 'Poor';
-  lastMaintenance?: string;
-  nextMaintenance?: string;
+import { Asset } from '../types';
+
+interface AssetWithHistory extends Asset {
   history?: AssetHistoryEntry[];
 }
 

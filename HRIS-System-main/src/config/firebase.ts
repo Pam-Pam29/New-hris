@@ -31,31 +31,15 @@ const initializeFirebase = async (): Promise<boolean> => {
   firebaseInitPromise = (async () => {
     try {
       const { initializeApp } = await import('firebase/app');
-      const { getFirestore, enableIndexedDbPersistence } = await import('firebase/firestore');
+      const { getFirestore } = await import('firebase/firestore');
       const { getAuth } = await import('firebase/auth');
       const { getAnalytics } = await import('firebase/analytics');
-      const { getStorage } = await import('firebase/storage');
 
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       auth = getAuth(app);
       analytics = getAnalytics(app);
-      const storage = getStorage(app);
-      
-      // Enable offline persistence
-      try {
-        await enableIndexedDbPersistence(db);
-        console.log('✅ Offline persistence enabled');
-      } catch (err: any) {
-        if (err.code === 'failed-precondition') {
-          console.warn('⚠️ Multiple tabs open, persistence can only be enabled in one tab at a time');
-        } else if (err.code === 'unimplemented') {
-          console.warn('⚠️ The current browser does not support offline persistence');
-        } else {
-          console.error('❌ Error enabling offline persistence:', err);
-        }
-      }
 
       firebaseInitialized = true;
       console.log('✅ Firebase initialized successfully', db);

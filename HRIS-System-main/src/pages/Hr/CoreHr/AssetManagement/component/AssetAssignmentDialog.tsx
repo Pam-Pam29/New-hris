@@ -5,29 +5,16 @@ import { Select } from '@/components/atoms/Select';
 import { TypographyP } from '@/components/ui/typography';
 import { Package, User } from 'lucide-react';
 
-interface Asset {
-  id: number;
-  name: string;
-  category: string;
-  serialNumber: string;
-  status: 'Available' | 'Assigned' | 'Under Repair' | 'Retired';
-  assignedTo?: string;
-  purchaseDate: string;
-  purchasePrice: number;
-  location: string;
-  condition: 'Excellent' | 'Good' | 'Fair' | 'Poor';
-  lastMaintenance?: string;
-  nextMaintenance?: string;
-}
+import { Asset } from '../types';
 
 interface AssetAssignmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   asset: Asset | null;
   employees: { value: string; label: string }[];
-  onAssign: (assetId: number, employeeName: string) => void;
-  onUnassign: (assetId: number) => void;
-  onTransfer: (assetId: number, newEmployeeName: string) => void;
+  onAssign: (assetId: string, employeeName: string) => void;
+  onUnassign: (assetId: string) => void;
+  onTransfer: (assetId: string, newEmployeeName: string) => void;
 }
 
 export const AssetAssignmentDialog: React.FC<AssetAssignmentDialogProps> = ({

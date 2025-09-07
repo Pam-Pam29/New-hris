@@ -11,22 +11,9 @@ import { AssetAssignmentDialog } from './component/AssetAssignmentDialog';
 import { AssetDetailsDrawer } from './component/AssetDetailsDrawer';
 import { employeeService } from '../../../../services/employeeService';
 import { Employee } from '../EmployeeManagement/types';
-
-// Asset type definition
-interface Asset {
-  id: number;
-  name: string;
-  category: string;
-  serialNumber: string;
-  status: 'Available' | 'Assigned' | 'Under Repair' | 'Retired';
-  assignedTo?: string;
-  purchaseDate: string;
-  purchasePrice: number;
-  location: string;
-  condition: 'Excellent' | 'Good' | 'Fair' | 'Poor';
-  lastMaintenance?: string;
-  nextMaintenance?: string;
-}
+import { Asset } from './types';
+import { getAssetService } from './services/assetService';
+import { toast } from "@/hooks/use-toast";
 
 interface StatCardProps {
   title: string;
@@ -72,6 +59,8 @@ export default function AssetManagement() {
   const [selectedAssetForAssignment, setSelectedAssetForAssignment] = useState<Asset | null>(null);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     serialNumber: '',
@@ -87,28 +76,37 @@ export default function AssetManagement() {
   const [employees, setEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
-    const loadEmployees = async () => {
+    const loadData = async () => {
       try {
-        const employeeData = await employeeService.getEmployees();
+        const [service, employeeData] = await Promise.all([
+          getAssetService(),
+          employeeService.getEmployees()
+        ]);
+        
+        const assetData = await service.getAssets();
+        setAssets(assetData);
         setEmployees(employeeData);
+        setLoading(false);
       } catch (error) {
-        console.error('Error fetching employees:', error);
+        console.error('Error loading data:', error);
+        setError('Failed to load data. Please try again later.');
+        setLoading(false);
       }
     };
-    loadEmployees();
+    loadData();
   }, []);
 
   // Mock employee data for assignment dropdown
   const mockEmployees = employees.map(employee => ({ value: employee.name, label: employee.name }));
 
   // Handle form submission
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSending(true);
 
-    setTimeout(() => {
-      const newAsset: Asset = {
-        id: assets.length + 1,
+    try {
+      const service = await getAssetService();
+      const newAsset = await service.createAsset({
         name: form.name,
         category: form.category,
         serialNumber: form.serialNumber,
@@ -119,11 +117,14 @@ export default function AssetManagement() {
         location: form.location,
         condition: form.condition as Asset['condition'],
         nextMaintenance: form.nextMaintenance || undefined
-      };
+      });
 
       setAssets(prev => [...prev, newAsset]);
-      setSending(false);
       setDialogOpen(false);
+      toast({
+        title: 'Success',
+        description: 'Asset created successfully',
+      });
 
       // Reset form
       setForm({
@@ -138,32 +139,100 @@ export default function AssetManagement() {
         condition: 'Excellent',
         nextMaintenance: ''
       });
-    }, 1200);
+    } catch (error) {
+      console.error('Error creating asset:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create asset. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
+    }
   }
 
   // Asset assignment handlers
-  function handleAssignAsset(assetId: number, employeeName: string) {
-    setAssets(prev => prev.map(asset =>
-      asset.id === assetId
-        ? { ...asset, status: 'Assigned' as const, assignedTo: employeeName }
-        : asset
-    ));
+  async function handleAssignAsset(assetId: string, employeeName: string) {
+    try {
+      const service = await getAssetService();
+      await service.updateAsset(assetId, {
+        status: 'Assigned',
+        assignedTo: employeeName
+      });
+      
+      setAssets(prev => prev.map(asset =>
+        asset.id === assetId
+          ? { ...asset, status: 'Assigned', assignedTo: employeeName }
+          : asset
+      ));
+      
+      toast({
+        title: 'Success',
+        description: 'Asset assigned successfully',
+      });
+    } catch (error) {
+      console.error('Error assigning asset:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to assign asset. Please try again.',
+        variant: 'destructive',
+      });
+    }
   }
 
-  function handleUnassignAsset(assetId: number) {
-    setAssets(prev => prev.map(asset =>
-      asset.id === assetId
-        ? { ...asset, status: 'Available' as const, assignedTo: undefined }
-        : asset
-    ));
+  async function handleUnassignAsset(assetId: string) {
+    try {
+      const service = await getAssetService();
+      await service.updateAsset(assetId, {
+        status: 'Available',
+        assignedTo: undefined
+      });
+      
+      setAssets(prev => prev.map(asset =>
+        asset.id === assetId
+          ? { ...asset, status: 'Available', assignedTo: undefined }
+          : asset
+      ));
+      
+      toast({
+        title: 'Success',
+        description: 'Asset unassigned successfully',
+      });
+    } catch (error) {
+      console.error('Error unassigning asset:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to unassign asset. Please try again.',
+        variant: 'destructive',
+      });
+    }
   }
 
-  function handleTransferAsset(assetId: number, newEmployeeName: string) {
-    setAssets(prev => prev.map(asset =>
-      asset.id === assetId
-        ? { ...asset, assignedTo: newEmployeeName }
-        : asset
-    ));
+  async function handleTransferAsset(assetId: string, newEmployeeName: string) {
+    try {
+      const service = await getAssetService();
+      await service.updateAsset(assetId, {
+        assignedTo: newEmployeeName
+      });
+      
+      setAssets(prev => prev.map(asset =>
+        asset.id === assetId
+          ? { ...asset, assignedTo: newEmployeeName }
+          : asset
+      ));
+      
+      toast({
+        title: 'Success',
+        description: 'Asset transferred successfully',
+      });
+    } catch (error) {
+      console.error('Error transferring asset:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to transfer asset. Please try again.',
+        variant: 'destructive',
+      });
+    }
   }
 
   function openAssignmentDialog(asset: Asset) {
@@ -286,6 +355,35 @@ export default function AssetManagement() {
     ],
     []
   );
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+          <p className="text-sm text-muted-foreground">Loading assets...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <Button
+            variant="outline"
+            onClick={() => window.location.reload()}
+            className="mt-4"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 min-h-screen bg-background text-foreground">
