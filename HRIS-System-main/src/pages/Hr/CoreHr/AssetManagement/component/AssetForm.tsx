@@ -236,12 +236,6 @@ export const AssetForm: React.FC<AssetFormProps> = ({
           {sending ? 'Adding Asset...' : 'Add Asset'}
         </Button>
       </div>
-
-      {/* Debug info - remove in production */}
-      <div className="col-span-1 md:col-span-2 mt-4 p-4 bg-gray-100 rounded text-xs">
-        <strong>Debug - Current form state:</strong>
-        <pre>{JSON.stringify(form, null, 2)}</pre>
-      </div>
     </form>
   );
 };

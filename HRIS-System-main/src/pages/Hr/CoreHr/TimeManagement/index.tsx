@@ -10,6 +10,10 @@ import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
 import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
 
+// Import Employee Service
+import { getEmployeeService, IEmployeeService } from '../../../../services/employeeService';
+import { Employee } from '../CoreHr/EmployeeManagement/types';
+
 import { getTimeService } from './services/timeService';
 import { AttendanceRecord } from './types';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +28,7 @@ const statuses = Object.keys(statusConfig);
 
 export default function TimeManagement() {
   const { toast } = useToast();
+
   // State for attendance records from backend
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [filteredAttendanceRecords, setFilteredAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -31,8 +36,12 @@ export default function TimeManagement() {
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
 
-  // Get unique employees from attendance records
-  const employees = Array.from(new Set(attendanceRecords.map(record => record.employee)));
+  // Employee service and employees state
+  const [employeeService, setEmployeeService] = useState<IEmployeeService | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  // Get unique employees from attendance records (for filtering)
+  const attendanceEmployees = Array.from(new Set(attendanceRecords.map(record => record.employee)));
 
   // Adjust popup state
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
@@ -54,11 +63,33 @@ export default function TimeManagement() {
     clockOut: ''
   });
 
-  // Load attendance records from backend
+  // Initialize Employee Service
   useEffect(() => {
-    loadAttendanceRecords();
+    const initializeService = async () => {
+      try {
+        const service = await getEmployeeService();
+        setEmployeeService(service);
+      } catch (error) {
+        console.error('Failed to initialize employee service:', error);
+      }
+    };
+
+    initializeService();
   }, []);
 
+  // Load employees using Employee Service
+  const fetchEmployees = async () => {
+    if (!employeeService) return;
+
+    try {
+      const employeesList = await employeeService.getEmployees();
+      setEmployees(employeesList);
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+    }
+  };
+
+  // Load attendance records from backend
   const loadAttendanceRecords = async () => {
     try {
       const timeService = await getTimeService();
@@ -72,13 +103,17 @@ export default function TimeManagement() {
     }
   };
 
-  // Filter logic - This is now handled in the button click
-  //const filtered = filteredAttendanceRecords;
-  //attendanceRecords.filter(row =>
-  //  (!selectedEmployee || row.employee === selectedEmployee) &&
-  //  (!selectedStatus || row.status === selectedStatus) &&
-  //  (!selectedDate || row.date === selectedDate)
-  //);
+  // Load data when employee service is ready
+  useEffect(() => {
+    if (employeeService) {
+      fetchEmployees();
+    }
+  }, [employeeService]);
+
+  // Load attendance records on component mount
+  useEffect(() => {
+    loadAttendanceRecords();
+  }, []);
 
   // Summary stats
   const summary = statuses.map(status => ({
@@ -114,9 +149,20 @@ export default function TimeManagement() {
         setShowAdjustDialog(false);
         setSelectedAttendance(null);
         setAdjustForm({ clockIn: '', clockOut: '', notes: '', reason: '' });
+
+        toast({
+          title: 'Attendance updated',
+          description: `Time adjusted for ${selectedAttendance.employee}`,
+          duration: 3500
+        });
       }
     } catch (error) {
       console.error('Error updating attendance record:', error);
+      toast({
+        title: 'Failed to update attendance',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        duration: 5000
+      });
     }
   };
 
@@ -124,6 +170,40 @@ export default function TimeManagement() {
     setShowAdjustDialog(false);
     setSelectedAttendance(null);
     setAdjustForm({ clockIn: '', clockOut: '', notes: '', reason: '' });
+  };
+
+  const handleAddAttendance = async () => {
+    try {
+      // Get employee name from the employees list
+      const selectedEmployeeData = employees.find(emp => emp.id.toString() === newAttendance.employee);
+      const employeeName = selectedEmployeeData ? selectedEmployeeData.name : newAttendance.employee;
+
+      const timeService = await getTimeService();
+      const created = await timeService.createAttendanceRecord({
+        id: '',
+        employee: employeeName,
+        date: newAttendance.date,
+        status: newAttendance.status as any,
+        clockIn: newAttendance.clockIn,
+        clockOut: newAttendance.clockOut,
+      } as any);
+
+      await loadAttendanceRecords();
+      setShowAddDialog(false);
+      setNewAttendance({ employee: '', date: '', status: 'Present', clockIn: '', clockOut: '' });
+
+      toast({
+        title: 'Attendance added',
+        description: `${created.employee} on ${created.date}`,
+        duration: 3500
+      });
+    } catch (e) {
+      toast({
+        title: 'Failed to add attendance',
+        description: e instanceof Error ? e.message : 'Unknown error',
+        duration: 5000
+      });
+    }
   };
 
   return (
@@ -160,7 +240,7 @@ export default function TimeManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all_employees">All Employees</SelectItem>
-                  {employees.filter(employee => employee !== '').map(employee => (
+                  {attendanceEmployees.filter(employee => employee !== '').map(employee => (
                     <SelectItem key={employee} value={employee}>{employee}</SelectItem>
                   ))}
                 </SelectContent>
@@ -317,7 +397,31 @@ export default function TimeManagement() {
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium">Employee</Label>
-              <Input value={newAttendance.employee} onChange={(e) => setNewAttendance(prev => ({ ...prev, employee: e.target.value }))} placeholder="Employee name" />
+              {employees.length > 0 ? (
+                <Select value={newAttendance.employee} onValueChange={(value) => setNewAttendance(prev => ({ ...prev, employee: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map(employee => (
+                      <SelectItem key={employee.id} value={employee.id.toString()}>
+                        {employee.name} - {employee.department} ({employee.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={newAttendance.employee}
+                  onChange={(e) => setNewAttendance(prev => ({ ...prev, employee: e.target.value }))}
+                  placeholder="Employee name"
+                />
+              )}
+              {employees.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  No employees found. Please add employees in Employee Management first.
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-sm font-medium">Date</Label>
@@ -349,25 +453,7 @@ export default function TimeManagement() {
             <div className="flex gap-3 pt-2">
               <Button
                 className="bg-violet-600 hover:bg-violet-700"
-                onClick={async () => {
-                  try {
-                    const timeService = await getTimeService();
-                    const created = await timeService.createAttendanceRecord({
-                      id: '',
-                      employee: newAttendance.employee,
-                      date: newAttendance.date,
-                      status: newAttendance.status as any,
-                      clockIn: newAttendance.clockIn,
-                      clockOut: newAttendance.clockOut,
-                    } as any);
-                    await loadAttendanceRecords();
-                    setShowAddDialog(false);
-                    setNewAttendance({ employee: '', date: '', status: 'Present', clockIn: '', clockOut: '' });
-                    toast({ title: 'Attendance added', description: `${created.employee} on ${created.date}`, duration: 3500 });
-                  } catch (e) {
-                    toast({ title: 'Failed to add attendance', description: e instanceof Error ? e.message : 'Unknown error', duration: 5000 });
-                  }
-                }}
+                onClick={handleAddAttendance}
               >
                 Save
               </Button>
