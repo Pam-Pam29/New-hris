@@ -1,45 +1,26 @@
 import React, { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { TypographyH2 } from '@/components/ui/typography';
-import { AtomicTanstackTable } from '@/components/TanstackTable/TanstackTable';
+import { Button } from '../../../../components/ui/button';
+import { TypographyH2 } from '../../../../components/ui/typography';
+import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
 import { ColumnDef } from "@tanstack/react-table";
-import { StatCard } from '@/components/molecules/StatCard';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { PlusCircle, FileText, Users, CheckCircle, Clock, Eye, Edit, Download } from 'lucide-react';
+import { StatCard } from '../../../../components/molecules/StatCard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
+import { PlusCircle, Eye, Edit, Download } from 'lucide-react';
 import { PolicyForm } from './components/PolicyForm';
 import { PolicyDetailsDrawer } from './components/PolicyDetailsDrawer';
-
-// Policy type definition
-interface Policy {
-  id: number;
-  title: string;
-  category: string;
-  version: string;
-  status: 'Draft' | 'Under Review' | 'Approved' | 'Published' | 'Archived';
-  description: string;
-  createdBy: string;
-  createdDate: string;
-  lastModified: string;
-  approvedBy?: string;
-  approvedDate?: string;
-  publishedDate?: string;
-  effectiveDate?: string;
-  expiryDate?: string;
-  acknowledgmentRequired: boolean;
-  acknowledgmentCount: number;
-  totalEmployees: number;
-  tags: string[];
-}
+import { Policy } from './types'; // Import Policy type from types.ts
+import { getPolicyService } from './services/policyService'; // Import getPolicyService
 
 // Mock data
 const mockPolicies: Policy[] = [
   {
-    id: 1,
+    id: "1",
     title: 'Remote Work Policy',
     category: 'HR',
     version: '2.1',
     status: 'Published',
     description: 'Guidelines for remote work arrangements, equipment, and expectations.',
+    content: 'This is the content of the remote work policy.',
     createdBy: 'HR Admin',
     createdDate: '2023-01-15',
     lastModified: '2023-06-10',
@@ -47,18 +28,20 @@ const mockPolicies: Policy[] = [
     approvedDate: '2023-06-08',
     publishedDate: '2023-06-10',
     effectiveDate: '2023-06-15',
+    expiryDate: '2024-06-15',
     acknowledgmentRequired: true,
     acknowledgmentCount: 45,
     totalEmployees: 50,
     tags: ['remote', 'work-from-home', 'equipment']
   },
   {
-    id: 2,
+    id: "2",
     title: 'Code of Conduct',
     category: 'Ethics',
     version: '1.0',
     status: 'Published',
     description: 'Company code of conduct and ethical guidelines for all employees.',
+    content: 'This is the content of the code of conduct.',
     createdBy: 'Legal Team',
     createdDate: '2022-12-01',
     lastModified: '2022-12-01',
@@ -66,18 +49,20 @@ const mockPolicies: Policy[] = [
     approvedDate: '2022-12-05',
     publishedDate: '2022-12-10',
     effectiveDate: '2023-01-01',
+    expiryDate: '2023-12-31',
     acknowledgmentRequired: true,
     acknowledgmentCount: 50,
     totalEmployees: 50,
     tags: ['ethics', 'conduct', 'compliance']
   },
   {
-    id: 3,
+    id: "3",
     title: 'Data Security Policy',
     category: 'IT',
     version: '3.0',
     status: 'Under Review',
     description: 'Comprehensive data security and privacy protection guidelines.',
+    content: 'This is the content of the data security policy.',
     createdBy: 'IT Security',
     createdDate: '2023-08-01',
     lastModified: '2023-08-15',
@@ -87,12 +72,13 @@ const mockPolicies: Policy[] = [
     tags: ['security', 'data', 'privacy', 'gdpr']
   },
   {
-    id: 4,
+    id: "4",
     title: 'Leave and Vacation Policy',
     category: 'HR',
     version: '1.5',
     status: 'Published',
     description: 'Annual leave, sick leave, and vacation request procedures.',
+    content: 'This is the content of the leave and vacation policy.',
     createdBy: 'HR Admin',
     createdDate: '2023-03-01',
     lastModified: '2023-07-20',
@@ -100,18 +86,20 @@ const mockPolicies: Policy[] = [
     approvedDate: '2023-07-18',
     publishedDate: '2023-07-20',
     effectiveDate: '2023-08-01',
+    expiryDate: '2024-07-31',
     acknowledgmentRequired: false,
     acknowledgmentCount: 0,
     totalEmployees: 50,
     tags: ['leave', 'vacation', 'pto']
   },
   {
-    id: 5,
+    id: "5",
     title: 'Expense Reimbursement Policy',
     category: 'Finance',
     version: '2.0',
     status: 'Draft',
     description: 'Guidelines for business expense reporting and reimbursement procedures.',
+    content: 'This is the content of the expense reimbursement policy.',
     createdBy: 'Finance Team',
     createdDate: '2023-09-01',
     lastModified: '2023-09-15',
@@ -122,33 +110,68 @@ const mockPolicies: Policy[] = [
   }
 ];
 
+interface FormValues {
+  title: string;
+  category: string;
+  version: string;
+  status: 'Draft' | 'Under Review' | 'Approved' | 'Published' | 'Archived';
+  description: string;
+  content: string;
+  effectiveDate?: string;
+  tags: string;
+  acknowledgmentRequired: boolean;
+}
+
 export default function PolicyManagement() {
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editForm, setEditForm] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<FormValues | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sending, setSending] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormValues>({
     title: '',
     category: '',
     version: '1.0',
     status: 'Draft',
     description: '',
+    content: '',
     effectiveDate: '',
     tags: '',
     acknowledgmentRequired: false
   });
+  useState<string | null>(null); // Add error state
+
+  // Add handlePublish function
+  const handlePublish = async (policyId: string) => {
+    setSending(true);
+    try {
+      const service = await getPolicyService();
+      const updatedPolicy = await service.updatePolicy(policyId, {
+        status: 'Published',
+        publishedDate: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      });
+
+      setPolicies(prev => prev.map(p => p.id === policyId ? updatedPolicy : p));
+      setDetailsDrawerOpen(false);
+      setSelectedPolicy(null);
+    } catch (error: unknown) {
+      console.error('Error publishing policy:', error);
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Statistics
   const totalPolicies = policies.length;
   const publishedPolicies = policies.filter(p => p.status === 'Published').length;
   const draftPolicies = policies.filter(p => p.status === 'Draft').length;
   const underReviewPolicies = policies.filter(p => p.status === 'Under Review').length;
-  
+
   // Calculate overall acknowledgment rate
   const policiesRequiringAck = policies.filter(p => p.acknowledgmentRequired && p.status === 'Published');
   const totalAckRequired = policiesRequiringAck.reduce((sum, p) => sum + p.totalEmployees, 0);
@@ -180,13 +203,13 @@ export default function PolicyManagement() {
         version: '1.0',
         status: 'Draft',
         description: '',
+        content: '',
         effectiveDate: '',
         tags: '',
         acknowledgmentRequired: false
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error creating policy:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create policy');
     } finally {
       setSending(false);
     }
@@ -265,22 +288,22 @@ export default function PolicyManagement() {
         cell: ({ row }) => (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => {
-                setSelectedPolicy(row.original);
-                setDetailsDrawerOpen(true);
-              }}>
+              setSelectedPolicy(row.original);
+              setDetailsDrawerOpen(true);
+            }}>
               <Eye className="h-3 w-3 mr-1" />
               View
             </Button>
-             <Button size="sm" variant="outline" onClick={() => {
-               setEditForm({
-                 ...row.original,
-                 tags: row.original.tags ? row.original.tags.join(', ') : '',
-               });
-               setEditDialogOpen(true);
-             }}>
-               <Edit className="h-3 w-3 mr-1" />
-               Edit
-             </Button>
+            <Button size="sm" variant="outline" onClick={() => {
+              setEditForm({
+                ...row.original,
+                tags: row.original.tags ? row.original.tags.join(', ') : '',
+              });
+              setEditDialogOpen(true);
+            }}>
+              <Edit className="h-3 w-3 mr-1" />
+              Edit
+            </Button>
             <Button size="sm" variant="outline">
               <Download className="h-3 w-3 mr-1" />
               Export
@@ -299,18 +322,19 @@ export default function PolicyManagement() {
 
     try {
       const service = await getPolicyService();
-      const updatedPolicy = await service.updatePolicy(editForm.id, {
-        ...editForm,
-        lastModified: new Date().toISOString(),
-        tags: editForm.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0)
-      });
+      if (editForm) {
+        const updatedPolicy = await service.updatePolicy(selectedPolicy?.id || "", {
+          ...editForm,
+          lastModified: new Date().toISOString(),
+          tags: editForm.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0)
+        });
 
-      setPolicies(prev => prev.map(p => p.id === editForm.id ? updatedPolicy : p));
-      setEditDialogOpen(false);
-      setEditForm(null);
-    } catch (error) {
+        setPolicies(prev => prev.map(p => p.id === selectedPolicy?.id ? updatedPolicy : p));
+        setEditDialogOpen(false);
+        setEditForm(null);
+      }
+    } catch (error: unknown) {
       console.error('Error updating policy:', error);
-      setError(error instanceof Error ? error.message : 'Failed to update policy');
     } finally {
       setSending(false);
     }
@@ -322,37 +346,32 @@ export default function PolicyManagement() {
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatCard
-            title="Total Policies"
+            label="Total Policies"
             value={totalPolicies.toString()}
-            icon={<FileText className="h-4 w-4" />}
             description="All company policies"
             color="orange"
           />
           <StatCard
-            title="Published"
+            label="Published"
             value={publishedPolicies.toString()}
-            icon={<CheckCircle className="h-4 w-4" />}
             description="Active policies"
             color="orange"
           />
           <StatCard
-            title="Under Review"
+            label="Under Review"
             value={underReviewPolicies.toString()}
-            icon={<Clock className="h-4 w-4" />}
             description="Pending approval"
             color="orange"
           />
           <StatCard
-            title="Drafts"
+            label="Drafts"
             value={draftPolicies.toString()}
-            icon={<Edit className="h-4 w-4" />}
             description="Work in progress"
             color="orange"
           />
           <StatCard
-            title="Acknowledgment Rate"
+            label="Acknowledgment Rate"
             value={`${acknowledgmentRate}%`}
-            icon={<Users className="h-4 w-4" />}
             description="Employee compliance"
             color="orange"
           />
@@ -376,10 +395,7 @@ export default function PolicyManagement() {
             globalFilterPlaceholder="Search policies..."
             pageSizeOptions={[10, 20, 50]}
             initialPageSize={10}
-            tableClassName="min-w-full divide-y divide-border"
-            rowClassName={(row: { index: number }) =>
-              `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`}
-            headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
+            className="min-w-full divide-y divide-border bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
             filterDropdowns={
               <>
                 <select
@@ -430,7 +446,7 @@ export default function PolicyManagement() {
           </DialogHeader>
           {editForm && (
             <PolicyForm
-              form={editForm}
+              form={form}
               setForm={setEditForm}
               handleSubmit={handleEditSubmit}
               sending={sending}
@@ -442,32 +458,10 @@ export default function PolicyManagement() {
       <PolicyDetailsDrawer
         open={detailsDrawerOpen}
         onOpenChange={open => setDetailsDrawerOpen(open)}
-        policy={selectedPolicy}
-        onPublish={handlePublish}
+        policy={selectedPolicy || mockPolicies[0]} // Provide a default value
+        onPublish={() => handlePublish(selectedPolicy?.id || "")}
         sending={sending}
       />
     </>
   );
-
-  // Add handlePublish function
-  const handlePublish = async (policyId: number) => {
-    setSending(true);
-    try {
-      const service = await getPolicyService();
-      const updatedPolicy = await service.updatePolicy(policyId, {
-        status: 'Published',
-        publishedDate: new Date().toISOString(),
-        lastModified: new Date().toISOString()
-      });
-
-      setPolicies(prev => prev.map(p => p.id === policyId ? updatedPolicy : p));
-      setDetailsDrawerOpen(false);
-      setSelectedPolicy(null);
-    } catch (error) {
-      console.error('Error publishing policy:', error);
-      setError(error instanceof Error ? error.message : 'Failed to publish policy');
-    } finally {
-      setSending(false);
-    }
-  }
 }

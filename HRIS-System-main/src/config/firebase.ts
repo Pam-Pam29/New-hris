@@ -13,10 +13,10 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase services (with error handling for missing dependencies)
-let app: any = null;
-let db: any = null;
-let auth: any = null;
-let analytics: any = null;
+let app: import('firebase/app').FirebaseApp | null = null;
+let db: import('firebase/firestore').Firestore | null = null;
+let auth: import('firebase/auth').Auth | null = null;
+let analytics: import('firebase/analytics').Analytics | null = null;
 let firebaseInitialized = false;
 
 // Promise to track Firebase initialization
@@ -44,8 +44,10 @@ const initializeFirebase = async (): Promise<boolean> => {
       firebaseInitialized = true;
       console.log('✅ Firebase initialized successfully', db);
       return true;
-    } catch (error) {
-      console.warn('⚠️ Firebase not available. Please install Firebase: npm install firebase');
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.warn(`⚠️ Firebase initialization failed: ${error.message}`);
+      }
       console.warn('⚠️ Falling back to Mock service');
       firebaseInitialized = false;
       return false;
@@ -78,7 +80,7 @@ export const getServiceConfig = async () => {
   await initializeFirebase();
 
   // Check environment variable for service preference
-  const preferredService = import.meta.env.VITE_DEFAULT_SERVICE || 'mock';
+  const preferredService = import.meta.env.VITE_DEFAULT_SERVICE || 'firebase';
   const useFirebase = (preferredService === 'firebase' && isFirebaseConfigured());
 
   return {
@@ -101,13 +103,13 @@ export const getServiceConfig = async () => {
 // For backwards compatibility, export a SERVICE_CONFIG that defaults to mock
 // but can be overridden by calling getServiceConfig()
 export const SERVICE_CONFIG = {
-  defaultService: 'mock' as 'firebase' | 'mock',
+  defaultService: 'firebase' as 'firebase' | 'mock',
   firebase: {
-    enabled: false,
-    db: null
+    enabled: isFirebaseConfigured(),
+    db: isFirebaseConfigured() ? db : null
   },
   mock: {
-    enabled: true
+    enabled: !isFirebaseConfigured()
   }
 };
 
