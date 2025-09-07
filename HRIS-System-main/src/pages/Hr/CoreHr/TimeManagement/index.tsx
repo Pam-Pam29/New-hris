@@ -12,6 +12,7 @@ import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, Us
 
 import { getTimeService } from './services/timeService';
 import { AttendanceRecord } from './types';
+import { useToast } from '@/hooks/use-toast';
 
 const statusConfig = {
   Present: { color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
@@ -22,6 +23,7 @@ const statusConfig = {
 const statuses = Object.keys(statusConfig);
 
 export default function TimeManagement() {
+  const { toast } = useToast();
   // State for attendance records from backend
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [filteredAttendanceRecords, setFilteredAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -40,6 +42,16 @@ export default function TimeManagement() {
     clockOut: '',
     notes: '',
     reason: 'forgot_clock_in'
+  });
+
+  // Add Attendance popup state
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [newAttendance, setNewAttendance] = useState({
+    employee: '',
+    date: '',
+    status: 'Present',
+    clockIn: '',
+    clockOut: ''
   });
 
   // Load attendance records from backend
@@ -127,6 +139,11 @@ export default function TimeManagement() {
               Time Management
             </TypographyH2>
             <p className="text-muted-foreground text-sm">HR/Admin Dashboard</p>
+          </div>
+          <div className="ml-auto">
+            <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => setShowAddDialog(true)}>
+              Add Attendance
+            </Button>
           </div>
         </div>
       </div>
@@ -290,6 +307,75 @@ export default function TimeManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add Attendance Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Attendance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Employee</Label>
+              <Input value={newAttendance.employee} onChange={(e) => setNewAttendance(prev => ({ ...prev, employee: e.target.value }))} placeholder="Employee name" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Date</Label>
+              <Input type="date" value={newAttendance.date} onChange={(e) => setNewAttendance(prev => ({ ...prev, date: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Status</Label>
+              <Select value={newAttendance.status} onValueChange={(value) => setNewAttendance(prev => ({ ...prev, status: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statuses.map(status => (
+                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">Clock In</Label>
+                <Input type="time" value={newAttendance.clockIn} onChange={(e) => setNewAttendance(prev => ({ ...prev, clockIn: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Clock Out</Label>
+                <Input type="time" value={newAttendance.clockOut} onChange={(e) => setNewAttendance(prev => ({ ...prev, clockOut: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button
+                className="bg-violet-600 hover:bg-violet-700"
+                onClick={async () => {
+                  try {
+                    const timeService = await getTimeService();
+                    const created = await timeService.createAttendanceRecord({
+                      id: '',
+                      employee: newAttendance.employee,
+                      date: newAttendance.date,
+                      status: newAttendance.status as any,
+                      clockIn: newAttendance.clockIn,
+                      clockOut: newAttendance.clockOut,
+                    } as any);
+                    await loadAttendanceRecords();
+                    setShowAddDialog(false);
+                    setNewAttendance({ employee: '', date: '', status: 'Present', clockIn: '', clockOut: '' });
+                    toast({ title: 'Attendance added', description: `${created.employee} on ${created.date}`, duration: 3500 });
+                  } catch (e) {
+                    toast({ title: 'Failed to add attendance', description: e instanceof Error ? e.message : 'Unknown error', duration: 5000 });
+                  }
+                }}
+              >
+                Save
+              </Button>
+              <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Enhanced Adjust Time Dialog */}
       <Dialog open={showAdjustDialog} onOpenChange={setShowAdjustDialog}>

@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import type { Firestore } from 'firebase/firestore';
 import { AttendanceRecord, TimeAdjustment, TimeOffRequest } from '../types';
 import { isFirebaseConfigured } from '@/config/firebase';
 
@@ -27,22 +28,27 @@ export interface ITimeService {
 }
 
 export class FirebaseTimeService implements ITimeService {
+  private db: Firestore;
+
+  constructor(db: Firestore) {
+    this.db = db;
+  }
   // Attendance Records
   async getAttendanceRecords(): Promise<AttendanceRecord[]> {
-    const attendanceRef = collection(db, 'attendance');
+    const attendanceRef = collection(this.db, 'attendance');
     const q = query(attendanceRef, orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
   }
 
   async getAttendanceRecordById(id: string): Promise<AttendanceRecord | null> {
-    const docRef = doc(db, 'attendance', id);
+    const docRef = doc(this.db, 'attendance', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as AttendanceRecord : null;
   }
 
   async createAttendanceRecord(record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord> {
-    const attendanceRef = collection(db, 'attendance');
+    const attendanceRef = collection(this.db, 'attendance');
     const docRef = await addDoc(attendanceRef, {
       ...record,
       lastModified: Timestamp.now(),
@@ -51,7 +57,7 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async updateAttendanceRecord(id: string, record: Partial<AttendanceRecord>): Promise<AttendanceRecord> {
-    const docRef = doc(db, 'attendance', id);
+    const docRef = doc(this.db, 'attendance', id);
     await updateDoc(docRef, {
       ...record,
       lastModified: Timestamp.now(),
@@ -62,25 +68,25 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async deleteAttendanceRecord(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'attendance', id));
+    await deleteDoc(doc(this.db, 'attendance', id));
   }
 
   // Time Adjustments
   async getTimeAdjustments(): Promise<TimeAdjustment[]> {
-    const adjustmentsRef = collection(db, 'timeAdjustments');
+    const adjustmentsRef = collection(this.db, 'timeAdjustments');
     const q = query(adjustmentsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeAdjustment));
   }
 
   async getTimeAdjustmentById(id: string): Promise<TimeAdjustment | null> {
-    const docRef = doc(db, 'timeAdjustments', id);
+    const docRef = doc(this.db, 'timeAdjustments', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as TimeAdjustment : null;
   }
 
   async createTimeAdjustment(adjustment: Omit<TimeAdjustment, 'id'>): Promise<TimeAdjustment> {
-    const adjustmentsRef = collection(db, 'timeAdjustments');
+    const adjustmentsRef = collection(this.db, 'timeAdjustments');
     const docRef = await addDoc(adjustmentsRef, {
       ...adjustment,
       createdAt: Timestamp.now(),
@@ -89,7 +95,7 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async updateTimeAdjustment(id: string, adjustment: Partial<TimeAdjustment>): Promise<TimeAdjustment> {
-    const docRef = doc(db, 'timeAdjustments', id);
+    const docRef = doc(this.db, 'timeAdjustments', id);
     await updateDoc(docRef, adjustment);
     const updated = await this.getTimeAdjustmentById(id);
     if (!updated) throw new Error('Adjustment not found after update');
@@ -97,25 +103,25 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async deleteTimeAdjustment(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'timeAdjustments', id));
+    await deleteDoc(doc(this.db, 'timeAdjustments', id));
   }
 
   // Time Off Requests
   async getTimeOffRequests(): Promise<TimeOffRequest[]> {
-    const requestsRef = collection(db, 'timeOffRequests');
+    const requestsRef = collection(this.db, 'timeOffRequests');
     const q = query(requestsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeOffRequest));
   }
 
   async getTimeOffRequestById(id: string): Promise<TimeOffRequest | null> {
-    const docRef = doc(db, 'timeOffRequests', id);
+    const docRef = doc(this.db, 'timeOffRequests', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as TimeOffRequest : null;
   }
 
   async createTimeOffRequest(request: Omit<TimeOffRequest, 'id'>): Promise<TimeOffRequest> {
-    const requestsRef = collection(db, 'timeOffRequests');
+    const requestsRef = collection(this.db, 'timeOffRequests');
     const docRef = await addDoc(requestsRef, {
       ...request,
       createdAt: Timestamp.now(),
@@ -124,7 +130,7 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async updateTimeOffRequest(id: string, request: Partial<TimeOffRequest>): Promise<TimeOffRequest> {
-    const docRef = doc(db, 'timeOffRequests', id);
+    const docRef = doc(this.db, 'timeOffRequests', id);
     await updateDoc(docRef, request);
     const updated = await this.getTimeOffRequestById(id);
     if (!updated) throw new Error('Request not found after update');
@@ -132,7 +138,7 @@ export class FirebaseTimeService implements ITimeService {
   }
 
   async deleteTimeOffRequest(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'timeOffRequests', id));
+    await deleteDoc(doc(this.db, 'timeOffRequests', id));
   }
 }
 
@@ -222,8 +228,10 @@ export class MockTimeService implements ITimeService {
 
 export class TimeServiceFactory {
   static async createTimeService(): Promise<ITimeService> {
-    if (await isFirebaseConfigured()) {
-      return new FirebaseTimeService();
+    await initializeFirebase();
+    const config = await getServiceConfig();
+    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+      return new FirebaseTimeService(config.firebase.db as Firestore);
     }
     return new MockTimeService();
   }

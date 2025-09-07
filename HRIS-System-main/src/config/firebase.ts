@@ -33,13 +33,24 @@ const initializeFirebase = async (): Promise<boolean> => {
       const { initializeApp } = await import('firebase/app');
       const { getFirestore } = await import('firebase/firestore');
       const { getAuth } = await import('firebase/auth');
-      const { getAnalytics } = await import('firebase/analytics');
 
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       auth = getAuth(app);
-      analytics = getAnalytics(app);
+
+      // Initialize Analytics only when available and supported (browser + measurementId)
+      try {
+        if (typeof window !== 'undefined' && !!firebaseConfig.measurementId) {
+          const { getAnalytics, isSupported } = await import('firebase/analytics');
+          if (await isSupported()) {
+            analytics = getAnalytics(app);
+          }
+        }
+      } catch (e) {
+        // Safely ignore analytics failures in dev/non-browser environments
+        analytics = null;
+      }
 
       firebaseInitialized = true;
       console.log('✅ Firebase initialized successfully', db);

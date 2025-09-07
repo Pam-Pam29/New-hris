@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import type { Firestore } from 'firebase/firestore';
 import { Asset, AssetAssignment, MaintenanceRecord } from '../types';
 import { isFirebaseConfigured } from '@/config/firebase';
 
@@ -31,22 +32,27 @@ export interface IAssetService {
 }
 
 export class FirebaseAssetService implements IAssetService {
+  private db: Firestore;
+
+  constructor(db: Firestore) {
+    this.db = db;
+  }
   // Asset Management
   async getAssets(): Promise<Asset[]> {
-    const assetsRef = collection(db, 'assets');
+    const assetsRef = collection(this.db, 'assets');
     const q = query(assetsRef, orderBy('name'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
   }
 
   async getAssetById(id: string): Promise<Asset | null> {
-    const docRef = doc(db, 'assets', id);
+    const docRef = doc(this.db, 'assets', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Asset : null;
   }
 
   async createAsset(asset: Omit<Asset, 'id'>): Promise<Asset> {
-    const assetsRef = collection(db, 'assets');
+    const assetsRef = collection(this.db, 'assets');
     const docRef = await addDoc(assetsRef, {
       ...asset,
       createdAt: Timestamp.now(),
@@ -55,7 +61,7 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async updateAsset(id: string, asset: Partial<Asset>): Promise<Asset> {
-    const docRef = doc(db, 'assets', id);
+    const docRef = doc(this.db, 'assets', id);
     await updateDoc(docRef, {
       ...asset,
       updatedAt: Timestamp.now(),
@@ -66,11 +72,11 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async deleteAsset(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'assets', id));
+    await deleteDoc(doc(this.db, 'assets', id));
   }
 
   async searchAssets(searchQuery: string): Promise<Asset[]> {
-    const assetsRef = collection(db, 'assets');
+    const assetsRef = collection(this.db, 'assets');
     const q = query(assetsRef, orderBy('name'));
     const snapshot = await getDocs(q);
     const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
@@ -84,20 +90,20 @@ export class FirebaseAssetService implements IAssetService {
 
   // Asset Assignment
   async getAssetAssignments(): Promise<AssetAssignment[]> {
-    const assignmentsRef = collection(db, 'asset_assignments');
+    const assignmentsRef = collection(this.db, 'asset_assignments');
     const q = query(assignmentsRef, orderBy('assignedDate', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetAssignment));
   }
 
   async getAssetAssignmentById(id: string): Promise<AssetAssignment | null> {
-    const docRef = doc(db, 'asset_assignments', id);
+    const docRef = doc(this.db, 'asset_assignments', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as AssetAssignment : null;
   }
 
   async createAssetAssignment(assignment: Omit<AssetAssignment, 'id'>): Promise<AssetAssignment> {
-    const assignmentsRef = collection(db, 'asset_assignments');
+    const assignmentsRef = collection(this.db, 'asset_assignments');
     const docRef = await addDoc(assignmentsRef, {
       ...assignment,
       createdAt: Timestamp.now(),
@@ -106,7 +112,7 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async updateAssetAssignment(id: string, assignment: Partial<AssetAssignment>): Promise<AssetAssignment> {
-    const docRef = doc(db, 'asset_assignments', id);
+    const docRef = doc(this.db, 'asset_assignments', id);
     await updateDoc(docRef, {
       ...assignment,
       updatedAt: Timestamp.now(),
@@ -117,11 +123,11 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async deleteAssetAssignment(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'asset_assignments', id));
+    await deleteDoc(doc(this.db, 'asset_assignments', id));
   }
 
   async getAssignmentsByEmployee(employeeId: string): Promise<AssetAssignment[]> {
-    const assignmentsRef = collection(db, 'asset_assignments');
+    const assignmentsRef = collection(this.db, 'asset_assignments');
     const q = query(
       assignmentsRef,
       where('employeeId', '==', employeeId),
@@ -132,7 +138,7 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async getAssignmentsByAsset(assetId: string): Promise<AssetAssignment[]> {
-    const assignmentsRef = collection(db, 'asset_assignments');
+    const assignmentsRef = collection(this.db, 'asset_assignments');
     const q = query(
       assignmentsRef,
       where('assetId', '==', assetId),
@@ -144,20 +150,20 @@ export class FirebaseAssetService implements IAssetService {
 
   // Maintenance Records
   async getMaintenanceRecords(): Promise<MaintenanceRecord[]> {
-    const maintenanceRef = collection(db, 'maintenance_records');
+    const maintenanceRef = collection(this.db, 'maintenance_records');
     const q = query(maintenanceRef, orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRecord));
   }
 
   async getMaintenanceRecordById(id: string): Promise<MaintenanceRecord | null> {
-    const docRef = doc(db, 'maintenance_records', id);
+    const docRef = doc(this.db, 'maintenance_records', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as MaintenanceRecord : null;
   }
 
   async createMaintenanceRecord(record: Omit<MaintenanceRecord, 'id'>): Promise<MaintenanceRecord> {
-    const maintenanceRef = collection(db, 'maintenance_records');
+    const maintenanceRef = collection(this.db, 'maintenance_records');
     const docRef = await addDoc(maintenanceRef, {
       ...record,
       createdAt: Timestamp.now(),
@@ -166,7 +172,7 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async updateMaintenanceRecord(id: string, record: Partial<MaintenanceRecord>): Promise<MaintenanceRecord> {
-    const docRef = doc(db, 'maintenance_records', id);
+    const docRef = doc(this.db, 'maintenance_records', id);
     await updateDoc(docRef, {
       ...record,
       updatedAt: Timestamp.now(),
@@ -177,11 +183,11 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async deleteMaintenanceRecord(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'maintenance_records', id));
+    await deleteDoc(doc(this.db, 'maintenance_records', id));
   }
 
   async getMaintenanceRecordsByAsset(assetId: string): Promise<MaintenanceRecord[]> {
-    const maintenanceRef = collection(db, 'maintenance_records');
+    const maintenanceRef = collection(this.db, 'maintenance_records');
     const q = query(
       maintenanceRef,
       where('assetId', '==', assetId),
@@ -298,8 +304,10 @@ export class MockAssetService implements IAssetService {
 
 export class AssetServiceFactory {
   static async createAssetService(): Promise<IAssetService> {
-    if (await isFirebaseConfigured()) {
-      return new FirebaseAssetService();
+    await initializeFirebase();
+    const config = await getServiceConfig();
+    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+      return new FirebaseAssetService(config.firebase.db as Firestore);
     }
     return new MockAssetService();
   }

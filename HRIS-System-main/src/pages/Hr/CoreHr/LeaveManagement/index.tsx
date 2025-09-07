@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '../../../../components/ui/button';
-import { LeaveDetailsDrawer, LeaveDetailsDrawerProps } from './components/LeaveDetailsDrawer';
+import { LeaveDetailsDrawer } from './components/LeaveDetailsDrawer';
 import { LeaveTypeManagement } from './components/LeaveTypeManagement';
 import { Dialog, DialogContent } from '../../../../components/ui/dialog';
 import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
 import { ColumnDef } from '@tanstack/react-table';
-import { employeeService } from '../../../../services/employeeService';
-import { Employee } from '../EmployeeManagement/types';
+import { useToast } from '../../../../hooks/use-toast';
+import { getLeaveRequestService } from './services/leaveRequestService';
+import { Input } from '../../../../components/ui/input';
+import { Label } from '../../../../components/ui/label';
 
 interface LeaveRequest {
   id: number;
@@ -22,13 +24,10 @@ interface LeaveRequest {
   approvedDate?: string;
 }
 
-const mockLeaveEntitlements: any[] = [];
-
-interface LeaveManagementProps {
-  entitlements: any[];
-}
+// const mockLeaveEntitlements: any[] = [];
 
 export default function LeaveManagement() {
+  const { toast } = useToast();
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -36,17 +35,19 @@ export default function LeaveManagement() {
   const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    const loadEmployees = async () => {
+    const load = async () => {
       setLoading(true);
       try {
-        await employeeService.getEmployees();
+        const svc = await getLeaveRequestService();
+        const list = await svc.listRequests();
+        setRequests(list as any);
       } catch (error) {
-        console.error('Error fetching employees:', error);
+        console.error('Error loading leave requests:', error);
       } finally {
         setLoading(false);
       }
     };
-    loadEmployees();
+    load();
   }, []);
 
   // Columns for Tanstack Table
@@ -101,9 +102,14 @@ export default function LeaveManagement() {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => (
-        <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(row.original); setDetailsOpen(true); }}>
-          View
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(row.original); setDetailsOpen(true); }}>
+            View
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => toast({ title: 'Download', description: 'Download will be available soon.', duration: 4000 })}>
+            Download
+          </Button>
+        </div>
       ),
       enableSorting: false,
       enableColumnFilter: false,
@@ -117,39 +123,52 @@ export default function LeaveManagement() {
   }, [requests, statusFilter]);
 
   const [leaveTypeDialogOpen, setLeaveTypeDialogOpen] = useState(false);
+  const [addLeaveDialogOpen, setAddLeaveDialogOpen] = useState(false);
+  const [newLeave, setNewLeave] = useState({
+    employeeName: '',
+    type: '',
+    startDate: '',
+    endDate: ''
+  });
 
-  function handleApprove() {
+  async function handleApprove() {
     if (!selectedRequest) return;
     setLoading(true);
-    setTimeout(() => {
-      setRequests(prev => prev.map(req =>
-        req.id === selectedRequest.id ? {
-          ...req,
-          status: 'Approved',
-          approver: 'HR Manager',
-          approvedDate: new Date().toISOString().split('T')[0],
-        } : req
-      ));
-      setLoading(false);
+    try {
+      const svc = await getLeaveRequestService();
+      const updated = await svc.updateRequest(String(selectedRequest.id), {
+        status: 'Approved',
+        approver: 'HR Manager',
+        approvedDate: new Date().toISOString().split('T')[0],
+      } as any);
+      setRequests(prev => prev.map(r => r.id === selectedRequest.id ? (updated as any) : r));
       setDetailsOpen(false);
-    }, 1000);
+    } catch (e) {
+      console.error('Error approving leave:', e);
+      (toast && toast({ title: 'Failed to approve leave', description: e instanceof Error ? e.message : 'Unknown error' }));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleReject() {
+  async function handleReject() {
     if (!selectedRequest) return;
     setLoading(true);
-    setTimeout(() => {
-      setRequests(prev => prev.map(req =>
-        req.id === selectedRequest.id ? {
-          ...req,
-          status: 'Rejected',
-          approver: 'HR Manager',
-          approvedDate: new Date().toISOString().split('T')[0],
-        } : req
-      ));
-      setLoading(false);
+    try {
+      const svc = await getLeaveRequestService();
+      const updated = await svc.updateRequest(String(selectedRequest.id), {
+        status: 'Rejected',
+        approver: 'HR Manager',
+        approvedDate: new Date().toISOString().split('T')[0],
+      } as any);
+      setRequests(prev => prev.map(r => r.id === selectedRequest.id ? (updated as any) : r));
       setDetailsOpen(false);
-    }, 1000);
+    } catch (e) {
+      console.error('Error rejecting leave:', e);
+      (toast && toast({ title: 'Failed to reject leave', description: e instanceof Error ? e.message : 'Unknown error' }));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -158,14 +177,66 @@ export default function LeaveManagement() {
       <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
       <div className="flex justify-between mb-4">
 
-        <Button className="bg-violet-600 text-white" onClick={() => setLeaveTypeDialogOpen(true)}>
-          Manage Leave Types
-        </Button>
+        <div className="flex gap-2">
+          <Button className="bg-violet-600 text-white" onClick={() => setAddLeaveDialogOpen(true)}>
+            Add Leave
+          </Button>
+          <Button className="bg-violet-600 text-white" onClick={() => setLeaveTypeDialogOpen(true)}>
+            Manage Leave Types
+          </Button>
+        </div>
       </div>
 
       <Dialog open={leaveTypeDialogOpen} onOpenChange={setLeaveTypeDialogOpen}>
         <DialogContent className="max-w-2xl">
           <LeaveTypeManagement />
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Leave Dialog */}
+      <Dialog open={addLeaveDialogOpen} onOpenChange={setAddLeaveDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium mb-1">Employee</Label>
+              <Input value={newLeave.employeeName} onChange={(e) => setNewLeave(prev => ({ ...prev, employeeName: e.target.value }))} placeholder="Employee name" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-1">Type</Label>
+              <Input value={newLeave.type} onChange={(e) => setNewLeave(prev => ({ ...prev, type: e.target.value }))} placeholder="Leave type" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium mb-1">Start Date</Label>
+                <Input type="date" value={newLeave.startDate} onChange={(e) => setNewLeave(prev => ({ ...prev, startDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-1">End Date</Label>
+                <Input type="date" value={newLeave.endDate} onChange={(e) => setNewLeave(prev => ({ ...prev, endDate: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button className="bg-violet-600 hover:bg-violet-700" onClick={async () => {
+                try {
+                  const svc = await getLeaveRequestService();
+                  const created = await svc.createRequest({
+                    employeeName: newLeave.employeeName || 'Employee',
+                    type: newLeave.type || 'General Leave',
+                    startDate: newLeave.startDate || new Date().toISOString().split('T')[0],
+                    endDate: newLeave.endDate || new Date().toISOString().split('T')[0],
+                  } as any);
+                  setRequests(prev => [created as any, ...prev]);
+                  toast({ title: 'Leave request submitted', description: `${created.employeeName} - ${created.type}`, duration: 3500 });
+                } catch (e) {
+                  toast({ title: 'Failed to submit leave', description: e instanceof Error ? e.message : 'Unknown error', duration: 5000 });
+                } finally {
+                  setAddLeaveDialogOpen(false);
+                  setNewLeave({ employeeName: '', type: '', startDate: '', endDate: '' });
+                }
+              }}>Save</Button>
+              <Button variant="outline" onClick={() => setAddLeaveDialogOpen(false)}>Cancel</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Leave Requests Table using AtomicTanstackTable */}
@@ -178,10 +249,6 @@ export default function LeaveManagement() {
           pageSizeOptions={[10, 20, 50]}
           initialPageSize={10}
           className="min-w-full divide-y divide-border"
-          rowClassName={(row: { index: number }) =>
-            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`
-          }
-          headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
           filterDropdowns={
             <>
               {/* Example filter: by status */}

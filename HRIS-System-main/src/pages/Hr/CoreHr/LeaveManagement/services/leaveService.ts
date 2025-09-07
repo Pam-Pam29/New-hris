@@ -1,5 +1,6 @@
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import type { Firestore } from 'firebase/firestore';
 import { LeaveType } from '../types';
 
 export interface ILeaveService {
@@ -10,10 +11,16 @@ export interface ILeaveService {
 }
 
 class FirebaseLeaveService implements ILeaveService {
-  private collection = collection(db, 'leaveTypes');
+  private db: Firestore;
+  private collectionRef;
+
+  constructor(db: Firestore) {
+    this.db = db;
+    this.collectionRef = collection(this.db, 'leaveTypes');
+  }
 
   async getLeaveTypes(): Promise<LeaveType[]> {
-    const snapshot = await getDocs(this.collection);
+    const snapshot = await getDocs(this.collectionRef);
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -21,7 +28,7 @@ class FirebaseLeaveService implements ILeaveService {
   }
 
   async createLeaveType(data: Omit<LeaveType, 'id'>): Promise<LeaveType> {
-    const docRef = await addDoc(this.collection, data);
+    const docRef = await addDoc(this.collectionRef, data);
     return {
       id: docRef.id,
       ...data
@@ -29,7 +36,7 @@ class FirebaseLeaveService implements ILeaveService {
   }
 
   async updateLeaveType(id: string, data: Partial<LeaveType>): Promise<LeaveType> {
-    const docRef = doc(this.collection, id);
+    const docRef = doc(this.collectionRef, id);
     await updateDoc(docRef, data);
     return {
       id,
@@ -38,7 +45,7 @@ class FirebaseLeaveService implements ILeaveService {
   }
 
   async deleteLeaveType(id: string): Promise<void> {
-    const docRef = doc(this.collection, id);
+    const docRef = doc(this.collectionRef, id);
     await deleteDoc(docRef);
   }
 }
@@ -84,6 +91,10 @@ class MockLeaveService implements ILeaveService {
 }
 
 export async function getLeaveService(): Promise<ILeaveService> {
-  // You can add logic here to determine which service to use based on environment or configuration
-  return new FirebaseLeaveService();
+  await initializeFirebase();
+  const config = await getServiceConfig();
+  if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+    return new FirebaseLeaveService(config.firebase.db as Firestore);
+  }
+  return new MockLeaveService();
 }

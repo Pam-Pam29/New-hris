@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import type { Firestore } from 'firebase/firestore';
 import { Policy, PolicyAcknowledgment, PolicyRevision, PolicyCategory } from '../types';
 import { isFirebaseConfigured } from '@/config/firebase';
 
@@ -40,22 +41,27 @@ export interface IPolicyService {
 }
 
 export class FirebasePolicyService implements IPolicyService {
+  private db: Firestore;
+
+  constructor(db: Firestore) {
+    this.db = db;
+  }
   // Policy Management
   async getPolicies(): Promise<Policy[]> {
-    const policiesRef = collection(db, 'policies');
+    const policiesRef = collection(this.db, 'policies');
     const q = query(policiesRef, orderBy('createdDate', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Policy));
   }
 
   async getPolicyById(id: string): Promise<Policy | null> {
-    const docRef = doc(db, 'policies', id);
+    const docRef = doc(this.db, 'policies', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Policy : null;
   }
 
   async createPolicy(policy: Omit<Policy, 'id'>): Promise<Policy> {
-    const policiesRef = collection(db, 'policies');
+    const policiesRef = collection(this.db, 'policies');
     const docRef = await addDoc(policiesRef, {
       ...policy,
       createdDate: Timestamp.now(),
@@ -65,7 +71,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async updatePolicy(id: string, policy: Partial<Policy>): Promise<Policy> {
-    const docRef = doc(db, 'policies', id);
+    const docRef = doc(this.db, 'policies', id);
     await updateDoc(docRef, {
       ...policy,
       lastModified: Timestamp.now(),
@@ -76,11 +82,11 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async deletePolicy(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'policies', id));
+    await deleteDoc(doc(this.db, 'policies', id));
   }
 
   async searchPolicies(searchQuery: string): Promise<Policy[]> {
-    const policiesRef = collection(db, 'policies');
+    const policiesRef = collection(this.db, 'policies');
     const q = query(policiesRef, orderBy('title'));
     const snapshot = await getDocs(q);
     const policies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Policy));
@@ -93,7 +99,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async getPoliciesByCategory(categoryId: string): Promise<Policy[]> {
-    const policiesRef = collection(db, 'policies');
+    const policiesRef = collection(this.db, 'policies');
     const q = query(
       policiesRef,
       where('category', '==', categoryId),
@@ -104,7 +110,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async getPoliciesByStatus(status: Policy['status']): Promise<Policy[]> {
-    const policiesRef = collection(db, 'policies');
+    const policiesRef = collection(this.db, 'policies');
     const q = query(
       policiesRef,
       where('status', '==', status),
@@ -116,20 +122,20 @@ export class FirebasePolicyService implements IPolicyService {
 
   // Policy Acknowledgments
   async getPolicyAcknowledgments(): Promise<PolicyAcknowledgment[]> {
-    const acknowledgementsRef = collection(db, 'policy_acknowledgments');
+    const acknowledgementsRef = collection(this.db, 'policy_acknowledgments');
     const q = query(acknowledgementsRef, orderBy('acknowledgedDate', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PolicyAcknowledgment));
   }
 
   async getPolicyAcknowledgmentById(id: string): Promise<PolicyAcknowledgment | null> {
-    const docRef = doc(db, 'policy_acknowledgments', id);
+    const docRef = doc(this.db, 'policy_acknowledgments', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as PolicyAcknowledgment : null;
   }
 
   async createPolicyAcknowledgment(acknowledgment: Omit<PolicyAcknowledgment, 'id'>): Promise<PolicyAcknowledgment> {
-    const acknowledgementsRef = collection(db, 'policy_acknowledgments');
+    const acknowledgementsRef = collection(this.db, 'policy_acknowledgments');
     const docRef = await addDoc(acknowledgementsRef, {
       ...acknowledgment,
       acknowledgedDate: Timestamp.now(),
@@ -138,7 +144,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async updatePolicyAcknowledgment(id: string, acknowledgment: Partial<PolicyAcknowledgment>): Promise<PolicyAcknowledgment> {
-    const docRef = doc(db, 'policy_acknowledgments', id);
+    const docRef = doc(this.db, 'policy_acknowledgments', id);
     await updateDoc(docRef, acknowledgment);
     const updated = await this.getPolicyAcknowledgmentById(id);
     if (!updated) throw new Error('Acknowledgment not found after update');
@@ -146,11 +152,11 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async deletePolicyAcknowledgment(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'policy_acknowledgments', id));
+    await deleteDoc(doc(this.db, 'policy_acknowledgments', id));
   }
 
   async getAcknowledgmentsByPolicy(policyId: string): Promise<PolicyAcknowledgment[]> {
-    const acknowledgementsRef = collection(db, 'policy_acknowledgments');
+    const acknowledgementsRef = collection(this.db, 'policy_acknowledgments');
     const q = query(
       acknowledgementsRef,
       where('policyId', '==', policyId),
@@ -161,7 +167,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async getAcknowledgmentsByEmployee(employeeId: string): Promise<PolicyAcknowledgment[]> {
-    const acknowledgementsRef = collection(db, 'policy_acknowledgments');
+    const acknowledgementsRef = collection(this.db, 'policy_acknowledgments');
     const q = query(
       acknowledgementsRef,
       where('employeeId', '==', employeeId),
@@ -173,20 +179,20 @@ export class FirebasePolicyService implements IPolicyService {
 
   // Policy Revisions
   async getPolicyRevisions(): Promise<PolicyRevision[]> {
-    const revisionsRef = collection(db, 'policy_revisions');
+    const revisionsRef = collection(this.db, 'policy_revisions');
     const q = query(revisionsRef, orderBy('changedDate', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PolicyRevision));
   }
 
   async getPolicyRevisionById(id: string): Promise<PolicyRevision | null> {
-    const docRef = doc(db, 'policy_revisions', id);
+    const docRef = doc(this.db, 'policy_revisions', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as PolicyRevision : null;
   }
 
   async createPolicyRevision(revision: Omit<PolicyRevision, 'id'>): Promise<PolicyRevision> {
-    const revisionsRef = collection(db, 'policy_revisions');
+    const revisionsRef = collection(this.db, 'policy_revisions');
     const docRef = await addDoc(revisionsRef, {
       ...revision,
       changedDate: Timestamp.now(),
@@ -195,7 +201,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async updatePolicyRevision(id: string, revision: Partial<PolicyRevision>): Promise<PolicyRevision> {
-    const docRef = doc(db, 'policy_revisions', id);
+    const docRef = doc(this.db, 'policy_revisions', id);
     await updateDoc(docRef, revision);
     const updated = await this.getPolicyRevisionById(id);
     if (!updated) throw new Error('Revision not found after update');
@@ -203,11 +209,11 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async deletePolicyRevision(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'policy_revisions', id));
+    await deleteDoc(doc(this.db, 'policy_revisions', id));
   }
 
   async getRevisionsByPolicy(policyId: string): Promise<PolicyRevision[]> {
-    const revisionsRef = collection(db, 'policy_revisions');
+    const revisionsRef = collection(this.db, 'policy_revisions');
     const q = query(
       revisionsRef,
       where('policyId', '==', policyId),
@@ -219,26 +225,26 @@ export class FirebasePolicyService implements IPolicyService {
 
   // Policy Categories
   async getPolicyCategories(): Promise<PolicyCategory[]> {
-    const categoriesRef = collection(db, 'policy_categories');
+    const categoriesRef = collection(this.db, 'policy_categories');
     const q = query(categoriesRef, orderBy('order'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PolicyCategory));
   }
 
   async getPolicyCategoryById(id: string): Promise<PolicyCategory | null> {
-    const docRef = doc(db, 'policy_categories', id);
+    const docRef = doc(this.db, 'policy_categories', id);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as PolicyCategory : null;
   }
 
   async createPolicyCategory(category: Omit<PolicyCategory, 'id'>): Promise<PolicyCategory> {
-    const categoriesRef = collection(db, 'policy_categories');
+    const categoriesRef = collection(this.db, 'policy_categories');
     const docRef = await addDoc(categoriesRef, category);
     return { id: docRef.id, ...category };
   }
 
   async updatePolicyCategory(id: string, category: Partial<PolicyCategory>): Promise<PolicyCategory> {
-    const docRef = doc(db, 'policy_categories', id);
+    const docRef = doc(this.db, 'policy_categories', id);
     await updateDoc(docRef, category);
     const updated = await this.getPolicyCategoryById(id);
     if (!updated) throw new Error('Category not found after update');
@@ -246,7 +252,7 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   async deletePolicyCategory(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'policy_categories', id));
+    await deleteDoc(doc(this.db, 'policy_categories', id));
   }
 }
 
@@ -391,8 +397,10 @@ export class MockPolicyService implements IPolicyService {
 
 export class PolicyServiceFactory {
   static async createPolicyService(): Promise<IPolicyService> {
-    if (await isFirebaseConfigured()) {
-      return new FirebasePolicyService();
+    await initializeFirebase();
+    const config = await getServiceConfig();
+    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+      return new FirebasePolicyService(config.firebase.db as Firestore);
     }
     return new MockPolicyService();
   }

@@ -2,45 +2,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { TypographyH2 } from "../../components/ui/typography";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import FirebaseConnectionTest from "../../components/FirebaseConnectionTest";
+import { useToast } from "../../hooks/use-toast";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { getEmployeeService } from "../../services/employeeService";
+import { getLeaveRequestService } from "./CoreHr/LeaveManagement/services/leaveRequestService";
 
-const stats = [
-	{
-		label: "Total Employees",
-		value: "120",
-		description: "Active employees in the company",
-	},
-	{
-		label: "Open Positions",
-		value: "8",
-		description: "Currently hiring for these roles",
-	},
-	{
-		label: "Payroll (This Month)",
-		value: "$50,000",
-		description: "Total payroll processed",
-	},
-	{
-		label: "On Leave",
-		value: "5",
-		description: "Employees currently on leave",
-	},
-	{
-		label: "New Hires",
-		value: "3",
-		description: "New employees this month",
-	},
-	{
-		label: "Attrition Rate",
-		value: "2.5%",
-		description: "Turnover rate this year",
-	},
-	{
-		label: "Upcoming Birthdays",
-		value: "2",
-		description: "Birthdays this week",
-	},
-];
+function useLiveStats() {
+	const [loading, setLoading] = useState(true);
+	const [employees, setEmployees] = useState(0);
+	const [pendingLeaves, setPendingLeaves] = useState(0);
+	const [openPositions] = useState(0);
+	const [newHires] = useState(0);
+	const [attrition] = useState("-");
+	const [birthdays] = useState(0);
+
+	useEffect(() => {
+		const load = async () => {
+			try {
+				const empSvc = await getEmployeeService();
+				const emps = await empSvc.getEmployees();
+				setEmployees(emps.length);
+				const leaveSvc = await getLeaveRequestService();
+				const leaves = await leaveSvc.listRequests();
+				setPendingLeaves(leaves.filter((l: any) => l.status === 'Pending').length);
+			} finally {
+				setLoading(false);
+			}
+		};
+		load();
+	}, []);
+
+	const stats = [
+		{ label: "Total Employees", value: String(employees), description: "Active employees in the company" },
+		{ label: "Open Positions", value: String(openPositions), description: "Currently hiring for these roles" },
+		{ label: "On Leave (Pending)", value: String(pendingLeaves), description: "Awaiting approval" },
+		{ label: "New Hires", value: String(newHires), description: "New employees this month" },
+		{ label: "Attrition Rate", value: String(attrition), description: "Turnover rate this year" },
+		{ label: "Upcoming Birthdays", value: String(birthdays), description: "Birthdays this week" },
+	];
+	return { loading, stats };
+}
 
 function StatCard({ label, value, description }: { label: string; value: string; description: string }) {
 	return (
@@ -57,37 +59,41 @@ function StatCard({ label, value, description }: { label: string; value: string;
 }
 
 function StatCardGroup() {
+	const { loading, stats } = useLiveStats();
+	const items = loading ? Array.from({ length: 4 }).map(() => ({ label: 'Loading', value: '…', description: '' })) : stats.slice(0, 4);
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-			{stats.slice(0, 4).map((stat) => (
-				<StatCard key={stat.label} {...stat} />
+			{items.map((stat, i) => (
+				<StatCard key={i} {...stat} />
 			))}
 		</div>
 	);
 }
 
 function ExtraStatCardGroup() {
+	const { loading, stats } = useLiveStats();
+	const items = loading ? Array.from({ length: 3 }).map(() => ({ label: 'Loading', value: '…', description: '' })) : stats.slice(4);
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-			{stats.slice(4).map((stat) => (
-				<StatCard key={stat.label} {...stat} />
+			{items.map((stat, i) => (
+				<StatCard key={i} {...stat} />
 			))}
 		</div>
 	);
 }
 
 function QuickActions() {
+	const { toast } = useToast();
+	const comingSoon = (label: string) => toast({ title: `${label}`, description: "This action will be available soon.", duration: 4000 });
+
 	return (
 		<div className="flex flex-wrap gap-3 mt-8">
-			<Button className="bg-green-500 hover:bg-green-600 text-white">Add New Employee</Button>
-			<Button className="hover:bg-pink-600 text-white">Post a Job</Button>
-			<Button className="bg-orange-500 hover:bg-orange-600 text-white">Approve Leave</Button>
-			<Button
-                className="bg-violet-600 text-white hover:bg-violet-700"
-                variant="outline"
-            >
-                Run Payroll
-            </Button>
+			<Button asChild className="bg-green-500 hover:bg-green-600 text-white"><Link to="/Hr/CoreHr/EmployeeManagement">Add New Employee</Link></Button>
+			<Button asChild className="hover:bg-pink-600 text-white"><Link to="/Hr/Hiring/JobBoard">Post a Job</Link></Button>
+			<Button asChild className="bg-orange-500 hover:bg-orange-600 text-white"><Link to="/Hr/CoreHr/LeaveManagement">Approve Leave</Link></Button>
+			<Button className="bg-violet-600 text-white hover:bg-violet-700" variant="outline" onClick={() => comingSoon("Run Payroll")}>
+				Run Payroll
+			</Button>
 		</div>
 	);
 }
@@ -184,9 +190,6 @@ export default function Dashboard() {
 				<UpcomingEvents />
 			</div>
 			<HeadcountTrendChart />
-			<div className="mt-8">
-				<FirebaseConnectionTest />
-			</div>
 		</div>
 	);
 }

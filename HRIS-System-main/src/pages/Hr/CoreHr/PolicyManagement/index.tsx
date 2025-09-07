@@ -10,6 +10,7 @@ import { PolicyForm } from './components/PolicyForm';
 import { PolicyDetailsDrawer } from './components/PolicyDetailsDrawer';
 import { Policy } from './types'; // Import Policy type from types.ts
 import { getPolicyService } from './services/policyService'; // Import getPolicyService
+import { useToast } from '@/hooks/use-toast';
 
 // Mock data
 const mockPolicies: Policy[] = [
@@ -123,6 +124,7 @@ interface FormValues {
 }
 
 export default function PolicyManagement() {
+  const { toast } = useToast();
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
@@ -304,7 +306,7 @@ export default function PolicyManagement() {
               <Edit className="h-3 w-3 mr-1" />
               Edit
             </Button>
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" onClick={() => toast({ title: 'Export', description: 'Export will be available soon.', duration: 4000 })}>
               <Download className="h-3 w-3 mr-1" />
               Export
             </Button>
