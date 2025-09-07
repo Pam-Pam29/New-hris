@@ -12,7 +12,7 @@ export interface IAssetService {
   updateAsset(id: string, asset: Partial<Asset>): Promise<Asset>;
   deleteAsset(id: string): Promise<void>;
   searchAssets(query: string): Promise<Asset[]>;
-  
+
   // Asset Assignment
   getAssetAssignments(): Promise<AssetAssignment[]>;
   getAssetAssignmentById(id: string): Promise<AssetAssignment | null>;
@@ -21,7 +21,7 @@ export interface IAssetService {
   deleteAssetAssignment(id: string): Promise<void>;
   getAssignmentsByEmployee(employeeId: string): Promise<AssetAssignment[]>;
   getAssignmentsByAsset(assetId: string): Promise<AssetAssignment[]>;
-  
+
   // Maintenance Records
   getMaintenanceRecords(): Promise<MaintenanceRecord[]>;
   getMaintenanceRecordById(id: string): Promise<MaintenanceRecord | null>;
@@ -53,6 +53,7 @@ export class FirebaseAssetService implements IAssetService {
 
   async createAsset(asset: Omit<Asset, 'id'>): Promise<Asset> {
     const assetsRef = collection(this.db, 'assets');
+    console.log('FirebaseAssetService.createAsset called with:', asset); // Add logging
     const docRef = await addDoc(assetsRef, {
       ...asset,
       createdAt: Timestamp.now(),
@@ -80,7 +81,7 @@ export class FirebaseAssetService implements IAssetService {
     const q = query(assetsRef, orderBy('name'));
     const snapshot = await getDocs(q);
     const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-    
+
     return assets.filter(asset =>
       asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,6 +215,7 @@ export class MockAssetService implements IAssetService {
 
   async createAsset(asset: Omit<Asset, 'id'>): Promise<Asset> {
     const newAsset = { ...asset, id: Date.now().toString() };
+    console.log('MockAssetService.createAsset called with:', asset); // Add logging
     this.assets.push(newAsset);
     return newAsset;
   }

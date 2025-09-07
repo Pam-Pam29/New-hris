@@ -82,7 +82,7 @@ export default function AssetManagement() {
           getAssetService(),
           employeeService.getEmployees()
         ]);
-        
+
         const assetData = await service.getAssets();
         setAssets(assetData);
         setEmployees(employeeData);
@@ -102,22 +102,58 @@ export default function AssetManagement() {
   // Handle form submission
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log('Form submitted!', form); // Debug log
     setSending(true);
 
     try {
+      // Add validation
+      if (!form.name.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Asset name is required.',
+          variant: 'destructive',
+        });
+        setSending(false);
+        return;
+      }
+
+      if (!form.category.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Asset category is required.',
+          variant: 'destructive',
+        });
+        setSending(false);
+        return;
+      }
+
       const service = await getAssetService();
-      const newAsset = await service.createAsset({
+      console.log('Calling createAsset with:', form); // Add logging
+
+      const assetData: Omit<Asset, 'id'> = {
         name: form.name,
         category: form.category,
         serialNumber: form.serialNumber,
         status: form.status as Asset['status'],
-        assignedTo: form.status === 'Assigned' ? form.assignedTo : undefined,
         purchaseDate: form.purchaseDate,
         purchasePrice: form.purchasePrice,
         location: form.location,
-        condition: form.condition as Asset['condition'],
-        nextMaintenance: form.nextMaintenance || undefined
-      });
+        condition: form.condition as Asset['condition']
+      };
+
+      // Only add nextMaintenance if it has a value (Firebase doesn't accept undefined)
+      if (form.nextMaintenance && form.nextMaintenance.trim() !== '') {
+        assetData.nextMaintenance = form.nextMaintenance;
+      }
+
+      if (form.status === 'Assigned') {
+        assetData.assignedTo = form.assignedTo;
+      }
+
+      console.log('Asset data to be created:', assetData); // Debug log
+
+      const newAsset = await service.createAsset(assetData);
+      console.log('New asset created:', newAsset); // Debug log
 
       setAssets(prev => [...prev, newAsset]);
       setDialogOpen(false);
@@ -143,7 +179,7 @@ export default function AssetManagement() {
       console.error('Error creating asset:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create asset. Please try again.',
+        description: `Failed to create asset: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
     } finally {
@@ -159,13 +195,13 @@ export default function AssetManagement() {
         status: 'Assigned',
         assignedTo: employeeName
       });
-      
+
       setAssets(prev => prev.map(asset =>
         asset.id === assetId
           ? { ...asset, status: 'Assigned', assignedTo: employeeName }
           : asset
       ));
-      
+
       toast({
         title: 'Success',
         description: 'Asset assigned successfully',
@@ -187,13 +223,13 @@ export default function AssetManagement() {
         status: 'Available',
         assignedTo: undefined
       });
-      
+
       setAssets(prev => prev.map(asset =>
         asset.id === assetId
           ? { ...asset, status: 'Available', assignedTo: undefined }
           : asset
       ));
-      
+
       toast({
         title: 'Success',
         description: 'Asset unassigned successfully',
@@ -214,13 +250,13 @@ export default function AssetManagement() {
       await service.updateAsset(assetId, {
         assignedTo: newEmployeeName
       });
-      
+
       setAssets(prev => prev.map(asset =>
         asset.id === assetId
           ? { ...asset, assignedTo: newEmployeeName }
           : asset
       ));
-      
+
       toast({
         title: 'Success',
         description: 'Asset transferred successfully',
@@ -342,9 +378,13 @@ export default function AssetManagement() {
                   className="text-violet-600 border-violet-200 hover:bg-violet-50"
                 >
                   {isAvailable ? (
-                    <><UserPlus className="h-3 w-3 mr-1" /> Assign</>
+                    <>
+                      <UserPlus className="h-3 w-3 mr-1" /> Assign
+                    </>
                   ) : (
-                    <><ArrowRightLeft className="h-3 w-3 mr-1" /> Manage</>
+                    <>
+                      <ArrowRightLeft className="h-3 w-3 mr-1" /> Manage
+                    </>
                   )}
                 </Button>
               )}
