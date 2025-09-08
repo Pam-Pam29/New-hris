@@ -1,284 +1,325 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Button } from '../../../../components/ui/button';
-import { LeaveDetailsDrawer } from './components/LeaveDetailsDrawer';
-import { LeaveTypeManagement } from './components/LeaveTypeManagement';
-import { Dialog, DialogContent } from '../../../../components/ui/dialog';
-import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
-import { ColumnDef } from '@tanstack/react-table';
-import { useToast } from '../../../../hooks/use-toast';
-import { getLeaveRequestService } from './services/leaveRequestService';
-import { Input } from '../../../../components/ui/input';
-import { Label } from '../../../../components/ui/label';
+// services/leaveService.ts
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  where,
+  Timestamp,
+  getFirestore
+} from 'firebase/firestore';
 
-interface LeaveRequest {
-  id: number;
+// Firebase config - replace with your actual config
+import { initializeApp } from 'firebase/app';
+
+const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-auth-domain",
+  projectId: "your-project-id",
+  storageBucket: "your-storage-bucket",
+  messagingSenderId: "your-messaging-sender-id",
+  appId: "your-app-id"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Types
+export interface LeaveRequest {
+  id?: string;
+  employeeId: string;
   employeeName: string;
-  employeeId: number;
+  department: string;
   type: string;
   startDate: string;
   endDate: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
-  reason?: string;
+  reason: string;
   submittedDate: string;
-  approver?: string;
-  approvedDate?: string;
+  approver: string;
+  approvedDate: string;
+  totalDays: number;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
-// const mockLeaveEntitlements: any[] = [];
+export interface LeaveType {
+  id?: string;
+  name: string;
+  daysAllowed: number;
+  color: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
 
-export default function LeaveManagement() {
-  const { toast } = useToast();
-  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('');
+export interface Employee {
+  id?: string;
+  name: string;
+  department: string;
+  position: string;
+  email?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const svc = await getLeaveRequestService();
-        const list = await svc.listRequests();
-        setRequests(list as any);
-      } catch (error) {
-        console.error('Error loading leave requests:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+// Firebase Collections
+const COLLECTIONS = {
+  LEAVE_REQUESTS: 'leaveRequests',
+  LEAVE_TYPES: 'leaveTypes',
+  EMPLOYEES: 'employees'
+} as const;
 
-  // Columns for Tanstack Table
-  const columns = useMemo<ColumnDef<LeaveRequest>[]>(() => [
-    {
-      accessorKey: 'employeeName',
-      header: 'Employee',
-      cell: info => info.getValue(),
-    },
-    {
-      accessorKey: 'type',
-      header: 'Type',
-      cell: info => info.getValue(),
-    },
-    {
-      id: 'dates',
-      header: 'Dates',
-      cell: ({ row }) => `${row.original.startDate} - ${row.original.endDate}`,
-    },
-    {
-      id: 'days',
-      header: 'Days',
-      cell: ({ row }) => {
-        const start = new Date(row.original.startDate);
-        const end = new Date(row.original.endDate);
-        // Inclusive of both start and end
-        const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return <span>{diff > 0 ? diff : 1}</span>;
-      },
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => {
-        const status = row.original.status;
-        let color = '';
-        switch (status) {
-          case 'Pending': color = 'bg-yellow-100 text-yellow-800'; break;
-          case 'Approved': color = 'bg-green-100 text-green-800'; break;
-          case 'Rejected': color = 'bg-red-100 text-red-800'; break;
-          default: color = 'bg-gray-100 text-gray-800';
-        }
-        return <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>{status}</span>;
-      },
-    },
-    {
-      accessorKey: 'submittedDate',
-      header: 'Submitted',
-      cell: info => info.getValue(),
-    },
-    {
-      id: 'actions',
-      header: 'Actions',
-      cell: ({ row }) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(row.original); setDetailsOpen(true); }}>
-            View
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => toast({ title: 'Download', description: 'Download will be available soon.', duration: 4000 })}>
-            Download
-          </Button>
-        </div>
-      ),
-      enableSorting: false,
-      enableColumnFilter: false,
-    },
-  ], []);
+export class LeaveFirebaseService {
 
-  // Filtered data for status
-  const filteredRequests = useMemo(() => {
-    if (!statusFilter) return requests;
-    return requests.filter(req => req.status === statusFilter);
-  }, [requests, statusFilter]);
-
-  const [leaveTypeDialogOpen, setLeaveTypeDialogOpen] = useState(false);
-  const [addLeaveDialogOpen, setAddLeaveDialogOpen] = useState(false);
-  const [newLeave, setNewLeave] = useState({
-    employeeName: '',
-    type: '',
-    startDate: '',
-    endDate: ''
-  });
-
-  async function handleApprove() {
-    if (!selectedRequest) return;
-    setLoading(true);
+  // Leave Requests Methods
+  async getLeaveRequests(): Promise<LeaveRequest[]> {
     try {
-      const svc = await getLeaveRequestService();
-      const updated = await svc.updateRequest(String(selectedRequest.id), {
-        status: 'Approved',
-        approver: 'HR Manager',
-        approvedDate: new Date().toISOString().split('T')[0],
-      } as any);
-      setRequests(prev => prev.map(r => r.id === selectedRequest.id ? (updated as any) : r));
-      setDetailsOpen(false);
-    } catch (e) {
-      console.error('Error approving leave:', e);
-      (toast && toast({ title: 'Failed to approve leave', description: e instanceof Error ? e.message : 'Unknown error' }));
-    } finally {
-      setLoading(false);
+      const q = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
+      })) as LeaveRequest[];
+    } catch (error) {
+      console.error('Error fetching leave requests:', error);
+      throw new Error('Failed to fetch leave requests');
     }
   }
 
-  async function handleReject() {
-    if (!selectedRequest) return;
-    setLoading(true);
+  async createLeaveRequest(request: Omit<LeaveRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeaveRequest> {
     try {
-      const svc = await getLeaveRequestService();
-      const updated = await svc.updateRequest(String(selectedRequest.id), {
-        status: 'Rejected',
-        approver: 'HR Manager',
-        approvedDate: new Date().toISOString().split('T')[0],
-      } as any);
-      setRequests(prev => prev.map(r => r.id === selectedRequest.id ? (updated as any) : r));
-      setDetailsOpen(false);
-    } catch (e) {
-      console.error('Error rejecting leave:', e);
-      (toast && toast({ title: 'Failed to reject leave', description: e instanceof Error ? e.message : 'Unknown error' }));
-    } finally {
-      setLoading(false);
+      const now = Timestamp.now();
+      const docRef = await addDoc(collection(db, COLLECTIONS.LEAVE_REQUESTS), {
+        ...request,
+        createdAt: now,
+        updatedAt: now
+      });
+
+      return {
+        id: docRef.id,
+        ...request,
+        createdAt: now,
+        updatedAt: now
+      };
+    } catch (error) {
+      console.error('Error creating leave request:', error);
+      throw new Error('Failed to create leave request');
     }
   }
 
-  return (
-    <div className="p-8 min-h-screen bg-background text-foreground">
+  async updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<LeaveRequest> {
+    try {
+      const docRef = doc(db, COLLECTIONS.LEAVE_REQUESTS, id);
+      const updateData = {
+        ...updates,
+        updatedAt: Timestamp.now()
+      };
 
-      <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
-      <div className="flex justify-between mb-4">
+      await updateDoc(docRef, updateData);
 
-        <div className="flex gap-2">
-          <Button className="bg-violet-600 text-white" onClick={() => setAddLeaveDialogOpen(true)}>
-            Add Leave
-          </Button>
-          <Button className="bg-violet-600 text-white" onClick={() => setLeaveTypeDialogOpen(true)}>
-            Manage Leave Types
-          </Button>
-        </div>
-      </div>
+      // Return the updated request (in a real app, you might want to fetch it)
+      return {
+        id,
+        ...updates,
+        updatedAt: Timestamp.now()
+      } as LeaveRequest;
+    } catch (error) {
+      console.error('Error updating leave request:', error);
+      throw new Error('Failed to update leave request');
+    }
+  }
 
-      <Dialog open={leaveTypeDialogOpen} onOpenChange={setLeaveTypeDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <LeaveTypeManagement />
-        </DialogContent>
-      </Dialog>
+  async deleteLeaveRequest(id: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.LEAVE_REQUESTS, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting leave request:', error);
+      throw new Error('Failed to delete leave request');
+    }
+  }
 
-      {/* Add Leave Dialog */}
-      <Dialog open={addLeaveDialogOpen} onOpenChange={setAddLeaveDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm font-medium mb-1">Employee</Label>
-              <Input value={newLeave.employeeName} onChange={(e) => setNewLeave(prev => ({ ...prev, employeeName: e.target.value }))} placeholder="Employee name" />
-            </div>
-            <div>
-              <Label className="text-sm font-medium mb-1">Type</Label>
-              <Input value={newLeave.type} onChange={(e) => setNewLeave(prev => ({ ...prev, type: e.target.value }))} placeholder="Leave type" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium mb-1">Start Date</Label>
-                <Input type="date" value={newLeave.startDate} onChange={(e) => setNewLeave(prev => ({ ...prev, startDate: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-sm font-medium mb-1">End Date</Label>
-                <Input type="date" value={newLeave.endDate} onChange={(e) => setNewLeave(prev => ({ ...prev, endDate: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button className="bg-violet-600 hover:bg-violet-700" onClick={async () => {
-                try {
-                  const svc = await getLeaveRequestService();
-                  const created = await svc.createRequest({
-                    employeeName: newLeave.employeeName || 'Employee',
-                    type: newLeave.type || 'General Leave',
-                    startDate: newLeave.startDate || new Date().toISOString().split('T')[0],
-                    endDate: newLeave.endDate || new Date().toISOString().split('T')[0],
-                  } as any);
-                  setRequests(prev => [created as any, ...prev]);
-                  toast({ title: 'Leave request submitted', description: `${created.employeeName} - ${created.type}`, duration: 3500 });
-                } catch (e) {
-                  toast({ title: 'Failed to submit leave', description: e instanceof Error ? e.message : 'Unknown error', duration: 5000 });
-                } finally {
-                  setAddLeaveDialogOpen(false);
-                  setNewLeave({ employeeName: '', type: '', startDate: '', endDate: '' });
-                }
-              }}>Save</Button>
-              <Button variant="outline" onClick={() => setAddLeaveDialogOpen(false)}>Cancel</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Leave Requests Table using AtomicTanstackTable */}
-      <div className="overflow-x-auto rounded-xl shadow border border-border bg-card">
-        <AtomicTanstackTable
-          data={filteredRequests}
-          columns={columns}
-          showGlobalFilter
-          globalFilterPlaceholder="Search leave requests..."
-          pageSizeOptions={[10, 20, 50]}
-          initialPageSize={10}
-          className="min-w-full divide-y divide-border"
-          filterDropdowns={
-            <>
-              {/* Example filter: by status */}
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400 mr-2"
-              >
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-              {/* Additional filters can be added here */}
-            </>
-          }
-        />
-      </div>
-      {/* Details Drawer/Modal */}
-      <LeaveDetailsDrawer
-        open={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-        request={selectedRequest}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        loading={loading}
-        requests={filteredRequests}
-        entitlements={[]}
-      />
-    </div>
-  );
+  async approveLeaveRequest(id: string, approver: string): Promise<LeaveRequest> {
+    return this.updateLeaveRequest(id, {
+      status: 'Approved',
+      approver,
+      approvedDate: new Date().toISOString().split('T')[0]
+    });
+  }
+
+  async rejectLeaveRequest(id: string, approver: string): Promise<LeaveRequest> {
+    return this.updateLeaveRequest(id, {
+      status: 'Rejected',
+      approver,
+      approvedDate: new Date().toISOString().split('T')[0]
+    });
+  }
+
+  // Leave Types Methods
+  async getLeaveTypes(): Promise<LeaveType[]> {
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.LEAVE_TYPES),
+        orderBy('name', 'asc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeaveType[];
+    } catch (error) {
+      console.error('Error fetching leave types:', error);
+      throw new Error('Failed to fetch leave types');
+    }
+  }
+
+  async createLeaveType(leaveType: Omit<LeaveType, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeaveType> {
+    try {
+      const now = Timestamp.now();
+      const docRef = await addDoc(collection(db, COLLECTIONS.LEAVE_TYPES), {
+        ...leaveType,
+        createdAt: now,
+        updatedAt: now
+      });
+
+      return {
+        id: docRef.id,
+        ...leaveType,
+        createdAt: now,
+        updatedAt: now
+      };
+    } catch (error) {
+      console.error('Error creating leave type:', error);
+      throw new Error('Failed to create leave type');
+    }
+  }
+
+  async updateLeaveType(id: string, updates: Partial<LeaveType>): Promise<LeaveType> {
+    try {
+      const docRef = doc(db, COLLECTIONS.LEAVE_TYPES, id);
+      const updateData = {
+        ...updates,
+        updatedAt: Timestamp.now()
+      };
+
+      await updateDoc(docRef, updateData);
+
+      return {
+        id,
+        ...updates,
+        updatedAt: Timestamp.now()
+      } as LeaveType;
+    } catch (error) {
+      console.error('Error updating leave type:', error);
+      throw new Error('Failed to update leave type');
+    }
+  }
+
+  async deleteLeaveType(id: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.LEAVE_TYPES, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting leave type:', error);
+      throw new Error('Failed to delete leave type');
+    }
+  }
+
+  // Employee Methods (for the dropdown)
+  async getEmployees(): Promise<Employee[]> {
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.EMPLOYEES),
+        orderBy('name', 'asc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Employee[];
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      throw new Error('Failed to fetch employees');
+    }
+  }
+
+  // Utility Methods
+  async getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]> {
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        where('employeeId', '==', employeeId),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeaveRequest[];
+    } catch (error) {
+      console.error('Error fetching employee leave requests:', error);
+      throw new Error('Failed to fetch employee leave requests');
+    }
+  }
+
+  async getLeaveRequestsByStatus(status: LeaveRequest['status']): Promise<LeaveRequest[]> {
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        where('status', '==', status),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeaveRequest[];
+    } catch (error) {
+      console.error('Error fetching leave requests by status:', error);
+      throw new Error('Failed to fetch leave requests by status');
+    }
+  }
+
+  async getLeaveRequestsByDateRange(startDate: string, endDate: string): Promise<LeaveRequest[]> {
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        where('startDate', '>=', startDate),
+        where('startDate', '<=', endDate),
+        orderBy('startDate', 'asc')
+      );
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeaveRequest[];
+    } catch (error) {
+      console.error('Error fetching leave requests by date range:', error);
+      throw new Error('Failed to fetch leave requests by date range');
+    }
+  }
 }
+
+// Export service instance
+export const leaveService = new LeaveFirebaseService();
+
+// Service factory for dependency injection (similar to your employee service)
+export const getLeaveService = async (): Promise<LeaveFirebaseService> => {
+  return leaveService;
+};

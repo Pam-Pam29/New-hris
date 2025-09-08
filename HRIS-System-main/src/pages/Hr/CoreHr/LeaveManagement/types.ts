@@ -1,34 +1,34 @@
-// Leave Management Types
-
+// types/leave.ts
 export interface LeaveType {
   id: string;
   name: string;
+  daysAllowed: number;
+  color: string;
   description?: string;
-  days: number;
-  active: boolean;
+  active?: boolean;
 }
 
 export interface LeaveRequest {
   id: string;
   employeeId: string;
   employeeName: string;
-  leaveTypeId: string;
-  leaveTypeName: string;
+  department: string;
+  type: string;
   startDate: string;
   endDate: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   reason: string;
-  approverNotes?: string;
-  createdAt: string;
-  updatedAt: string;
+  submittedDate: string;
+  approver: string;
+  approvedDate: string;
+  totalDays: number;
 }
 
-export interface LeaveBalance {
+export interface Employee {
   id: string;
-  employeeId: string;
-  leaveTypeId: string;
-  totalDays: number;
-  usedDays: number;
-  remainingDays: number;
-  year: number;
+  name: string;
+  department: string;
+  position: string;
+  email?: string;
+  status: string;
 }

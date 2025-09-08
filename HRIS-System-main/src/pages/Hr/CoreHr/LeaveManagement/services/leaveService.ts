@@ -1,5 +1,5 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import { db } from '../../../../config/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { LeaveType } from '../types';
 
@@ -50,51 +50,7 @@ class FirebaseLeaveService implements ILeaveService {
   }
 }
 
-class MockLeaveService implements ILeaveService {
-  private leaveTypes: LeaveType[] = [
-    { id: '1', name: 'Annual Leave', description: 'Regular vacation days', days: 14, active: true },
-    { id: '2', name: 'Sick Leave', description: 'For medical reasons', days: 10, active: true },
-    { id: '3', name: 'Parental Leave', description: 'For new parents', days: 90, active: true }
-  ];
-
-  async getLeaveTypes(): Promise<LeaveType[]> {
-    return Promise.resolve([...this.leaveTypes]);
-  }
-
-  async createLeaveType(data: Omit<LeaveType, 'id'>): Promise<LeaveType> {
-    const newType = {
-      id: String(this.leaveTypes.length + 1),
-      ...data
-    };
-    this.leaveTypes.push(newType);
-    return Promise.resolve(newType);
-  }
-
-  async updateLeaveType(id: string, data: Partial<LeaveType>): Promise<LeaveType> {
-    const index = this.leaveTypes.findIndex(t => t.id === id);
-    if (index === -1) throw new Error('Leave type not found');
-    
-    const updatedType = {
-      ...this.leaveTypes[index],
-      ...data
-    };
-    this.leaveTypes[index] = updatedType;
-    return Promise.resolve(updatedType);
-  }
-
-  async deleteLeaveType(id: string): Promise<void> {
-    const index = this.leaveTypes.findIndex(t => t.id === id);
-    if (index === -1) throw new Error('Leave type not found');
-    this.leaveTypes.splice(index, 1);
-    return Promise.resolve();
-  }
-}
 
 export async function getLeaveService(): Promise<ILeaveService> {
-  await initializeFirebase();
-  const config = await getServiceConfig();
-  if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-    return new FirebaseLeaveService(config.firebase.db as Firestore);
-  }
-  return new MockLeaveService();
+  return new FirebaseLeaveService(db);
 }
