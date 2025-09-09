@@ -62,30 +62,37 @@ export function Sidebar() {
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
 
   return (
-    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-64'} bg-background border-r border-border flex flex-col text-foreground transition-all duration-200 shadow-sm dark:shadow-accent/5`}>
+    <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-72'} bg-card border-r border-border/50 flex flex-col text-foreground transition-all duration-300 shadow-soft animate-slide-in`}>
       {/* Company Switcher and Collapse Toggle */}
-      <div className={`flex items-center gap-3 px-4 py-5 border-b border-muted mb-2 ${collapsed ? 'justify-center' : ''}`}>
+      <div className={`flex items-center gap-3 px-4 py-6 border-b border-border/50 mb-2 ${collapsed ? 'justify-center' : ''}`}>
         <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
           <Popover.Trigger asChild>
             <button
-              className={`flex items-center gap-2 focus:outline-none ${collapsed ? 'p-0' : 'p-2'} bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 rounded-lg transition-colors`}
+              className={`flex items-center gap-3 focus:outline-none ${collapsed ? 'p-2' : 'p-3'} bg-gradient-to-r from-primary/10 to-secondary/10 hover:from-primary/20 hover:to-secondary/20 rounded-xl transition-all duration-200 group`}
               aria-label="Switch company"
               onClick={() => setCompanyPopoverOpen((o) => !o)}
             >
-              <selectedCompany.icon className="w-6 h-6 text-primary dark:text-primary-foreground" />
-              {!collapsed && <span className="font-semibold text-lg truncate">{selectedCompany.name}</span>}
-              {!collapsed && <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              <selectedCompany.icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+              {!collapsed && (
+                <>
+                  <div className="flex flex-col items-start">
+                    <span className="font-bold text-lg text-gradient">{selectedCompany.name}</span>
+                    <span className="text-xs text-muted-foreground">HRIS System</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+                </>
+              )}
             </button>
           </Popover.Trigger>
-          <Popover.Content align="start" className="w-48 p-2">
+          <Popover.Content align="start" className="w-56 p-2 glass-effect">
             <ul className="flex flex-col gap-1">
               {mockCompanies.map((company) => (
                 <li key={company.name}>
                   <button
-                    className={`flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-accent/50 dark:hover:bg-accent/30 transition-colors ${selectedCompany.name === company.name ? 'bg-accent/80 dark:bg-accent/40 font-semibold' : ''}`}
+                    className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group ${selectedCompany.name === company.name ? 'bg-primary/10 text-primary font-semibold' : ''}`}
                     onClick={() => { setSelectedCompany(company); setCompanyPopoverOpen(false); }}
                   >
-                    <company.icon className="w-5 h-5 text-primary dark:text-primary-foreground" />
+                    <company.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
                     <span>{company.name}</span>
                   </button>
                 </li>
@@ -94,11 +101,14 @@ export function Sidebar() {
           </Popover.Content>
         </Popover>
         <button
-          className="p-1 rounded hover:bg-accent/50 dark:hover:bg-accent/30 transition-colors"
+          className="p-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setCollapsed((c) => !c)}
         >
-          {collapsed ? <ChevronRight className="w-4 h-4 text-muted-foreground hover:text-foreground" /> : <ChevronLeft className="w-4 h-4 text-muted-foreground hover:text-foreground" />}
+          {collapsed ? 
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" /> : 
+            <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          }
         </button>
       </div>
       <nav className={`flex-1 overflow-y-auto p-4 pt-0 ${collapsed ? 'px-2' : ''}`}>
@@ -170,20 +180,33 @@ export function Sidebar() {
 // SidebarNavLink: helper for nav links with icon, active state, and collapsed mode
 function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean }) {
   return (
-    <NavigationMenuItem>
+    <NavigationMenuItem className="w-full">
       <a
         href={link.href}
         className={
-          `flex items-center gap-3 rounded-md font-medium transition-colors
-          ${collapsed ? 'justify-center w-10 h-10 p-0' : 'px-3 py-2 text-sm w-full'}
-          ${isActive ? 'bg-accent/80 dark:bg-accent/30 font-semibold' : 'hover:bg-accent/50 hover:dark:bg-accent/20'}
-          ${isActive ? 'text-primary dark:text-primary' : 'text-foreground'}
+          `flex items-center gap-3 rounded-xl font-medium transition-all duration-200 group relative
+          ${collapsed ? 'justify-center w-12 h-12 p-0' : 'px-4 py-3 text-sm w-full'}
+          ${isActive 
+            ? 'bg-gradient-to-r from-primary/20 to-secondary/20 text-primary font-semibold shadow-soft' 
+            : 'hover:bg-accent/50 hover:shadow-soft text-foreground hover:text-primary'
+          }
           `
         }
         title={collapsed ? link.label : undefined}
       >
-        <link.icon className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-        {!collapsed && link.label}
+        <link.icon className={`w-5 h-5 transition-all duration-200 ${
+          isActive 
+            ? 'text-primary scale-110' 
+            : 'text-muted-foreground group-hover:text-primary group-hover:scale-105'
+        }`} />
+        {!collapsed && (
+          <span className="transition-all duration-200 group-hover:translate-x-1">
+            {link.label}
+          </span>
+        )}
+        {isActive && !collapsed && (
+          <div className="absolute right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
+        )}
       </a>
     </NavigationMenuItem>
   );

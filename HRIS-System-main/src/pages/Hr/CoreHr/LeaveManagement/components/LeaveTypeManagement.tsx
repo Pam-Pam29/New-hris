@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 // Import the Firebase service
-import { leaveService, LeaveRequest, LeaveType, Employee } from './services/leaveService';
+import { leaveRequestService, leaveTypeService, employeeService, LeaveRequest, LeaveType, Employee } from '../services/leaveService';
 
 // Simple inline components for missing UI elements
 const Input = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -230,12 +230,13 @@ const LeaveTypeManagement = ({
 
     setSaving(true);
     try {
-      const createdType = await leaveService.createLeaveType({
+      const id = await leaveTypeService.add({
         name: newType.name,
         daysAllowed: newType.daysAllowed,
         color: newType.color
       });
 
+      const createdType = { id, ...newType };
       const updatedTypes = [...types, createdType];
       setTypes(updatedTypes);
       onUpdate(updatedTypes);
@@ -252,7 +253,7 @@ const LeaveTypeManagement = ({
 
     setSaving(true);
     try {
-      await leaveService.deleteLeaveType(id);
+      await leaveTypeService.delete(id);
       const updatedTypes = types.filter(type => type.id !== id);
       setTypes(updatedTypes);
       onUpdate(updatedTypes);
@@ -393,9 +394,9 @@ export default function LeaveManagement() {
     setLoading(true);
     try {
       const [requestsData, leaveTypesData, employeesData] = await Promise.all([
-        leaveService.getLeaveRequests(),
-        leaveService.getLeaveTypes(),
-        leaveService.getEmployees()
+        leaveRequestService.getAll(),
+        leaveTypeService.getAll(),
+        employeeService.getAll()
       ]);
 
       setRequests(requestsData);
@@ -441,7 +442,7 @@ export default function LeaveManagement() {
 
     setActionLoading(true);
     try {
-      await leaveService.approveLeaveRequest(selectedRequest.id!, 'HR Manager');
+      await leaveRequestService.approve(selectedRequest.id!, 'HR Manager');
 
       // Update local state
       setRequests(prev => prev.map(req =>
@@ -453,6 +454,7 @@ export default function LeaveManagement() {
       setSuccess(`Leave request approved for ${selectedRequest.employeeName}`);
       setDetailsOpen(false);
     } catch (error) {
+      console.error('Error approving leave request:', error);
       setError('Failed to approve leave request');
     } finally {
       setActionLoading(false);
@@ -465,7 +467,7 @@ export default function LeaveManagement() {
 
     setActionLoading(true);
     try {
-      await leaveService.rejectLeaveRequest(selectedRequest.id!, 'HR Manager');
+      await leaveRequestService.reject(selectedRequest.id!, 'HR Manager');
 
       // Update local state
       setRequests(prev => prev.map(req =>
@@ -477,6 +479,7 @@ export default function LeaveManagement() {
       setSuccess(`Leave request rejected for ${selectedRequest.employeeName}`);
       setDetailsOpen(false);
     } catch (error) {
+      console.error('Error rejecting leave request:', error);
       setError('Failed to reject leave request');
     } finally {
       setActionLoading(false);
@@ -495,26 +498,30 @@ export default function LeaveManagement() {
       const selectedEmployee = employees.find(emp => emp.id === newLeaveForm.employeeId);
       const totalDays = calculateDays(newLeaveForm.startDate, newLeaveForm.endDate);
 
-      const newRequest = await leaveService.createLeaveRequest({
+      const requestData = {
         employeeId: newLeaveForm.employeeId,
         employeeName: selectedEmployee?.name || 'Unknown Employee',
         department: selectedEmployee?.department || 'Unknown',
         type: newLeaveForm.type,
         startDate: newLeaveForm.startDate,
         endDate: newLeaveForm.endDate,
-        status: 'Pending',
+        status: 'Pending' as const,
         reason: newLeaveForm.reason,
         submittedDate: new Date().toISOString().split('T')[0],
         approver: '',
         approvedDate: '',
         totalDays
-      });
+      };
+
+      const id = await leaveRequestService.add(requestData);
+      const newRequest = { id, ...requestData };
 
       setRequests(prev => [newRequest, ...prev]);
       setSuccess(`Leave request submitted for ${newRequest.employeeName}`);
       setAddLeaveDialogOpen(false);
       setNewLeaveForm({ employeeId: 'NONE', type: 'NONE', startDate: '', endDate: '', reason: '' });
     } catch (error) {
+      console.error('Error submitting leave request:', error);
       setError('Failed to submit leave request');
     } finally {
       setActionLoading(false);
@@ -539,37 +546,42 @@ export default function LeaveManagement() {
   }
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="p-8 min-h-screen animate-fade-in">
       {/* Success/Error Messages */}
       {success && (
-        <Alert className="mb-6 border-green-200 bg-green-50 text-green-800">
-          <CheckCircle className="h-4 w-4" />
-          <AlertDescription>{success}</AlertDescription>
+        <Alert className="mb-6 border-success/20 bg-success/10 text-success-foreground animate-fade-in">
+          <CheckCircle className="h-4 w-4 text-success" />
+          <AlertDescription className="text-success">{success}</AlertDescription>
         </Alert>
       )}
 
       {error && (
-        <Alert className="mb-6 border-red-200 bg-red-50 text-red-800">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+        <Alert className="mb-6 border-destructive/20 bg-destructive/10 text-destructive-foreground animate-fade-in">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <AlertDescription className="text-destructive">{error}</AlertDescription>
         </Alert>
       )}
 
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 animate-slide-in">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
-              <Calendar className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+              <Calendar className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-bold text-gradient mb-1">
                 Leave Management
               </h1>
-              <p className="text-muted-foreground text-sm">Manage employee leave requests and policies</p>
+              <p className="text-muted-foreground">Manage employee leave requests and policies with ease</p>
             </div>
           </div>
-          <Button variant="outline" onClick={refreshData} disabled={loading}>
+          <Button 
+            variant="outline" 
+            onClick={refreshData} 
+            disabled={loading}
+            className="shadow-soft hover:shadow-soft-lg transition-all duration-200"
+          >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh Data
           </Button>
@@ -577,58 +589,62 @@ export default function LeaveManagement() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-fade-in">
+        <Card className="card-modern group hover:scale-105 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Total Requests</p>
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalRequests}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Total Requests</p>
+                <p className="text-3xl font-bold text-primary">{totalRequests}</p>
+                <p className="text-xs text-muted-foreground mt-1">All time</p>
               </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                <FileText className="h-6 w-6 text-primary" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-950/20 dark:to-yellow-900/20">
+        <Card className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Pending</p>
-                <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">{pendingRequests}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Pending</p>
+                <p className="text-3xl font-bold text-warning">{pendingRequests}</p>
+                <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
               </div>
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-                <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+              <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                <Clock className="h-6 w-6 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20">
+        <Card className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Approved</p>
-                <p className="text-3xl font-bold text-green-600 dark:text-green-400">{approvedRequests}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Approved</p>
+                <p className="text-3xl font-bold text-success">{approvedRequests}</p>
+                <p className="text-xs text-muted-foreground mt-1">Successfully processed</p>
               </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                <CheckCircle className="h-6 w-6 text-success" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20">
+        <Card className="card-modern group hover:scale-105 bg-gradient-to-br from-destructive/5 to-destructive/10 border-destructive/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Rejected</p>
-                <p className="text-3xl font-bold text-red-600 dark:text-red-400">{rejectedRequests}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Rejected</p>
+                <p className="text-3xl font-bold text-destructive">{rejectedRequests}</p>
+                <p className="text-xs text-muted-foreground mt-1">Declined requests</p>
               </div>
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
-                <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="p-3 bg-destructive/10 rounded-xl group-hover:bg-destructive/20 transition-colors">
+                <XCircle className="h-6 w-6 text-destructive" />
               </div>
             </div>
           </CardContent>

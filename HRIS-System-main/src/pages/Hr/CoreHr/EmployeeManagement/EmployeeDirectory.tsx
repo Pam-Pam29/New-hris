@@ -1,4 +1,27 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  Users, 
+  UserPlus, 
+  Search, 
+  Filter, 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar,
+  Building,
+  Briefcase,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Download,
+  Upload,
+  Eye,
+  X,
+  Plus
+} from 'lucide-react';
 
 interface Employee {
   id: number;
@@ -121,128 +144,241 @@ export default function EmployeeDirectory() {
 
   if (loading) {
     return (
-      <div className="p-8 min-h-screen bg-gradient-to-br from-background to-muted/70 dark:from-background dark:to-accent/10 transition-colors duration-300">
-        <div className="text-center text-foreground dark:text-foreground/90">Loading employees...</div>
+      <div className="p-8 min-h-screen animate-fade-in flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading employees...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-background to-muted/70 dark:from-background dark:to-accent/10 transition-colors duration-300">
+    <div className="p-8 min-h-screen animate-fade-in">
       {/* Header Section */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg transition-colors duration-300">
-            <span className="text-2xl">👥</span>
+      <div className="mb-8 animate-slide-in">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+              <Users className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gradient mb-1">
+                Employee Management
+              </h1>
+              <p className="text-muted-foreground">Manage your workforce efficiently and effectively</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent m-0 transition-colors duration-300">
-              Employee Management
-            </h1>
-            <p className="text-muted-foreground dark:text-muted-foreground/90 text-sm m-0 transition-colors duration-300">Manage your workforce efficiently</p>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors">
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors">
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-card dark:bg-card/90 p-6 rounded-lg shadow-sm dark:shadow-accent/5 border border-border dark:border-accent/20 transition-all duration-300">
-          <div className="text-2xl font-bold text-foreground dark:text-foreground/90">{employees.length}</div>
-          <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">Total Employees</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Total Employees</p>
+              <p className="text-3xl font-bold text-primary">{employees.length}</p>
+              <p className="text-xs text-muted-foreground">Active workforce</p>
+            </div>
+          </div>
         </div>
-        <div className="bg-card dark:bg-card/90 p-6 rounded-lg shadow-sm dark:shadow-accent/5 border border-border dark:border-accent/20 transition-all duration-300">
-          <div className="text-2xl font-bold text-foreground dark:text-foreground/90">{employees.filter(e => e.status === 'Active').length}</div>
-          <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">Active Employees</div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                <CheckCircle className="h-6 w-6 text-success" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Active Employees</p>
+              <p className="text-3xl font-bold text-success">{employees.filter(e => e.status === 'Active').length}</p>
+              <p className="text-xs text-muted-foreground">Currently working</p>
+            </div>
+          </div>
         </div>
-        <div className="bg-card dark:bg-card/90 p-6 rounded-lg shadow-sm dark:shadow-accent/5 border border-border dark:border-accent/20 transition-all duration-300">
-          <div className="text-2xl font-bold text-foreground dark:text-foreground/90">{employees.filter(e => e.status === 'On Leave').length}</div>
-          <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">On Leave</div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                <Clock className="h-6 w-6 text-warning" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">On Leave</p>
+              <p className="text-3xl font-bold text-warning">{employees.filter(e => e.status === 'On Leave').length}</p>
+              <p className="text-xs text-muted-foreground">Temporary absence</p>
+            </div>
+          </div>
         </div>
-        <div className="bg-card dark:bg-card/90 p-6 rounded-lg shadow-sm dark:shadow-accent/5 border border-border dark:border-accent/20 transition-all duration-300">
-          <div className="text-2xl font-bold text-foreground dark:text-foreground/90">{new Set(employees.map(e => e.department)).size}</div>
-          <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">Departments</div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-info/5 to-info/10 border-info/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-info/10 rounded-xl group-hover:bg-info/20 transition-colors">
+                <Building className="h-6 w-6 text-info" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Departments</p>
+              <p className="text-3xl font-bold text-info">{new Set(employees.map(e => e.department)).size}</p>
+              <p className="text-xs text-muted-foreground">Active departments</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Actions Bar */}
-      <div className="flex justify-between items-center mb-8">
-        <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">
-          Showing {employees.length} employees
+      {/* Search and Actions Bar */}
+      <div className="card-modern mb-8">
+        <div className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                />
+              </div>
+              <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors">
+                <Filter className="h-4 w-4" />
+                Filter
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add Employee
+              </button>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => setShowAddDialog(true)}
-          className="bg-primary hover:bg-primary/90 dark:bg-primary/90 dark:hover:bg-primary/80 text-primary-foreground dark:text-primary-foreground/90 border-none py-2 px-4 rounded-md cursor-pointer flex items-center gap-2 text-sm transition-colors duration-300"
-        >
-          ➕ Add Employee
-        </button>
       </div>
 
       {/* Employee Table */}
-      <div className="bg-card dark:bg-card/90 rounded-lg shadow-sm dark:shadow-accent/5 border border-border dark:border-accent/20 overflow-hidden transition-all duration-300">
+      <div className="card-modern overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead className="bg-muted dark:bg-muted/50 transition-colors duration-300">
+          <table className="table-modern">
+            <thead>
               <tr>
-                <th className="p-4 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground/80 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="p-4 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground/80 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="p-4 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground/80 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="p-4 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground/80 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="p-4 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground/80 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="text-left">Employee</th>
+                <th className="text-left">Role & Department</th>
+                <th className="text-left">Contact</th>
+                <th className="text-left">Status</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border dark:divide-accent/20">
+            <tbody>
               {employees.map((employee, index) => (
-                <tr key={`emp-${employee.id}-${index}`} className="hover:bg-muted/50 dark:hover:bg-muted/20 transition-colors duration-200">
-                  <td className="p-4">
-                    <div className="flex items-center">
-                      <img
-                        src={employee.avatar || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPHBhdGggZD0iTTIwIDEwQzIyLjIwOTEgMTAgMjQgMTEuNzkwOSAyNCAxNEMyNCAxNi4yMDkxIDIyLjIwOTEgMTggMjAgMThDMTcuNzkwOSAxOCAxNiAxNi4yMDkxIDE2IDE0QzE2IDExLjc5MDkgMTcuNzkwOSAxMCAyMCAxMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTI4IDMwQzI4IDI2LjY4NjMgMjQuNDE4MyAyNCAyMCAyNEMxNS41ODE3IDI0IDEyIDI2LjY4NjMgMTIgMzBIMjhaIiBmaWxsPSIjOUNBM0FGIi8+Cjwvc3ZnPgo='}
-                        alt={employee.name}
-                        className="w-10 h-10 rounded-full mr-3 border border-border dark:border-accent/30"
-                        onError={(e) => {
-                          e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPHBhdGggZD0iTTIwIDEwQzIyLjIwOTEgMTAgMjQgMTEuNzkwOSAyNCAxNEMyNCAxNi4yMDkxIDIyLjIwOTEgMTggMjAgMThDMTcuNzkwOSAxOCAxNiAxNi4yMDkxIDE2IDE0QzE2IDExLjc5MDkgMTcuNzkwOSAxMCAyMCAxMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTI4IDMwQzI4IDI2LjY4NjMgMjQuNDE4MyAyNCAyMCAyNEMxNS41ODE3IDI0IDEyIDI2LjY4NjMgMTIgMzBIMjhaIiBmaWxsPSIjOUNBM0FGIi8+Cjwvc3ZnPgo=';
-                        }}
-                      />
+                <tr key={`emp-${employee.id}-${index}`} className="group">
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={employee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name)}&background=random&color=fff&size=40`}
+                          alt={employee.name}
+                          className="w-10 h-10 rounded-full border-2 border-border shadow-soft"
+                          onError={(e) => {
+                            e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name)}&background=random&color=fff&size=40`;
+                          }}
+                        />
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${
+                          employee.status === 'Active' ? 'bg-success' : 'bg-warning'
+                        }`} />
+                      </div>
                       <div>
-                        <div className="text-sm font-medium text-foreground dark:text-foreground/90">{employee.name}</div>
-                        <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">{employee.email}</div>
+                        <div className="font-semibold text-foreground">{employee.name}</div>
+                        <div className="text-sm text-muted-foreground">ID: {employee.id}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 text-sm text-foreground dark:text-foreground/90">
-                    {employee.role}
+                  <td>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{employee.role}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Building className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">{employee.department}</span>
+                      </div>
+                    </div>
                   </td>
-                  <td className="p-4 text-sm text-foreground dark:text-foreground/90">
-                    {employee.department}
+                  <td>
+                    <div className="space-y-1">
+                      {employee.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{employee.email}</span>
+                        </div>
+                      )}
+                      {employee.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{employee.phone}</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${employee.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'} transition-colors duration-300`}>
-                      {employee.status}
-                    </span>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      {employee.status === 'Active' ? (
+                        <CheckCircle className="h-4 w-4 text-success" />
+                      ) : (
+                        <Clock className="h-4 w-4 text-warning" />
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        employee.status === 'Active' 
+                          ? 'bg-success/10 text-success border border-success/20' 
+                          : 'bg-warning/10 text-warning border border-warning/20'
+                      }`}>
+                        {employee.status}
+                      </span>
+                    </div>
                   </td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
+                  <td>
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {/* View employee details */}}
+                        className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openEditDialog(employee)}
-                        className="bg-transparent hover:bg-muted dark:hover:bg-muted/30 border border-border dark:border-accent/30 px-2 py-1 rounded-md cursor-pointer text-xs flex items-center gap-1 transition-colors duration-300"
+                        className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                        title="Edit Employee"
                       >
-                        ✏️ Edit
+                        <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteEmployee(employee.id.toString())}
-                        className="bg-transparent hover:bg-destructive/10 dark:hover:bg-destructive/20 border border-border dark:border-accent/30 px-2 py-1 rounded-md cursor-pointer text-xs flex items-center gap-1 transition-colors duration-300"
+                        className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                        title="Delete Employee"
                       >
-                        🗑️ Delete
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -250,70 +386,117 @@ export default function EmployeeDirectory() {
               ))}
             </tbody>
           </table>
+          
+          {employees.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium text-muted-foreground mb-2">No employees found</p>
+              <p className="text-sm text-muted-foreground mb-4">Get started by adding your first employee</p>
+              <button
+                onClick={() => setShowAddDialog(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add First Employee
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Add Employee Dialog */}
       {showAddDialog && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card dark:bg-card/95 p-6 rounded-lg w-full max-w-md m-4 shadow-lg dark:shadow-accent/10 border border-border dark:border-accent/20 transition-all duration-300">
-            <h2 className="m-0 mb-4 text-xl font-semibold text-foreground dark:text-foreground/90">Add New Employee</h2>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter employee name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter email"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Role</label>
-                <input
-                  type="text"
-                  value={formData.role}
-                  onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter role"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Department</label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter department"
-                />
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={handleAddEmployee}
-                  className="flex-1 bg-primary hover:bg-primary/90 dark:bg-primary/90 dark:hover:bg-primary/80 text-primary-foreground dark:text-primary-foreground/90 border-none py-2 rounded-md cursor-pointer text-sm transition-colors duration-300"
-                >
-                  Add Employee
-                </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="card-modern w-full max-w-md m-4 animate-slide-in">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <UserPlus className="h-5 w-5 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Add New Employee</h2>
+                </div>
                 <button
                   onClick={() => {
                     setShowAddDialog(false);
                     setFormData({ name: '', email: '', role: '', department: '' });
                   }}
-                  className="flex-1 bg-transparent hover:bg-muted dark:hover:bg-muted/30 border border-border dark:border-accent/30 py-2 rounded-md cursor-pointer text-sm text-foreground dark:text-foreground/90 transition-colors duration-300"
+                  className="p-2 hover:bg-muted/50 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                    placeholder="Enter employee name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Role *</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={formData.role}
+                      onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter job role"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Department *</label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={formData.department}
+                      onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter department"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-6 pt-4 border-t border-border">
+                <button
+                  onClick={() => {
+                    setShowAddDialog(false);
+                    setFormData({ name: '', email: '', role: '', department: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-input rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={handleAddEmployee}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+                >
+                  Add Employee
                 </button>
               </div>
             </div>
@@ -323,66 +506,99 @@ export default function EmployeeDirectory() {
 
       {/* Edit Employee Dialog */}
       {showEditDialog && selectedEmployee && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card dark:bg-card/95 p-6 rounded-lg w-full max-w-md m-4 shadow-lg dark:shadow-accent/10 border border-border dark:border-accent/20 transition-all duration-300">
-            <h2 className="m-0 mb-4 text-xl font-semibold text-foreground dark:text-foreground/90">Edit Employee</h2>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter employee name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter email"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Role</label>
-                <input
-                  type="text"
-                  value={formData.role}
-                  onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter role"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground dark:text-foreground/90 mb-1">Department</label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  className="w-full p-2 border border-border dark:border-accent/30 rounded-md text-sm bg-background dark:bg-muted/50 text-foreground dark:text-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors duration-300"
-                  placeholder="Enter department"
-                />
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={handleUpdateEmployee}
-                  className="flex-1 bg-primary hover:bg-primary/90 dark:bg-primary/90 dark:hover:bg-primary/80 text-primary-foreground dark:text-primary-foreground/90 border-none py-2 rounded-md cursor-pointer text-sm transition-colors duration-300"
-                >
-                  Update Employee
-                </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="card-modern w-full max-w-md m-4 animate-slide-in">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Edit className="h-5 w-5 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Edit Employee</h2>
+                </div>
                 <button
                   onClick={() => {
                     setShowEditDialog(false);
                     setSelectedEmployee(null);
                     setFormData({ name: '', email: '', role: '', department: '' });
                   }}
-                  className="flex-1 bg-transparent hover:bg-muted dark:hover:bg-muted/30 border border-border dark:border-accent/30 py-2 rounded-md cursor-pointer text-sm text-foreground dark:text-foreground/90 transition-colors duration-300"
+                  className="p-2 hover:bg-muted/50 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                    placeholder="Enter employee name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Role *</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={formData.role}
+                      onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter job role"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Department *</label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={formData.department}
+                      onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      placeholder="Enter department"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-6 pt-4 border-t border-border">
+                <button
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setSelectedEmployee(null);
+                    setFormData({ name: '', email: '', role: '', department: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-input rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={handleUpdateEmployee}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+                >
+                  Update Employee
                 </button>
               </div>
             </div>

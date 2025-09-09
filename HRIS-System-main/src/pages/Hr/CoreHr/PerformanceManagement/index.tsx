@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   TrendingUp, Target, Users, Award, BarChart3, Calendar, Star,
   AlertTriangle, Plus, Filter, Download, Eye, Edit, User, X,
-  Save, Loader2, Search, CheckCircle, AlertCircle
+  Save, Loader2, Search, CheckCircle, AlertCircle, Settings,
+  Upload, FileText, Clock, Zap, Activity, PieChart
 } from 'lucide-react';
 
 // Firebase imports
@@ -486,193 +487,230 @@ export default function PerformanceManagement() {
   const completedGoals = performanceReviews.reduce((sum, review) => sum + review.completedGoals, 0);
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <div className="p-8 min-h-screen animate-fade-in">
       {/* Success/Error Alerts */}
       {success && (
-        <div className="mb-6 p-4 border border-green-200 bg-green-50 text-green-800 rounded-lg flex items-center gap-2">
+        <div className="mb-6 p-4 border border-success/20 bg-success/10 text-success rounded-lg flex items-center gap-2 animate-slide-in">
           <CheckCircle className="h-4 w-4" />
           <span>{success}</span>
         </div>
       )}
 
       {error && (
-        <div className="mb-6 p-4 border border-red-200 bg-red-50 text-red-800 rounded-lg flex items-center gap-2">
+        <div className="mb-6 p-4 border border-destructive/20 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2 animate-slide-in">
           <AlertCircle className="h-4 w-4" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Header Section */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <TrendingUp className="h-6 w-6 text-blue-600" />
+      <div className="mb-8 animate-slide-in">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+              <TrendingUp className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gradient mb-1">
+                Performance Management
+              </h1>
+              <p className="text-muted-foreground">Track employee performance, goals, and development</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Performance Management
-            </h2>
-            <p className="text-gray-600 text-sm">Track employee performance, goals, and development</p>
-          </div>
-        </div>
-      </div>
-
-
-
-      {/* Filters Section */}
-      <div className="mb-8 bg-white/50 backdrop-blur-sm rounded-lg border border-gray-200 shadow-lg">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-600" />
-            <h3 className="text-lg font-semibold">Performance Filters</h3>
-          </div>
-        </div>
-        <div className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-end">
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-gray-600">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name, department, or position..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-gray-600">Department</label>
-              <select
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-gray-600">Performance Status</label>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {performanceStatuses.map(status => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-gray-600">Employee</label>
-              <select
-                value={selectedEmployee}
-                onChange={(e) => setSelectedEmployee(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="All Employees">All Employees</option>
-                {performanceReviews.map(emp => (
-                  <option key={emp.id} value={emp.name}>{emp.name}</option>
-                ))}
-              </select>
-            </div>
-            <button
+          <div className="flex gap-3">
+            <button 
               onClick={handleExportReport}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors shadow-soft hover:shadow-soft-lg"
             >
               <Download className="h-4 w-4" />
-              Export Report
+              Export
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors shadow-soft hover:shadow-soft-lg">
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors shadow-soft hover:shadow-soft-lg">
+              <Settings className="h-4 w-4" />
+              Settings
             </button>
           </div>
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8 animate-fade-in">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
           <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Reviews</p>
-                <p className="text-3xl font-bold text-blue-600">{totalEmployees}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                <FileText className="h-6 w-6 text-primary" />
               </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Users className="h-6 w-6 text-blue-600" />
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">+5%</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Total Reviews</p>
+              <p className="text-3xl font-bold text-primary">{totalEmployees}</p>
+              <p className="text-xs text-muted-foreground">Performance evaluations</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
           <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Average Rating</p>
-                <p className="text-3xl font-bold text-green-600">{averageRating}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                <Star className="h-6 w-6 text-success" />
               </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <Star className="h-6 w-6 text-green-600" />
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">+0.2</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Average Rating</p>
+              <p className="text-3xl font-bold text-success">{averageRating}</p>
+              <p className="text-xs text-muted-foreground">Out of 5.0 stars</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-secondary/5 to-secondary/10 border-secondary/20">
           <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Exceeding</p>
-                <p className="text-3xl font-bold text-purple-600">{exceedingCount}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-secondary/10 rounded-xl group-hover:bg-secondary/20 transition-colors">
+                <Award className="h-6 w-6 text-secondary" />
               </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <Award className="h-6 w-6 text-purple-600" />
+              <div className="flex items-center gap-1 text-sm text-success">
+                <Zap className="h-4 w-4" />
+                <span className="font-medium">Top</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Exceeding</p>
+              <p className="text-3xl font-bold text-secondary">{exceedingCount}</p>
+              <p className="text-xs text-muted-foreground">High performers</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg border border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
           <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Needs Improvement</p>
-                <p className="text-3xl font-bold text-orange-600">{needsImprovementCount}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                <AlertTriangle className="h-6 w-6 text-warning" />
               </div>
-              <div className="p-3 bg-orange-100 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-orange-600" />
+              <div className="flex items-center gap-1 text-sm text-warning">
+                <Clock className="h-4 w-4" />
+                <span className="font-medium">Focus</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Needs Improvement</p>
+              <p className="text-3xl font-bold text-warning">{needsImprovementCount}</p>
+              <p className="text-xs text-muted-foreground">Requires attention</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg border border-indigo-200 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-info/5 to-info/10 border-info/20">
           <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Goals Completed</p>
-                <p className="text-3xl font-bold text-indigo-600">{completedGoals}/{totalGoals}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-info/10 rounded-xl group-hover:bg-info/20 transition-colors">
+                <Target className="h-6 w-6 text-info" />
               </div>
-              <div className="p-3 bg-indigo-100 rounded-full">
-                <Target className="h-6 w-6 text-indigo-600" />
+              <div className="flex items-center gap-1 text-sm text-success">
+                <Activity className="h-4 w-4" />
+                <span className="font-medium">{totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0}%</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Goals Progress</p>
+              <p className="text-3xl font-bold text-info">{completedGoals}/{totalGoals}</p>
+              <p className="text-xs text-muted-foreground">Objectives completed</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="card-modern mb-8">
+        <div className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {departments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {performanceStatuses.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setEditingReview(null);
+                  setReviewForm({
+                    employeeId: '',
+                    rating: 5,
+                    feedback: '',
+                    goals: '',
+                    nextSteps: '',
+                    completedGoals: 0,
+                    totalGoals: 10
+                  });
+                  setReviewDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+              >
+                <Plus className="h-4 w-4" />
+                Add Review
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Performance Table */}
-      <div className="mb-8 bg-white/50 backdrop-blur-sm rounded-lg border border-gray-200 shadow-lg">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-gray-600" />
-              <h3 className="text-lg font-semibold">Employee Performance Overview</h3>
+      <div className="card-modern overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading performance reviews...</p>
             </div>
+          </div>
+        ) : filteredPerformanceReviews.length === 0 ? (
+          <div className="text-center py-12">
+            <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-lg font-medium text-muted-foreground mb-2">No performance reviews found</p>
+            <p className="text-sm text-muted-foreground mb-4">Get started by adding your first performance review</p>
             <button
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
               onClick={() => {
                 setEditingReview(null);
                 setReviewForm({
@@ -686,108 +724,113 @@ export default function PerformanceManagement() {
                 });
                 setReviewDialogOpen(true);
               }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
             >
               <Plus className="h-4 w-4" />
-              Add Review
+              Add First Review
             </button>
           </div>
-        </div>
-        <div className="p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-          ) : filteredPerformanceReviews.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No performance reviews found.</p>
-              <p className="text-sm text-gray-400">Add a review to get started.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Employee</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Department</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Position</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Rating</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Goals Progress</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredPerformanceReviews.map((review) => (
-                    <tr key={review.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-gray-100 rounded-full">
-                            <User className="h-4 w-4 text-gray-600" />
-                          </div>
-                          <span className="font-medium">{review.name}</span>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-modern">
+              <thead>
+                <tr>
+                  <th className="text-left">Employee</th>
+                  <th className="text-left">Performance</th>
+                  <th className="text-left">Goals Progress</th>
+                  <th className="text-left">Status</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPerformanceReviews.map((review) => (
+                  <tr key={review.id} className="group">
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <User className="h-4 w-4 text-primary" />
                         </div>
-                      </td>
-                      <td className="px-4 py-3">{review.department}</td>
-                      <td className="px-4 py-3">{review.position}</td>
-                      <td className="px-4 py-3">
+                        <div>
+                          <div className="font-semibold text-foreground">{review.name}</div>
+                          <div className="text-sm text-muted-foreground">{review.position} • {review.department}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{review.rating}</span>
+                          <span className="text-2xl font-bold text-foreground">{review.rating}</span>
                           <div className="flex gap-1">
                             {[...Array(5)].map((_, i) => (
                               <Star
                                 key={i}
-                                className={`h-3 w-3 ${i < Math.floor(review.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                                className={`h-4 w-4 ${i < Math.floor(review.rating) ? 'text-warning fill-current' : 'text-muted-foreground/30'}`}
                               />
                             ))}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600">{review.completedGoals}/{review.totalGoals}</span>
-                          <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                              style={{ width: `${(review.completedGoals / review.totalGoals) * 100}%` }}
-                            />
-                          </div>
+                        <div className="text-xs text-muted-foreground">
+                          Last reviewed: {review.lastReviewDate ? new Date(review.lastReviewDate).toLocaleDateString() : 'N/A'}
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-3 py-1 text-xs rounded-full ${review.status === 'Exceeding' ? 'bg-green-100 text-green-800' :
-                            review.status === 'Meeting' ? 'bg-blue-100 text-blue-800' :
-                              'bg-orange-100 text-orange-800'
+                      </div>
+                    </td>
+                    <td>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{review.completedGoals}/{review.totalGoals} goals</span>
+                          <span className="text-xs text-muted-foreground">
+                            {Math.round((review.completedGoals / review.totalGoals) * 100)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              (review.completedGoals / review.totalGoals) >= 0.8 ? 'bg-success' :
+                              (review.completedGoals / review.totalGoals) >= 0.6 ? 'bg-warning' : 'bg-destructive'
                             }`}
-                        >
+                            style={{ width: `${(review.completedGoals / review.totalGoals) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        {review.status === 'Exceeding' && <Award className="h-4 w-4 text-success" />}
+                        {review.status === 'Meeting' && <CheckCircle className="h-4 w-4 text-info" />}
+                        {review.status === 'Needs Improvement' && <AlertTriangle className="h-4 w-4 text-warning" />}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                          review.status === 'Exceeding' ? 'bg-success/10 text-success border-success/20' :
+                          review.status === 'Meeting' ? 'bg-info/10 text-info border-info/20' :
+                          'bg-warning/10 text-warning border-warning/20'
+                        }`}>
                           {review.status}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button
-                            className="px-3 py-1 text-xs border border-blue-200 text-blue-700 rounded hover:bg-blue-50 flex items-center gap-1 transition-colors"
-                            onClick={() => handleViewEmployee(review)}
-                          >
-                            <Eye className="h-3 w-3" />
-                            View
-                          </button>
-                          <button
-                            className="px-3 py-1 text-xs border border-green-200 text-green-700 rounded hover:bg-green-50 flex items-center gap-1 transition-colors"
-                            onClick={() => handleEditReview(review)}
-                          >
-                            <Edit className="h-3 w-3" />
-                            Edit
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleViewEmployee(review)}
+                          className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEditReview(review)}
+                          className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                          title="Edit Review"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Employee Details Drawer */}

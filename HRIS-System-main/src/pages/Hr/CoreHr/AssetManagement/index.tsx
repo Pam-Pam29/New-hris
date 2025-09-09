@@ -5,7 +5,31 @@ import { AtomicTanstackTable } from '../../../../components/TanstackTable/Tansta
 import { ColumnDef } from "@tanstack/react-table";
 import { StatCard } from '../../../../components/molecules/StatCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
-import { PlusCircle, Package, Users, AlertTriangle, CheckCircle, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { 
+  PlusCircle, 
+  Package, 
+  Users, 
+  AlertTriangle, 
+  CheckCircle, 
+  UserPlus, 
+  ArrowRightLeft,
+  Search,
+  Filter,
+  Download,
+  Upload,
+  Settings,
+  Eye,
+  Edit,
+  Trash2,
+  DollarSign,
+  TrendingUp,
+  Wrench,
+  MapPin,
+  Calendar,
+  Laptop,
+  Monitor,
+  Smartphone
+} from 'lucide-react';
 import { AssetForm } from './component/AssetForm';
 import { AssetAssignmentDialog } from './component/AssetAssignmentDialog';
 import { AssetDetailsDrawer } from './component/AssetDetailsDrawer';
@@ -303,55 +327,113 @@ export default function AssetManagement() {
   const columns = useMemo<ColumnDef<Asset>[]>(
     () => [
       {
-        header: "Asset ID",
-        accessorKey: "id",
-        cell: ({ row }) => <span className="font-mono text-xs">{row.original.id}</span>,
-      },
-      {
-        header: "Name",
+        header: "Asset",
         accessorKey: "name",
-        cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{row.original.name}</div>
-            <div className="text-xs text-muted-foreground">{row.original.serialNumber}</div>
-          </div>
-        ),
-      },
-      {
-        header: "Category",
-        accessorKey: "category",
-      },
-      {
-        header: "Status",
-        accessorKey: "status",
         cell: ({ row }) => {
-          const status = row.original.status;
-          const statusColors = {
-            'Available': 'bg-green-100 text-green-800',
-            'Assigned': 'bg-blue-100 text-blue-800',
-            'Under Repair': 'bg-yellow-100 text-yellow-800',
-            'Retired': 'bg-red-100 text-red-800'
+          const asset = row.original;
+          const getCategoryIcon = (category: string) => {
+            switch (category.toLowerCase()) {
+              case 'laptop':
+              case 'computer':
+                return <Laptop className="h-4 w-4 text-primary" />;
+              case 'monitor':
+              case 'display':
+                return <Monitor className="h-4 w-4 text-primary" />;
+              case 'phone':
+              case 'mobile':
+                return <Smartphone className="h-4 w-4 text-primary" />;
+              default:
+                return <Package className="h-4 w-4 text-primary" />;
+            }
           };
+
           return (
-            <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[status]}`}>
-              {status}
-            </span>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                {getCategoryIcon(asset.category)}
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">{asset.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {asset.serialNumber && `SN: ${asset.serialNumber}`}
+                  {asset.serialNumber && asset.category && ' • '}
+                  {asset.category}
+                </div>
+              </div>
+            </div>
           );
         },
       },
       {
-        header: "Assigned To",
-        accessorKey: "assignedTo",
-        cell: ({ row }) => row.original.assignedTo || '-',
+        header: "Status & Assignment",
+        accessorKey: "status",
+        cell: ({ row }) => {
+          const asset = row.original;
+          const statusConfig = {
+            'Available': { color: 'text-success', bg: 'bg-success/10 border-success/20', icon: CheckCircle },
+            'Assigned': { color: 'text-info', bg: 'bg-info/10 border-info/20', icon: Users },
+            'Under Repair': { color: 'text-warning', bg: 'bg-warning/10 border-warning/20', icon: Wrench },
+            'Retired': { color: 'text-destructive', bg: 'bg-destructive/10 border-destructive/20', icon: AlertTriangle }
+          };
+          const config = statusConfig[asset.status];
+          const IconComponent = config.icon;
+          
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <IconComponent className={`h-4 w-4 ${config.color}`} />
+                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${config.bg} ${config.color}`}>
+                  {asset.status}
+                </span>
+              </div>
+              {asset.assignedTo && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Users className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-muted-foreground">{asset.assignedTo}</span>
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
-        header: "Location",
+        header: "Location & Value",
         accessorKey: "location",
+        cell: ({ row }) => {
+          const asset = row.original;
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{asset.location || 'Not specified'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-success">${asset.purchasePrice.toLocaleString()}</span>
+              </div>
+            </div>
+          );
+        },
       },
       {
-        header: "Value",
-        accessorKey: "purchasePrice",
-        cell: ({ row }) => `$${row.original.purchasePrice.toLocaleString()}`,
+        header: "Purchase Info",
+        accessorKey: "purchaseDate",
+        cell: ({ row }) => {
+          const asset = row.original;
+          return (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : 'Not specified'}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Condition: {asset.condition || 'Unknown'}
+              </div>
+            </div>
+          );
+        },
       },
       {
         header: "Actions",
@@ -362,46 +444,44 @@ export default function AssetManagement() {
           const isAssigned = asset.status === 'Assigned';
 
           return (
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
                 onClick={() => openDetailsDrawer(asset)}
+                className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                title="View Details"
               >
-                View Details
-              </Button>
+                <Eye className="h-4 w-4" />
+              </button>
               {(isAvailable || isAssigned) && (
-                <Button
-                  size="sm"
-                  variant="outline"
+                <button
                   onClick={() => openAssignmentDialog(asset)}
-                  className="text-violet-600 border-violet-200 hover:bg-violet-50"
+                  className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                  title={isAvailable ? "Assign Asset" : "Manage Assignment"}
                 >
-                  {isAvailable ? (
-                    <>
-                      <UserPlus className="h-3 w-3 mr-1" /> Assign
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRightLeft className="h-3 w-3 mr-1" /> Manage
-                    </>
-                  )}
-                </Button>
+                  {isAvailable ? <UserPlus className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
+                </button>
               )}
+              <button
+                onClick={() => {/* Edit asset */}}
+                className="p-2 hover:bg-secondary/10 text-secondary rounded-lg transition-colors"
+                title="Edit Asset"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
             </div>
           );
         },
       },
     ],
-    []
+    [openDetailsDrawer, openAssignmentDialog]
   );
 
   if (loading) {
     return (
-      <div className="p-8 min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
-          <p className="text-sm text-muted-foreground">Loading assets...</p>
+      <div className="p-8 min-h-screen animate-fade-in flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading assets...</p>
         </div>
       </div>
     );
@@ -409,14 +489,15 @@ export default function AssetManagement() {
 
   if (error) {
     return (
-      <div className="p-8 min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <AlertTriangle className="h-8 w-8 text-red-500" />
-          <p className="text-sm text-muted-foreground">{error}</p>
+      <div className="p-8 min-h-screen animate-fade-in flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <p className="text-lg font-medium text-foreground mb-2">Something went wrong</p>
+          <p className="text-muted-foreground mb-4">{error}</p>
           <Button
             variant="outline"
             onClick={() => window.location.reload()}
-            className="mt-4"
+            className="shadow-soft hover:shadow-soft-lg transition-all duration-200"
           >
             Try Again
           </Button>
@@ -426,98 +507,190 @@ export default function AssetManagement() {
   }
 
   return (
-    <div className="p-8 min-h-screen bg-background text-foreground">
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <StatCard
-          title="Total Assets"
-          value={totalAssets.toString()}
-          icon={<Package className="h-4 w-4" />}
-          description="All company assets"
-        />
-        <StatCard
-          title="Assigned"
-          value={assignedAssets.toString()}
-          icon={<Users className="h-4 w-4" />}
-          description="Currently in use"
-        />
-        <StatCard
-          title="Available"
-          value={availableAssets.toString()}
-          icon={<CheckCircle className="h-4 w-4" />}
-          description="Ready for assignment"
-        />
-        <StatCard
-          title="Under Repair"
-          value={underRepairAssets.toString()}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          description="Being serviced"
-        />
-        <StatCard
-          title="Total Value"
-          value={`$${totalValue.toLocaleString()}`}
-          icon={<Package className="h-4 w-4" />}
-          description="Asset portfolio value"
-        />
+    <div className="p-8 min-h-screen animate-fade-in">
+      {/* Header Section */}
+      <div className="mb-8 animate-slide-in">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+              <Package className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gradient mb-1">
+                Asset Management
+              </h1>
+              <p className="text-muted-foreground">Track, manage, and optimize your company assets</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200" 
+              onClick={() => setDialogOpen(true)}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Asset
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <TypographyH2>Asset Management</TypographyH2>
-        <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => setDialogOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Asset
-        </Button>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8 animate-fade-in">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                <Package className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">+8%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Total Assets</p>
+              <p className="text-3xl font-bold text-primary">{totalAssets}</p>
+              <p className="text-xs text-muted-foreground">All company assets</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-info/5 to-info/10 border-info/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-info/10 rounded-xl group-hover:bg-info/20 transition-colors">
+                <Users className="h-6 w-6 text-info" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Assigned</p>
+              <p className="text-3xl font-bold text-info">{assignedAssets}</p>
+              <p className="text-xs text-muted-foreground">Currently in use</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                <CheckCircle className="h-6 w-6 text-success" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Available</p>
+              <p className="text-3xl font-bold text-success">{availableAssets}</p>
+              <p className="text-xs text-muted-foreground">Ready for assignment</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                <Wrench className="h-6 w-6 text-warning" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Under Repair</p>
+              <p className="text-3xl font-bold text-warning">{underRepairAssets}</p>
+              <p className="text-xs text-muted-foreground">Being serviced</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-secondary/5 to-secondary/10 border-secondary/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-secondary/10 rounded-xl group-hover:bg-secondary/20 transition-colors">
+                <DollarSign className="h-6 w-6 text-secondary" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">+15%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Total Value</p>
+              <p className="text-3xl font-bold text-secondary">${totalValue.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Asset portfolio value</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="card-modern mb-8">
+        <div className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search assets..."
+                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">All Categories</option>
+                  {categoryOptions.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">All Statuses</option>
+                  {statusOptions.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+                <select
+                  value={locationFilter}
+                  onChange={e => setLocationFilter(e.target.value)}
+                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">All Locations</option>
+                  {locationOptions.map(location => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Assets Table */}
-      <div className="overflow-x-auto rounded-xl shadow border border-border bg-card">
+      <div className="card-modern overflow-hidden">
         <AtomicTanstackTable
           data={filteredAssets}
           columns={columns}
-          showGlobalFilter
-          globalFilterPlaceholder="Search assets..."
+          showGlobalFilter={false}
           pageSizeOptions={[10, 20, 50]}
           initialPageSize={10}
-          className="min-w-full divide-y divide-border"
-          rowClassName={(row: { index: number }) =>
-            `transition-colors ${row.index % 2 === 0 ? 'bg-muted/50' : 'bg-background'} hover:bg-violet-50 dark:hover:bg-violet-900`
-          }
-          headerClassName="bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
-          filterDropdowns={
-            <>
-              <select
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400"
-              >
-                <option value="">All Categories</option>
-                {categoryOptions.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400"
-              >
-                <option value="">All Statuses</option>
-                {statusOptions.map(status => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-              <select
-                value={locationFilter}
-                onChange={e => setLocationFilter(e.target.value)}
-                className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400"
-              >
-                <option value="">All Locations</option>
-                {locationOptions.map(location => (
-                  <option key={location} value={location}>{location}</option>
-                ))}
-              </select>
-            </>
-          }
+          className="table-modern"
         />
       </div>
 

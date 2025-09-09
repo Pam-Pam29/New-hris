@@ -8,7 +8,30 @@ import { Badge } from '../../../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
-import { Clock, Users, CheckCircle, AlertTriangle, XCircle, Filter, Calendar, User, Edit, Save, X } from 'lucide-react';
+import { 
+  Clock, 
+  Users, 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle, 
+  Filter, 
+  Calendar, 
+  User, 
+  Edit, 
+  Save, 
+  X,
+  Plus,
+  Download,
+  Upload,
+  Settings,
+  Search,
+  TrendingUp,
+  Activity,
+  Timer,
+  CalendarDays,
+  Eye,
+  BarChart3
+} from 'lucide-react';
 
 // Import Employee Service
 import { getEmployeeService, IEmployeeService } from '../../../../services/employeeService';
@@ -207,176 +230,294 @@ export default function TimeManagement() {
   };
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="p-8 min-h-screen animate-fade-in">
       {/* Header Section */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
-            <Clock className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+      <div className="mb-8 animate-slide-in">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+              <Clock className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gradient mb-1">
+                Time Management
+              </h1>
+              <p className="text-muted-foreground">Track attendance, manage schedules, and monitor work hours</p>
+            </div>
           </div>
-          <div>
-            <TypographyH2 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
-              Time Management
-            </TypographyH2>
-            <p className="text-muted-foreground text-sm">HR/Admin Dashboard</p>
-          </div>
-          <div className="ml-auto">
-            <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => setShowAddDialog(true)}>
+          <div className="flex gap-3">
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+            <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200" 
+              onClick={() => setShowAddDialog(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
               Add Attendance
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Filters Section */}
-      <Card className="mb-8 border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Employee</label>
-              <Select value={selectedEmployee || 'all_employees'} onValueChange={(value) => setSelectedEmployee(value === 'all_employees' ? null : value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Employees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_employees">All Employees</SelectItem>
-                  {attendanceEmployees.filter(employee => employee !== '').map(employee => (
-                    <SelectItem key={employee} value={employee}>{employee}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                <CheckCircle className="h-6 w-6 text-success" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">+5%</span>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Status</label>
-              <Select value={selectedStatus || 'all_statuses'} onValueChange={(value) => setSelectedStatus(value === 'all_statuses' ? null : value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_statuses">All Statuses</SelectItem>
-                  {statuses.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Present Today</p>
+              <p className="text-3xl font-bold text-success">{summary.find(s => s.status === 'Present')?.count || 0}</p>
+              <p className="text-xs text-muted-foreground">Employees on time</p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Date</label>
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                placeholder="Select date"
-              />
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                <AlertTriangle className="h-6 w-6 text-warning" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-warning">
+                <Timer className="h-4 w-4" />
+                <span className="font-medium">Late</span>
+              </div>
             </div>
-            <div className="flex items-end">
-              <Button variant="outline" className="w-full" onClick={() => {
-                // Trigger the filter logic
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Late Arrivals</p>
+              <p className="text-3xl font-bold text-warning">{summary.find(s => s.status === 'Late')?.count || 0}</p>
+              <p className="text-xs text-muted-foreground">Need attention</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-destructive/5 to-destructive/10 border-destructive/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-destructive/10 rounded-xl group-hover:bg-destructive/20 transition-colors">
+                <XCircle className="h-6 w-6 text-destructive" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-destructive">
+                <Activity className="h-4 w-4" />
+                <span className="font-medium">Track</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Absent Today</p>
+              <p className="text-3xl font-bold text-destructive">{summary.find(s => s.status === 'Absent')?.count || 0}</p>
+              <p className="text-xs text-muted-foreground">Missing employees</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-modern group hover:scale-105 bg-gradient-to-br from-info/5 to-info/10 border-info/20">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-info/10 rounded-xl group-hover:bg-info/20 transition-colors">
+                <BarChart3 className="h-6 w-6 text-info" />
+              </div>
+              <div className="flex items-center gap-1 text-sm text-success">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium">95%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Attendance Rate</p>
+              <p className="text-3xl font-bold text-info">{attendanceRecords.length}</p>
+              <p className="text-xs text-muted-foreground">Total records</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="card-modern mb-8">
+        <div className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={selectedEmployee || 'all_employees'} onValueChange={(value) => setSelectedEmployee(value === 'all_employees' ? null : value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="All Employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_employees">All Employees</SelectItem>
+                    {attendanceEmployees.filter(employee => employee !== '').map(employee => (
+                      <SelectItem key={employee} value={employee}>{employee}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedStatus || 'all_statuses'} onValueChange={(value) => setSelectedStatus(value === 'all_statuses' ? null : value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_statuses">All Statuses</SelectItem>
+                    {statuses.map(status => (
+                      <SelectItem key={status} value={status}>{status}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => {
                 const filteredRecords = attendanceRecords.filter(row =>
                   (!selectedEmployee || row.employee === selectedEmployee) &&
                   (!selectedStatus || row.status === selectedStatus) &&
                   (!selectedDate || row.date === selectedDate)
                 );
                 setFilteredAttendanceRecords(filteredRecords);
-              }}>
-                <Filter className="h-4 w-4 mr-2" />
-                Apply Filters
-              </Button>
-            </div>
+              }}
+              className="shadow-soft hover:shadow-soft-lg transition-all duration-200"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Apply Filters
+            </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {summary.map(({ status, count }) => {
-          const config = statusConfig[status as keyof typeof statusConfig];
-          return (
-            <Card key={status} className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-lg ${config.color}`}>
-                    <config.icon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">{count}</div>
-                    <div className="text-sm text-muted-foreground">{status}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        </div>
       </div>
 
       {/* Attendance Table */}
-      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <TypographyH3 className="text-lg font-semibold">Attendance Records</TypographyH3>
+      <div className="card-modern overflow-hidden">
+        {filteredAttendanceRecords.length === 0 ? (
+          <div className="text-center py-12">
+            <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-lg font-medium text-muted-foreground mb-2">No attendance records found</p>
+            <p className="text-sm text-muted-foreground mb-4">Start tracking attendance by adding records</p>
+            <Button
+              onClick={() => setShowAddDialog(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+            >
+              <Plus className="h-4 w-4" />
+              Add First Record
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="table-modern">
               <thead>
-                <tr className="border-b border-border/50">
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Employee</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Clock In</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Clock Out</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Actions</th>
+                <tr>
+                  <th className="text-left">Employee</th>
+                  <th className="text-left">Date & Time</th>
+                  <th className="text-left">Work Hours</th>
+                  <th className="text-left">Status</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/50">
+              <tbody>
                 {filteredAttendanceRecords.map((row) => {
                   const config = statusConfig[row.status as keyof typeof statusConfig];
+                  const clockInTime = row.clockIn ? new Date(`2000-01-01 ${row.clockIn}`) : null;
+                  const clockOutTime = row.clockOut ? new Date(`2000-01-01 ${row.clockOut}`) : null;
+                  const workHours = clockInTime && clockOutTime 
+                    ? ((clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60)).toFixed(1)
+                    : null;
+
                   return (
-                    <tr key={row.id} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-3">
+                    <tr key={row.id} className="group">
+                      <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <User className="h-4 w-4 text-primary" />
                           </div>
-                          <span className="font-medium">{row.employee}</span>
+                          <div>
+                            <div className="font-semibold text-foreground">{row.employee}</div>
+                            <div className="text-sm text-muted-foreground">Employee</div>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{row.date}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-success" />
+                              <span className="text-success font-mono">{row.clockIn || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-destructive" />
+                              <span className="text-destructive font-mono">{row.clockOut || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="space-y-1">
+                          <div className="text-lg font-bold text-foreground">
+                            {workHours ? `${workHours}h` : 'N/A'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {workHours && parseFloat(workHours) >= 8 ? 'Full day' : 'Partial'}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {row.date}
+                          <config.icon className={`h-4 w-4 ${
+                            row.status === 'Present' ? 'text-success' :
+                            row.status === 'Late' ? 'text-warning' : 'text-destructive'
+                          }`} />
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                            row.status === 'Present' ? 'bg-success/10 text-success border-success/20' :
+                            row.status === 'Late' ? 'bg-warning/10 text-warning border-warning/20' :
+                            'bg-destructive/10 text-destructive border-destructive/20'
+                          }`}>
+                            {row.status}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          {row.clockIn || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          {row.clockOut || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={config.color}>
-                          <config.icon className="h-3 w-3 mr-1" />
-                          {row.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
+                      <td>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
                             onClick={() => handleAdjust(row)}
+                            className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                            title="Adjust Time"
                           >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Adjust
-                          </Button>
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -385,8 +526,8 @@ export default function TimeManagement() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* Add Attendance Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

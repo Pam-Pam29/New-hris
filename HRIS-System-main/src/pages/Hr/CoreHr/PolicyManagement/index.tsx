@@ -5,7 +5,24 @@ import { AtomicTanstackTable } from '../../../../components/TanstackTable/Tansta
 import { ColumnDef } from "@tanstack/react-table";
 import { StatCard } from '../../../../components/molecules/StatCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
-import { PlusCircle, Eye, Edit, Download } from 'lucide-react';
+import { 
+  PlusCircle, 
+  Eye, 
+  Edit, 
+  Download, 
+  FileText, 
+  Shield, 
+  CheckCircle, 
+  Clock, 
+  AlertTriangle,
+  Search,
+  Filter,
+  BookOpen,
+  Users,
+  TrendingUp,
+  Archive,
+  Settings
+} from 'lucide-react';
 import { PolicyForm } from './components/PolicyForm';
 import { PolicyDetailsDrawer } from './components/PolicyDetailsDrawer';
 import { Policy } from './types'; // Import Policy type from types.ts
@@ -233,47 +250,70 @@ export default function PolicyManagement() {
         header: "Policy",
         accessorKey: "title",
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{row.original.title}</div>
-            <div className="text-xs text-muted-foreground">v{row.original.version}</div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FileText className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <div className="font-semibold text-foreground">{row.original.title}</div>
+              <div className="text-sm text-muted-foreground">Version {row.original.version} • {row.original.category}</div>
+            </div>
           </div>
         ),
-      },
-      {
-        header: "Category",
-        accessorKey: "category",
       },
       {
         header: "Status",
         accessorKey: "status",
         cell: ({ row }) => {
           const status = row.original.status;
-          const statusColors = {
-            'Draft': 'bg-gray-100 text-gray-800',
-            'Under Review': 'bg-yellow-100 text-yellow-800',
-            'Approved': 'bg-blue-100 text-blue-800',
-            'Published': 'bg-green-100 text-green-800',
-            'Archived': 'bg-red-100 text-red-800'
+          const statusConfig = {
+            'Draft': { color: 'text-muted-foreground', bg: 'bg-muted/50', icon: Edit },
+            'Under Review': { color: 'text-warning', bg: 'bg-warning/10 border-warning/20', icon: Clock },
+            'Approved': { color: 'text-info', bg: 'bg-info/10 border-info/20', icon: Shield },
+            'Published': { color: 'text-success', bg: 'bg-success/10 border-success/20', icon: CheckCircle },
+            'Archived': { color: 'text-destructive', bg: 'bg-destructive/10 border-destructive/20', icon: Archive }
           };
+          const config = statusConfig[status];
+          const IconComponent = config.icon;
+          
           return (
-            <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[status]}`}>
-              {status}
-            </span>
+            <div className="flex items-center gap-2">
+              <IconComponent className={`h-4 w-4 ${config.color}`} />
+              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${config.bg} ${config.color}`}>
+                {status}
+              </span>
+            </div>
           );
         },
       },
       {
-        header: "Acknowledgment",
+        header: "Compliance",
         accessorKey: "acknowledgmentRequired",
         cell: ({ row }) => {
           const policy = row.original;
           if (!policy.acknowledgmentRequired) {
-            return <span className="text-muted-foreground text-sm">Not required</span>;
+            return (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+                <span className="text-muted-foreground text-sm">Not required</span>
+              </div>
+            );
           }
           const rate = policy.totalEmployees > 0 ? Math.round((policy.acknowledgmentCount / policy.totalEmployees) * 100) : 0;
+          const isCompliant = rate >= 80;
+          
           return (
-            <div className="text-sm">
-              <div className="font-medium">{policy.acknowledgmentCount}/{policy.totalEmployees}</div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isCompliant ? 'bg-success' : rate >= 60 ? 'bg-warning' : 'bg-destructive'}`}></div>
+                <span className="font-medium text-sm">{policy.acknowledgmentCount}/{policy.totalEmployees}</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-1.5">
+                <div 
+                  className={`h-1.5 rounded-full transition-all duration-300 ${isCompliant ? 'bg-success' : rate >= 60 ? 'bg-warning' : 'bg-destructive'}`}
+                  style={{ width: `${rate}%` }}
+                ></div>
+              </div>
               <div className="text-xs text-muted-foreground">{rate}% acknowledged</div>
             </div>
           );
@@ -282,39 +322,53 @@ export default function PolicyManagement() {
       {
         header: "Last Modified",
         accessorKey: "lastModified",
-        cell: ({ row }) => new Date(row.original.lastModified).toLocaleDateString(),
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <div className="font-medium">{new Date(row.original.lastModified).toLocaleDateString()}</div>
+            <div className="text-xs text-muted-foreground">by {row.original.createdBy}</div>
+          </div>
+        ),
       },
       {
         header: "Actions",
         id: "actions",
         cell: ({ row }) => (
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => {
-              setSelectedPolicy(row.original);
-              setDetailsDrawerOpen(true);
-            }}>
-              <Eye className="h-3 w-3 mr-1" />
-              View
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => {
-              setEditForm({
-                ...row.original,
-                tags: row.original.tags ? row.original.tags.join(', ') : '',
-              });
-              setEditDialogOpen(true);
-            }}>
-              <Edit className="h-3 w-3 mr-1" />
-              Edit
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => toast({ title: 'Export', description: 'Export will be available soon.', duration: 4000 })}>
-              <Download className="h-3 w-3 mr-1" />
-              Export
-            </Button>
+          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => {
+                setSelectedPolicy(row.original);
+                setDetailsDrawerOpen(true);
+              }}
+              className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+              title="View Details"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setEditForm({
+                  ...row.original,
+                  tags: row.original.tags ? row.original.tags.join(', ') : '',
+                });
+                setEditDialogOpen(true);
+              }}
+              className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+              title="Edit Policy"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => toast({ title: 'Export', description: 'Export will be available soon.', duration: 4000 })}
+              className="p-2 hover:bg-secondary/10 text-secondary rounded-lg transition-colors"
+              title="Export Policy"
+            >
+              <Download className="h-4 w-4" />
+            </button>
           </div>
         ),
       },
     ],
-    []
+    [toast, setSelectedPolicy, setDetailsDrawerOpen, setEditForm, setEditDialogOpen]
   );
 
   // Handle edit form submit
@@ -344,84 +398,181 @@ export default function PolicyManagement() {
 
   return (
     <>
-      <div className="p-8 min-h-screen bg-background text-foreground">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <StatCard
-            label="Total Policies"
-            value={totalPolicies.toString()}
-            description="All company policies"
-            color="orange"
-          />
-          <StatCard
-            label="Published"
-            value={publishedPolicies.toString()}
-            description="Active policies"
-            color="orange"
-          />
-          <StatCard
-            label="Under Review"
-            value={underReviewPolicies.toString()}
-            description="Pending approval"
-            color="orange"
-          />
-          <StatCard
-            label="Drafts"
-            value={draftPolicies.toString()}
-            description="Work in progress"
-            color="orange"
-          />
-          <StatCard
-            label="Acknowledgment Rate"
-            value={`${acknowledgmentRate}%`}
-            description="Employee compliance"
-            color="orange"
-          />
+      <div className="p-8 min-h-screen animate-fade-in">
+        {/* Header Section */}
+        <div className="mb-8 animate-slide-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl shadow-soft">
+                <BookOpen className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold text-gradient mb-1">
+                  Policy Management
+                </h1>
+                <p className="text-muted-foreground">Create, manage, and track company policies and compliance</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+              <Button 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200" 
+                onClick={() => setDialogOpen(true)}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Policy
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <TypographyH2>Policy Management</TypographyH2>
-          <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => setDialogOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Create Policy
-          </Button>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8 animate-fade-in">
+          <div className="card-modern group hover:scale-105 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                  <FileText className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex items-center gap-1 text-sm text-success">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="font-medium">+12%</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Policies</p>
+                <p className="text-3xl font-bold text-primary">{totalPolicies}</p>
+                <p className="text-xs text-muted-foreground">All company policies</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-modern group hover:scale-105 bg-gradient-to-br from-success/5 to-success/10 border-success/20">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-success/10 rounded-xl group-hover:bg-success/20 transition-colors">
+                  <CheckCircle className="h-6 w-6 text-success" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Published</p>
+                <p className="text-3xl font-bold text-success">{publishedPolicies}</p>
+                <p className="text-xs text-muted-foreground">Active policies</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-modern group hover:scale-105 bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-warning/10 rounded-xl group-hover:bg-warning/20 transition-colors">
+                  <Clock className="h-6 w-6 text-warning" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Under Review</p>
+                <p className="text-3xl font-bold text-warning">{underReviewPolicies}</p>
+                <p className="text-xs text-muted-foreground">Pending approval</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-modern group hover:scale-105 bg-gradient-to-br from-info/5 to-info/10 border-info/20">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-info/10 rounded-xl group-hover:bg-info/20 transition-colors">
+                  <Edit className="h-6 w-6 text-info" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Drafts</p>
+                <p className="text-3xl font-bold text-info">{draftPolicies}</p>
+                <p className="text-xs text-muted-foreground">Work in progress</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-modern group hover:scale-105 bg-gradient-to-br from-secondary/5 to-secondary/10 border-secondary/20">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-secondary/10 rounded-xl group-hover:bg-secondary/20 transition-colors">
+                  <Users className="h-6 w-6 text-secondary" />
+                </div>
+                <div className={`flex items-center gap-1 text-sm ${acknowledgmentRate >= 80 ? 'text-success' : acknowledgmentRate >= 60 ? 'text-warning' : 'text-destructive'}`}>
+                  {acknowledgmentRate >= 80 ? <TrendingUp className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Acknowledgment Rate</p>
+                <p className="text-3xl font-bold text-secondary">{acknowledgmentRate}%</p>
+                <p className="text-xs text-muted-foreground">Employee compliance</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="card-modern mb-8">
+          <div className="p-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div className="flex items-center gap-4 flex-1">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search policies..."
+                    className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={categoryFilter}
+                    onChange={e => setCategoryFilter(e.target.value)}
+                    className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Categories</option>
+                    {categoryOptions.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Statuses</option>
+                    {statusOptions.map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export All
+                </Button>
+                <Button variant="outline" className="shadow-soft hover:shadow-soft-lg transition-all duration-200">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Policies Table */}
-        <div className="overflow-x-auto rounded-xl shadow border border-border bg-card">
+        <div className="card-modern overflow-hidden">
           <AtomicTanstackTable
             data={filteredPolicies}
             columns={columns}
-            showGlobalFilter
-            globalFilterPlaceholder="Search policies..."
+            showGlobalFilter={false}
             pageSizeOptions={[10, 20, 50]}
             initialPageSize={10}
-            className="min-w-full divide-y divide-border bg-muted text-foreground font-semibold text-sm uppercase tracking-wide"
-            filterDropdowns={
-              <>
-                <select
-                  value={categoryFilter}
-                  onChange={e => setCategoryFilter(e.target.value)}
-                  className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400"
-                >
-                  <option value="">All Categories</option>
-                  {categoryOptions.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-                <select
-                  value={statusFilter}
-                  onChange={e => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-violet-400"
-                >
-                  <option value="">All Statuses</option>
-                  {statusOptions.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </>
-            }
+            className="table-modern"
           />
         </div>
 

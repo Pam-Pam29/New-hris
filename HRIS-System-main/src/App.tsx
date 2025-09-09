@@ -24,41 +24,43 @@ import Payroll from './pages/Hr/Payroll/Payroll';
 export default function App() {
   return (
     <Router>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex-1 min-h-screen bg-background text-foreground">
-          <Routes>
-            {/* Dashboard Routes */}
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+        <main className="flex-1 min-h-screen bg-gradient-to-br from-background via-background to-muted/20 text-foreground overflow-hidden">
+          <div className="h-full overflow-y-auto">
+            <Routes>
+              {/* Dashboard Routes */}
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* Core HR Routes */}
-            <Route path="/Hr/CoreHr/EmployeeManagement" element={<EmployeeDirectory />} />
-            <Route path="/Hr/CoreHr/PolicyManagement" element={<PolicyManagement />} />
-            <Route path="/Hr/CoreHr/AssetManagement" element={<AssetManagement />} />
-            <Route path="/Hr/CoreHr/PerformanceManagement" element={<PerformanceManagement />} />
-            <Route path="/Hr/CoreHr/TimeManagement" element={<TimeManagement />} />
-            <Route path="/Hr/CoreHr/LeaveManagement" element={<LeaveManagement />} />
+              {/* Core HR Routes */}
+              <Route path="/Hr/CoreHr/EmployeeManagement" element={<EmployeeDirectory />} />
+              <Route path="/Hr/CoreHr/PolicyManagement" element={<PolicyManagement />} />
+              <Route path="/Hr/CoreHr/AssetManagement" element={<AssetManagement />} />
+              <Route path="/Hr/CoreHr/PerformanceManagement" element={<PerformanceManagement />} />
+              <Route path="/Hr/CoreHr/TimeManagement" element={<TimeManagement />} />
+              <Route path="/Hr/CoreHr/LeaveManagement" element={<LeaveManagement />} />
 
-            {/* Hiring & Onboarding Routes */}
-            <Route path="/Hr/Hiring/Recruitment" element={<Recruitment />} />
-            {/* <Route path="/Hr/Hiring/Onboarding" element={<OnboardingPage />} /> */}
-            <Route path="/Hr/Hiring/JobBoard" element={<JobBoard />} />
-            {/* <Route path="/onboarding/:employeeId" element={<OnboardingPage />} /> */}
+              {/* Hiring & Onboarding Routes */}
+              <Route path="/Hr/Hiring/Recruitment" element={<Recruitment />} />
+              {/* <Route path="/Hr/Hiring/Onboarding" element={<OnboardingPage />} /> */}
+              <Route path="/Hr/Hiring/JobBoard" element={<JobBoard />} />
+              {/* <Route path="/onboarding/:employeeId" element={<OnboardingPage />} /> */}
 
-            {/* Payroll Routes */}
-            <Route path="/Hr/Payroll/Payroll" element={<Payroll />} />
-            {/* <Route path="/Hr/Payroll/Wallet" element={<Wallet />} /> */}
-            {/* <Route path="/Hr/Payroll/Salaries" element={<Salaries />} /> */}
-            {/* <Route path="/Hr/Payroll/Benefit" element={<Benefit />} /> */}
-            {/* <Route path="/Hr/Payroll/Pension" element={<Pension />} /> */}
-            {/* <Route path="/Hr/Payroll/Tax" element={<Tax />} /> */}
+              {/* Payroll Routes */}
+              <Route path="/Hr/Payroll/Payroll" element={<Payroll />} />
+              {/* <Route path="/Hr/Payroll/Wallet" element={<Wallet />} /> */}
+              {/* <Route path="/Hr/Payroll/Salaries" element={<Salaries />} /> */}
+              {/* <Route path="/Hr/Payroll/Benefit" element={<Benefit />} /> */}
+              {/* <Route path="/Hr/Payroll/Pension" element={<Pension />} /> */}
+              {/* <Route path="/Hr/Payroll/Tax" element={<Tax />} /> */}
 
-            {/* Legacy Routes (for backward compatibility) */}
-            <Route path="/employee" element={<EmployeeDirectory />} />
-            <Route path="/leavemanagement" element={<LeaveManagement />} />
-            <Route path="/timetracking" element={<TimeManagement />} />
-          </Routes>
+              {/* Legacy Routes (for backward compatibility) */}
+              <Route path="/employee" element={<EmployeeDirectory />} />
+              <Route path="/leavemanagement" element={<LeaveManagement />} />
+              <Route path="/timetracking" element={<TimeManagement />} />
+            </Routes>
+          </div>
         </main>
       </div>
     </Router>

@@ -1,359 +1,344 @@
-import { LeaveType, LeaveRequest, LeaveBalance } from '../pages/Hr/CoreHr/LeaveManagement/types';
-import { getServiceConfig, initializeFirebase } from '../config/firebase';
-import { Firestore } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  Timestamp,
+  DocumentData,
+  QuerySnapshot
+} from 'firebase/firestore';
 
-// Abstract interface for leave management operations
-export interface ILeaveService {
-  // Leave Types
-  getLeaveTypes(): Promise<LeaveType[]>;
-  getLeaveTypeById(id: string): Promise<LeaveType | null>;
-  createLeaveType(leaveType: Omit<LeaveType, 'id'>): Promise<LeaveType>;
-  updateLeaveType(id: string, leaveType: Partial<LeaveType>): Promise<LeaveType>;
-  deleteLeaveType(id: string): Promise<boolean>;
+// Fixed: Correct import path for Firebase configuration
+import { db } from '../config/firebase';
 
-  // Leave Requests
-  getLeaveRequests(): Promise<LeaveRequest[]>;
-  getLeaveRequestById(id: string): Promise<LeaveRequest | null>;
-  createLeaveRequest(leaveRequest: Omit<LeaveRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>): Promise<LeaveRequest>;
-  updateLeaveRequest(id: string, leaveRequest: Partial<LeaveRequest>): Promise<LeaveRequest>;
-  deleteLeaveRequest(id: string): Promise<boolean>;
-  approveLeaveRequest(id: string, approverNotes?: string): Promise<LeaveRequest>;
-  rejectLeaveRequest(id: string, approverNotes?: string): Promise<LeaveRequest>;
-
-  // Leave Balances
-  getLeaveBalances(employeeId: string): Promise<LeaveBalance[]>;
-  updateLeaveBalance(employeeId: string, leaveTypeId: string, changes: Partial<LeaveBalance>): Promise<LeaveBalance>;
+// Types
+interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+  reason: string;
+  submittedDate: any;
+  approver: string;
+  approvedDate: string;
+  totalDays: number;
 }
 
-// Firebase implementation
-export class FirebaseLeaveService implements ILeaveService {
-  private db: Firestore;
+interface LeaveType {
+  id: string;
+  name: string;
+  daysAllowed: number;
+  color: string;
+}
 
-  constructor(db: Firestore) {
-    this.db = db;
-  }
+interface Employee {
+  id: string;
+  name: string;
+  department: string;
+  position: string;
+}
 
-  // Leave Types
-  async getLeaveTypes(): Promise<LeaveType[]> {
+// Firebase service classes
+class FirebaseLeaveRequestService {
+  private collectionName = 'leaveRequests';
+
+  async getAll(): Promise<LeaveRequest[]> {
     try {
-      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
-      const leaveTypesRef = collection(this.db, 'leaveTypes');
-      const q = query(leaveTypesRef, orderBy('name'));
+      const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
       const querySnapshot = await getDocs(q);
-
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as LeaveType[];
-    } catch (error) {
-      console.error('Error fetching leave types:', error);
-      return [];
-    }
-  }
-
-  async getLeaveTypeById(id: string): Promise<LeaveType | null> {
-    try {
-      const { doc, getDoc } = await import('firebase/firestore');
-      const leaveTypeRef = doc(this.db, 'leaveTypes', id);
-      const leaveTypeDoc = await getDoc(leaveTypeRef);
-
-      if (!leaveTypeDoc.exists()) return null;
-
-      return {
-        id: leaveTypeDoc.id,
-        ...leaveTypeDoc.data()
-      } as LeaveType;
-    } catch (error) {
-      console.error('Error fetching leave type:', error);
-      return null;
-    }
-  }
-
-  async createLeaveType(leaveType: Omit<LeaveType, 'id'>): Promise<LeaveType> {
-    try {
-      const { collection, addDoc } = await import('firebase/firestore');
-      const leaveTypesRef = collection(this.db, 'leaveTypes');
-      const docRef = await addDoc(leaveTypesRef, leaveType);
-
-      return {
-        id: docRef.id,
-        ...leaveType
-      } as LeaveType;
-    } catch (error) {
-      console.error('Error creating leave type:', error);
-      throw error;
-    }
-  }
-
-  async updateLeaveType(id: string, leaveType: Partial<LeaveType>): Promise<LeaveType> {
-    try {
-      const { doc, updateDoc, getDoc } = await import('firebase/firestore');
-      const leaveTypeRef = doc(this.db, 'leaveTypes', id);
-      await updateDoc(leaveTypeRef, leaveType);
-
-      const updatedDoc = await getDoc(leaveTypeRef);
-      return {
-        id: updatedDoc.id,
-        ...updatedDoc.data()
-      } as LeaveType;
-    } catch (error) {
-      console.error('Error updating leave type:', error);
-      throw error;
-    }
-  }
-
-  async deleteLeaveType(id: string): Promise<boolean> {
-    try {
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      const leaveTypeRef = doc(this.db, 'leaveTypes', id);
-      await deleteDoc(leaveTypeRef);
-      return true;
-    } catch (error) {
-      console.error('Error deleting leave type:', error);
-      return false;
-    }
-  }
-
-  // Leave Requests
-  async getLeaveRequests(): Promise<LeaveRequest[]> {
-    try {
-      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
-      const leaveRequestsRef = collection(this.db, 'leaveRequests');
-      const q = query(leaveRequestsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as LeaveRequest[];
+      } as LeaveRequest));
     } catch (error) {
       console.error('Error fetching leave requests:', error);
-      return [];
-    }
-  }
-
-  async getLeaveRequestById(id: string): Promise<LeaveRequest | null> {
-    try {
-      const { doc, getDoc } = await import('firebase/firestore');
-      const leaveRequestRef = doc(this.db, 'leaveRequests', id);
-      const leaveRequestDoc = await getDoc(leaveRequestRef);
-
-      if (!leaveRequestDoc.exists()) return null;
-
-      return {
-        id: leaveRequestDoc.id,
-        ...leaveRequestDoc.data()
-      } as LeaveRequest;
-    } catch (error) {
-      console.error('Error fetching leave request:', error);
-      return null;
-    }
-  }
-
-  async createLeaveRequest(leaveRequest: Omit<LeaveRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>): Promise<LeaveRequest> {
-    try {
-      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-      const leaveRequestsRef = collection(this.db, 'leaveRequests');
-      const timestamp = serverTimestamp();
-
-      const newLeaveRequest = {
-        ...leaveRequest,
-        status: 'pending',
-        createdAt: timestamp,
-        updatedAt: timestamp
-      };
-
-      const docRef = await addDoc(leaveRequestsRef, newLeaveRequest);
-      return {
-        id: docRef.id,
-        ...newLeaveRequest,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      } as LeaveRequest;
-    } catch (error) {
-      console.error('Error creating leave request:', error);
       throw error;
     }
   }
 
-  async updateLeaveRequest(id: string, leaveRequest: Partial<LeaveRequest>): Promise<LeaveRequest> {
+  async add(data: Partial<LeaveRequest>): Promise<string> {
     try {
-      const { doc, updateDoc, getDoc, serverTimestamp } = await import('firebase/firestore');
-      const leaveRequestRef = doc(this.db, 'leaveRequests', id);
-      
-      const updates = {
-        ...leaveRequest,
-        updatedAt: serverTimestamp()
-      };
+      const docRef = await addDoc(collection(db, this.collectionName), {
+        ...data,
+        submittedDate: Timestamp.now(),
+        status: 'Pending'
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding leave request:', error);
+      throw error;
+    }
+  }
 
-      await updateDoc(leaveRequestRef, updates);
-
-      const updatedDoc = await getDoc(leaveRequestRef);
-      return {
-        id: updatedDoc.id,
-        ...updatedDoc.data(),
-        updatedAt: new Date().toISOString()
-      } as LeaveRequest;
+  async update(id: string, data: Partial<LeaveRequest>): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await updateDoc(docRef, data);
     } catch (error) {
       console.error('Error updating leave request:', error);
       throw error;
     }
   }
 
-  async deleteLeaveRequest(id: string): Promise<boolean> {
+  async approve(id: string, approver: string): Promise<void> {
     try {
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      const leaveRequestRef = doc(this.db, 'leaveRequests', id);
-      await deleteDoc(leaveRequestRef);
-      return true;
+      const docRef = doc(db, this.collectionName, id);
+      await updateDoc(docRef, {
+        status: 'Approved',
+        approver,
+        approvedDate: new Date().toISOString()
+      });
     } catch (error) {
-      console.error('Error deleting leave request:', error);
-      return false;
-    }
-  }
-
-  async approveLeaveRequest(id: string, approverNotes?: string): Promise<LeaveRequest> {
-    return this.updateLeaveRequest(id, {
-      status: 'approved',
-      approverNotes
-    });
-  }
-
-  async rejectLeaveRequest(id: string, approverNotes?: string): Promise<LeaveRequest> {
-    return this.updateLeaveRequest(id, {
-      status: 'rejected',
-      approverNotes
-    });
-  }
-
-  // Leave Balances
-  async getLeaveBalances(employeeId: string): Promise<LeaveBalance[]> {
-    try {
-      const { collection, getDocs, query, where } = await import('firebase/firestore');
-      const leaveBalancesRef = collection(this.db, 'leaveBalances');
-      const q = query(leaveBalancesRef, where('employeeId', '==', employeeId));
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as LeaveBalance[];
-    } catch (error) {
-      console.error('Error fetching leave balances:', error);
-      return [];
-    }
-  }
-
-  async updateLeaveBalance(employeeId: string, leaveTypeId: string, changes: Partial<LeaveBalance>): Promise<LeaveBalance> {
-    try {
-      const { collection, query, where, getDocs, updateDoc, doc } = await import('firebase/firestore');
-      const leaveBalancesRef = collection(this.db, 'leaveBalances');
-      const q = query(
-        leaveBalancesRef,
-        where('employeeId', '==', employeeId),
-        where('leaveTypeId', '==', leaveTypeId)
-      );
-
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
-        throw new Error('Leave balance not found');
-      }
-
-      const balanceDoc = querySnapshot.docs[0];
-      const balanceRef = doc(this.db, 'leaveBalances', balanceDoc.id);
-      
-      await updateDoc(balanceRef, changes);
-
-      return {
-        id: balanceDoc.id,
-        ...balanceDoc.data(),
-        ...changes
-      } as LeaveBalance;
-    } catch (error) {
-      console.error('Error updating leave balance:', error);
+      console.error('Error approving leave request:', error);
       throw error;
     }
   }
+
+  async reject(id: string, approver: string): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await updateDoc(docRef, {
+        status: 'Rejected',
+        approver,
+        approvedDate: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error rejecting leave request:', error);
+      throw error;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting leave request:', error);
+      throw error;
+    }
+  }
+
+  subscribe(callback: (requests: LeaveRequest[]) => void): () => void {
+    const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
+
+    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
+      const requests = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as LeaveRequest));
+      callback(requests);
+    }, (error) => {
+      console.error('Error in leave requests subscription:', error);
+    });
+  }
 }
 
-// Mock implementation for development/testing
-export class MockLeaveService implements ILeaveService {
-  // Implement mock methods here...
-  // This is a placeholder that should be implemented with mock data
-  async getLeaveTypes(): Promise<LeaveType[]> { return []; }
-  async getLeaveTypeById(): Promise<LeaveType | null> { return null; }
-  async createLeaveType(leaveType: Omit<LeaveType, 'id'>): Promise<LeaveType> { return { id: '1', ...leaveType }; }
-  async updateLeaveType(id: string, leaveType: Partial<LeaveType>): Promise<LeaveType> { return { id, ...leaveType } as LeaveType; }
-  async deleteLeaveType(): Promise<boolean> { return true; }
-  async getLeaveRequests(): Promise<LeaveRequest[]> { return []; }
-  async getLeaveRequestById(): Promise<LeaveRequest | null> { return null; }
-  async createLeaveRequest(leaveRequest: Omit<LeaveRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>): Promise<LeaveRequest> {
+class FirebaseLeaveTypeService {
+  private collectionName = 'leaveTypes';
+
+  async getAll(): Promise<LeaveType[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as LeaveType));
+    } catch (error) {
+      console.error('Error fetching leave types:', error);
+      throw error;
+    }
+  }
+
+  async add(data: Omit<LeaveType, 'id'>): Promise<string> {
+    try {
+      const docRef = await addDoc(collection(db, this.collectionName), data);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding leave type:', error);
+      throw error;
+    }
+  }
+
+  async update(id: string, data: Partial<LeaveType>): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await updateDoc(docRef, data);
+    } catch (error) {
+      console.error('Error updating leave type:', error);
+      throw error;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting leave type:', error);
+      throw error;
+    }
+  }
+
+  subscribe(callback: (types: LeaveType[]) => void): () => void {
+    return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
+      const types = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as LeaveType));
+      callback(types);
+    }, (error) => {
+      console.error('Error in leave types subscription:', error);
+    });
+  }
+}
+
+class FirebaseEmployeeService {
+  private collectionName = 'employees';
+
+  async getAll(): Promise<Employee[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Employee));
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      throw error;
+    }
+  }
+
+  async add(data: Omit<Employee, 'id'>): Promise<string> {
+    try {
+      const docRef = await addDoc(collection(db, this.collectionName), data);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding employee:', error);
+      throw error;
+    }
+  }
+
+  subscribe(callback: (employees: Employee[]) => void): () => void {
+    return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
+      const employees = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Employee));
+      callback(employees);
+    }, (error) => {
+      console.error('Error in employees subscription:', error);
+    });
+  }
+}
+
+// Data transformation utilities
+export const dataTransforms = {
+  calculateDays: (startDate: string, endDate: string): number => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays + 1; // Include both start and end dates
+  },
+
+  formatLeaveRequest: (formData: any, employee: Employee | undefined): Partial<LeaveRequest> => {
+    if (!employee) {
+      throw new Error('Employee not found');
+    }
+
+    const totalDays = dataTransforms.calculateDays(formData.startDate, formData.endDate);
+
     return {
-      id: '1',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...leaveRequest
+      employeeId: formData.employeeId,
+      employeeName: employee.name,
+      department: employee.department,
+      type: formData.type,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      reason: formData.reason,
+      totalDays,
+      status: 'Pending'
     };
-  }
-  async updateLeaveRequest(id: string, leaveRequest: Partial<LeaveRequest>): Promise<LeaveRequest> {
-    return { id, ...leaveRequest } as LeaveRequest;
-  }
-  async deleteLeaveRequest(): Promise<boolean> { return true; }
-  async approveLeaveRequest(id: string): Promise<LeaveRequest> {
-    return this.updateLeaveRequest(id, { status: 'approved' });
-  }
-  async rejectLeaveRequest(id: string): Promise<LeaveRequest> {
-    return this.updateLeaveRequest(id, { status: 'rejected' });
-  }
-  async getLeaveBalances(): Promise<LeaveBalance[]> { return []; }
-  async updateLeaveBalance(): Promise<LeaveBalance> { return {} as LeaveBalance; }
-}
-
-// Service factory
-export class LeaveServiceFactory {
-  static createService(type: 'firebase' | 'mock', db?: Firestore): ILeaveService {
-    switch (type) {
-      case 'firebase':
-        if (!db) throw new Error('Firebase DB instance required');
-        return new FirebaseLeaveService(db);
-      case 'mock':
-        return new MockLeaveService();
-      default:
-        return new MockLeaveService();
-    }
-  }
-}
-
-// Async function to get the properly configured leave service
-export const getLeaveService = async (): Promise<ILeaveService> => {
-  try {
-    await initializeFirebase(); // Wait for Firebase to be ready
-    const config = await getServiceConfig();
-
-    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-      console.log('Using Firebase Leave Service');
-      return LeaveServiceFactory.createService('firebase', config.firebase.db);
-    } else {
-      console.log('Using Mock Leave Service');
-      return LeaveServiceFactory.createService('mock');
-    }
-  } catch (error) {
-    console.warn('Failed to initialize Firebase Leave Service, falling back to Mock');
-    return new MockLeaveService();
   }
 };
 
-// For compatibility - but this will start as mock until Firebase is ready
-let leaveService: ILeaveService = new MockLeaveService();
+// Error handling utility
+export const handleFirebaseError = (error: any): string => {
+  console.error('Firebase error:', error);
 
-// Initialize the service asynchronously
-(async () => {
-  try {
-    leaveService = await getLeaveService();
-  } catch (error) {
-    console.error('Error initializing leave service:', error);
+  if (error.code) {
+    switch (error.code) {
+      case 'permission-denied':
+        return 'Permission denied. Please check your access rights.';
+      case 'unavailable':
+        return 'Service temporarily unavailable. Please try again later.';
+      case 'not-found':
+        return 'Requested data not found.';
+      case 'already-exists':
+        return 'Data already exists.';
+      default:
+        return `Firebase error: ${error.message}`;
+    }
   }
-})();
 
-export { leaveService };
+  return error.message || 'An unexpected error occurred';
+};
+
+// Initialize default data
+export const initializeDefaultData = async (): Promise<void> => {
+  try {
+    // Check if leave types exist
+    const leaveTypes = await leaveTypeService.getAll();
+    if (leaveTypes.length === 0) {
+      // Add default leave types
+      const defaultLeaveTypes = [
+        { name: 'Annual Leave', daysAllowed: 21, color: '#3B82F6' },
+        { name: 'Sick Leave', daysAllowed: 10, color: '#EF4444' },
+        { name: 'Personal Leave', daysAllowed: 5, color: '#8B5CF6' },
+        { name: 'Maternity Leave', daysAllowed: 90, color: '#EC4899' },
+        { name: 'Paternity Leave', daysAllowed: 14, color: '#06B6D4' }
+      ];
+
+      for (const leaveType of defaultLeaveTypes) {
+        await leaveTypeService.add(leaveType);
+      }
+    }
+
+    // Check if employees exist
+    const employees = await employeeService.getAll();
+    if (employees.length === 0) {
+      // Add sample employees
+      const defaultEmployees = [
+        { name: 'John Doe', department: 'Engineering', position: 'Software Developer' },
+        { name: 'Jane Smith', department: 'Marketing', position: 'Marketing Manager' },
+        { name: 'Mike Johnson', department: 'HR', position: 'HR Specialist' },
+        { name: 'Sarah Wilson', department: 'Finance', position: 'Financial Analyst' },
+        { name: 'David Brown', department: 'Engineering', position: 'Senior Developer' }
+      ];
+
+      for (const employee of defaultEmployees) {
+        await employeeService.add(employee);
+      }
+    }
+  } catch (error) {
+    console.warn('Error initializing default data:', error);
+    // Don't throw here - let the app continue even if default data setup fails
+  }
+};
+
+// Service instances
+export const leaveRequestService = new FirebaseLeaveRequestService();
+export const leaveTypeService = new FirebaseLeaveTypeService();
+export const employeeService = new FirebaseEmployeeService();
+
+// Export types for use in components
+export type { LeaveRequest, LeaveType, Employee };
