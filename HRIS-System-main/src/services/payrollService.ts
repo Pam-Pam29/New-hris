@@ -5,13 +5,17 @@ export interface PayrollRecord {
     id: string;
     employeeId: string;
     employeeName: string;
-    periodStart: Date;
-    periodEnd: Date;
-    grossPay: number;
+    department: string;
+    position: string;
+    baseSalary: number;
+    bonus: number;
     deductions: number;
     netPay: number;
-    status: 'pending' | 'processed' | 'paid';
-    paymentDate?: Date;
+    payPeriod: string;
+    paymentDate: Date | null;
+    status: 'pending' | 'processing' | 'paid' | 'cancelled' | 'archived';
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 export interface IPayrollService {
@@ -20,20 +24,37 @@ export interface IPayrollService {
     createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string>;
     updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void>;
     deletePayrollRecord(id: string): Promise<void>;
+    getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]>;
+    getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]>;
 }
 
-class FirebasePayrollService implements IPayrollService {
+export class FirebasePayrollService implements IPayrollService {
     constructor(private db: Firestore) { }
 
     async getPayrollRecords(): Promise<PayrollRecord[]> {
         try {
-            const { collection, getDocs } = await import('firebase/firestore');
+            const { collection, getDocs, Timestamp } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
             const snapshot = await getDocs(payrollRef);
-            return snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as PayrollRecord));
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    employeeId: data.employeeId,
+                    employeeName: data.employeeName,
+                    department: data.department,
+                    position: data.position,
+                    baseSalary: data.baseSalary,
+                    bonus: data.bonus,
+                    deductions: data.deductions,
+                    netPay: data.netPay,
+                    payPeriod: data.payPeriod,
+                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
+                    status: data.status,
+                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+                } as PayrollRecord;
+            });
         } catch (error) {
             console.error('Error fetching payroll records:', error);
             throw error;
@@ -45,7 +66,28 @@ class FirebasePayrollService implements IPayrollService {
             const { doc, getDoc } = await import('firebase/firestore');
             const payrollRef = doc(this.db, 'payroll_records', id);
             const snapshot = await getDoc(payrollRef);
-            return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as PayrollRecord : null;
+            
+            if (!snapshot.exists()) {
+                return null;
+            }
+            
+            const data = snapshot.data();
+            return {
+                id: snapshot.id,
+                employeeId: data.employeeId,
+                employeeName: data.employeeName,
+                department: data.department,
+                position: data.position,
+                baseSalary: data.baseSalary,
+                bonus: data.bonus,
+                deductions: data.deductions,
+                netPay: data.netPay,
+                payPeriod: data.payPeriod,
+                paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
+                status: data.status,
+                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+                updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+            } as PayrollRecord;
         } catch (error) {
             console.error(`Error fetching payroll record ${id}:`, error);
             throw error;
@@ -54,9 +96,19 @@ class FirebasePayrollService implements IPayrollService {
 
     async createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string> {
         try {
-            const { collection, addDoc } = await import('firebase/firestore');
+            const { collection, addDoc, Timestamp } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const docRef = await addDoc(payrollRef, record);
+            
+            // Add timestamps
+            const now = Timestamp.now();
+            const payrollWithTimestamps = {
+                ...record,
+                paymentDate: record.paymentDate ? Timestamp.fromDate(record.paymentDate) : null,
+                createdAt: now,
+                updatedAt: now
+            };
+            
+            const docRef = await addDoc(payrollRef, payrollWithTimestamps);
             return docRef.id;
         } catch (error) {
             console.error('Error creating payroll record:', error);
@@ -66,9 +118,21 @@ class FirebasePayrollService implements IPayrollService {
 
     async updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void> {
         try {
-            const { doc, updateDoc } = await import('firebase/firestore');
+            const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
             const payrollRef = doc(this.db, 'payroll_records', id);
-            await updateDoc(payrollRef, record);
+            
+            // Add updated timestamp
+            const dataToUpdate = {
+                ...record,
+                updatedAt: Timestamp.now()
+            };
+            
+            // Convert Date objects to Firestore Timestamps
+            if (record.paymentDate) {
+                dataToUpdate.paymentDate = Timestamp.fromDate(record.paymentDate);
+            }
+            
+            await updateDoc(payrollRef, dataToUpdate);
         } catch (error) {
             console.error(`Error updating payroll record ${id}:`, error);
             throw error;
@@ -85,32 +149,180 @@ class FirebasePayrollService implements IPayrollService {
             throw error;
         }
     }
+    
+    // Get payroll records by department
+    async getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]> {
+        try {
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const payrollRef = collection(this.db, 'payroll_records');
+            const q = query(payrollRef, where('department', '==', department));
+            const snapshot = await getDocs(q);
+            
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    employeeId: data.employeeId,
+                    employeeName: data.employeeName,
+                    department: data.department,
+                    position: data.position,
+                    baseSalary: data.baseSalary,
+                    bonus: data.bonus,
+                    deductions: data.deductions,
+                    netPay: data.netPay,
+                    payPeriod: data.payPeriod,
+                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
+                    status: data.status,
+                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+                } as PayrollRecord;
+            });
+        } catch (error) {
+            console.error('Error getting payroll records by department:', error);
+            throw error;
+        }
+    }
+    
+    // Get payroll records by status
+    async getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]> {
+        try {
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const payrollRef = collection(this.db, 'payroll_records');
+            const q = query(payrollRef, where('status', '==', status));
+            const snapshot = await getDocs(q);
+            
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    employeeId: data.employeeId,
+                    employeeName: data.employeeName,
+                    department: data.department,
+                    position: data.position,
+                    baseSalary: data.baseSalary,
+                    bonus: data.bonus,
+                    deductions: data.deductions,
+                    netPay: data.netPay,
+                    payPeriod: data.payPeriod,
+                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
+                    status: data.status,
+                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+                } as PayrollRecord;
+            });
+        } catch (error) {
+            console.error('Error getting payroll records by status:', error);
+            throw error;
+        }
+    }
 }
 
-class MockPayrollService implements IPayrollService {
+export class MockPayrollService implements IPayrollService {
+    private mockRecords: PayrollRecord[] = [
+        {
+            id: 'mock-id-1',
+            employeeId: 'emp-001',
+            employeeName: 'John Doe',
+            department: 'Engineering',
+            position: 'Software Engineer',
+            baseSalary: 5000,
+            bonus: 500,
+            deductions: 1000,
+            netPay: 4500,
+            payPeriod: 'January 2023',
+            paymentDate: new Date('2023-01-31'),
+            status: 'paid',
+            createdAt: new Date('2023-01-15'),
+            updatedAt: new Date('2023-01-15')
+        },
+        {
+            id: 'mock-id-2',
+            employeeId: 'emp-002',
+            employeeName: 'Jane Smith',
+            department: 'Marketing',
+            position: 'Marketing Manager',
+            baseSalary: 6000,
+            bonus: 1000,
+            deductions: 1500,
+            netPay: 5500,
+            payPeriod: 'January 2023',
+            paymentDate: new Date('2023-01-31'),
+            status: 'paid',
+            createdAt: new Date('2023-01-15'),
+            updatedAt: new Date('2023-01-15')
+        },
+        {
+            id: 'mock-id-3',
+            employeeId: 'emp-003',
+            employeeName: 'Bob Johnson',
+            department: 'Finance',
+            position: 'Financial Analyst',
+            baseSalary: 5500,
+            bonus: 800,
+            deductions: 1200,
+            netPay: 5100,
+            payPeriod: 'February 2023',
+            paymentDate: null,
+            status: 'pending',
+            createdAt: new Date('2023-02-01'),
+            updatedAt: new Date('2023-02-01')
+        }
+    ];
+    
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async getPayrollRecords(): Promise<PayrollRecord[]> {
-        return [];
+        return [...this.mockRecords];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async getPayrollRecord(_id: string): Promise<PayrollRecord | null> {
-        return null;
+    async getPayrollRecord(id: string): Promise<PayrollRecord | null> {
+        const record = this.mockRecords.find(r => r.id === id);
+        return record ? {...record} : null;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async createPayrollRecord(_record: Omit<PayrollRecord, 'id'>): Promise<string> {
-        return 'mock-id';
+    async createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string> {
+        const id = `mock-id-${this.mockRecords.length + 1}`;
+        const now = new Date();
+        const newRecord = {
+            ...record,
+            id,
+            createdAt: now,
+            updatedAt: now
+        } as PayrollRecord;
+        
+        this.mockRecords.push(newRecord);
+        return id;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async updatePayrollRecord(_id: string, _record: Partial<PayrollRecord>): Promise<void> {
-        // No-op
+    async updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void> {
+        const index = this.mockRecords.findIndex(r => r.id === id);
+        if (index !== -1) {
+            this.mockRecords[index] = {
+                ...this.mockRecords[index],
+                ...record,
+                updatedAt: new Date()
+            };
+        }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async deletePayrollRecord(_id: string): Promise<void> {
-        // No-op
+    async deletePayrollRecord(id: string): Promise<void> {
+        const index = this.mockRecords.findIndex(r => r.id === id);
+        if (index !== -1) {
+            this.mockRecords.splice(index, 1);
+        }
+    }
+    
+    // Get payroll records by department
+    async getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]> {
+        return this.mockRecords.filter(record => record.department === department);
+    }
+    
+    // Get payroll records by status
+    async getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]> {
+        return this.mockRecords.filter(record => record.status === status);
     }
 }
 

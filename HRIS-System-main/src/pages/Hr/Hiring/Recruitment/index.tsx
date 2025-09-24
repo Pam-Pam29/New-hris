@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
 import { Input } from '../../../../components/ui/input';
 import { Badge } from '../../../../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader } from '../../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../../components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
 import {
   Briefcase,
   Users,
@@ -24,34 +26,616 @@ import {
   DollarSign,
   Building,
   Loader2,
-  X
+  X,
+  FileText,
+  Phone
 } from 'lucide-react';
 
 // Import Firebase services
-import { recruitmentService, RecruitmentCandidate } from '../../../../services/recruitmentService';
-import { jobBoardService, JobPosting } from '../../../../services/jobBoardService';
+import { getServiceConfig } from '../../../../config/firebase';
+import { RecruitmentCandidate, Interview, Offer } from '../../../../services/recruitmentService';
+import { JobPosting } from '../../../../services/jobBoardService';
 
-// Simple inline components for missing UI elements
-const Label = ({ className = "", ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
-  <label className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`} {...props} />
-);
+// Import UI components
+import { Label } from '../../../../components/ui/label';
+import { Textarea } from '../../../../components/ui/textarea';
+import { Alert, AlertDescription } from '../../../../components/ui/alert';
+import { useToast } from '../../../../hooks/use-toast';
 
-const Textarea = ({ className = "", ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea
-    className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    {...props}
-  />
-);
+// Firebase service instances
+const { db } = getServiceConfig();
+let recruitmentServiceInstance: any = null;
+let jobBoardServiceInstance: any = null;
 
-const Alert = ({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground ${className}`} {...props} />
-);
+// Initialize services
+const getRecruitmentService = async () => {
+  if (!recruitmentServiceInstance) {
+    const { FirebaseRecruitmentService } = await import('../../../../services/recruitmentService');
+    recruitmentServiceInstance = new FirebaseRecruitmentService(db);
+  }
+  return recruitmentServiceInstance;
+};
 
-const AlertDescription = ({ className = "", ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <div className={`text-sm [&_p]:leading-relaxed ${className}`} {...props} />
-);
+const getJobBoardService = async () => {
+  if (!jobBoardServiceInstance) {
+    const { FirebaseJobBoardService } = await import('../../../../services/jobBoardService');
+    jobBoardServiceInstance = new FirebaseJobBoardService(db);
+  }
+  return jobBoardServiceInstance;
+};
 
-// Job Details Modal Component
+  function RecruitmentComponent() {
+  const [candidates, setCandidates] = useState<RecruitmentCandidate[]>([]);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [openPositions, setOpenPositions] = useState<JobPosting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Dialog states
+  const [addCandidateOpen, setAddCandidateOpen] = useState(false);
+  const [viewCandidateOpen, setViewCandidateOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<RecruitmentCandidate | null>(null);
+  const [addInterviewOpen, setAddInterviewOpen] = useState(false);
+  
+  // Form states
+  const [newCandidate, setNewCandidate] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    position: '',
+    status: 'new' as const,
+    resumeUrl: '',
+    skills: [] as string[],
+    experience: '',
+    notes: ''
+  });
+  
+  const { toast } = useToast();
+  
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get recruitment service
+        const recruitmentService = await getRecruitmentService();
+        const jobBoardService = await getJobBoardService();
+        
+        // Fetch candidates
+        const candidatesData = await recruitmentService.getCandidates();
+        setCandidates(candidatesData);
+        
+        // Fetch open positions
+        const positions = await jobBoardService.getJobPostings();
+        setOpenPositions(positions.filter(p => p.status === 'published'));
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching recruitment data:', err);
+        setError('Failed to load recruitment data. Please try again.');
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+  
+  // Handle adding a new candidate
+  const handleAddCandidate = async () => {
+    try {
+      const recruitmentService = await getRecruitmentService();
+      await recruitmentService.addCandidate(newCandidate);
+      
+      // Refresh candidates list
+      const candidatesData = await recruitmentService.getCandidates();
+      setCandidates(candidatesData);
+      
+      // Close dialog and reset form
+      setAddCandidateOpen(false);
+      setNewCandidate({
+        name: '',
+        email: '',
+        phone: '',
+        position: '',
+        status: 'new',
+        resumeUrl: '',
+        skills: [],
+        experience: '',
+        notes: ''
+      });
+      
+      toast({
+        title: 'Success',
+        description: 'Candidate added successfully',
+      });
+    } catch (err) {
+      console.error('Error adding candidate:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to add candidate. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // Handle updating candidate status
+  const handleUpdateCandidateStatus = async (id: string, status: RecruitmentCandidate['status']) => {
+    try {
+      const recruitmentService = await getRecruitmentService();
+      await recruitmentService.updateCandidateStatus(id, status);
+      
+      // Update local state
+      setCandidates(prev => 
+        prev.map(candidate => 
+          candidate.id === id ? { ...candidate, status } : candidate
+        )
+      );
+      
+      toast({
+        title: 'Success',
+        description: 'Candidate status updated',
+      });
+    } catch (err) {
+      console.error('Error updating candidate status:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to update candidate status',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // View candidate details
+  const viewCandidate = (candidate: RecruitmentCandidate) => {
+    setSelectedCandidate(candidate);
+    setViewCandidateOpen(true);
+  };
+  
+  // Get status badge color
+  const getStatusColor = (status: RecruitmentCandidate['status']) => {
+    switch (status) {
+      case 'new': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'screening': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
+      case 'interviewing': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      case 'offer': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      case 'hired': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'rejected': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
+    }
+  };
+
+
+  return (
+    <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Header Section */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <TypographyH2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+              Recruitment
+            </TypographyH2>
+            <p className="text-muted-foreground text-sm">Manage candidates, interviews, and hiring process</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{candidates.length}</div>
+                <div className="text-sm text-muted-foreground">Total Candidates</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">
+                  {candidates.filter(c => c.status === 'interviewing').length}
+                </div>
+                <div className="text-sm text-muted-foreground">In Interview Process</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">
+                  {candidates.filter(c => c.status === 'hired').length}
+                </div>
+                <div className="text-sm text-muted-foreground">Hired This Month</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                <Briefcase className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{openPositions.length}</div>
+                <div className="text-sm text-muted-foreground">Open Positions</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <div className="mb-8">
+        <Tabs defaultValue="candidates" className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <TabsList>
+              <TabsTrigger value="candidates">Candidates</TabsTrigger>
+              <TabsTrigger value="interviews">Interviews</TabsTrigger>
+              <TabsTrigger value="offers">Offers</TabsTrigger>
+            </TabsList>
+            <Button onClick={() => setAddCandidateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Add Candidate
+            </Button>
+          </div>
+
+          <TabsContent value="candidates" className="space-y-4">
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : (
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>All Candidates</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="search"
+                          placeholder="Search candidates..."
+                          className="pl-8 w-[200px] md:w-[300px]"
+                        />
+                      </div>
+                      <Button variant="outline" size="icon">
+                        <Filter className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Position</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Skills</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {candidates.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No candidates found. Add your first candidate to get started.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        candidates.map((candidate) => (
+                          <TableRow key={candidate.id}>
+                            <TableCell>
+                              <div className="font-medium">{candidate.name}</div>
+                              <div className="text-sm text-muted-foreground">{candidate.email}</div>
+                            </TableCell>
+                            <TableCell>{candidate.position}</TableCell>
+                            <TableCell>
+                              <Badge className={`${getStatusColor(candidate.status)}`}>
+                                {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {candidate.skills.slice(0, 3).map((skill, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                                {candidate.skills.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{candidate.skills.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => viewCandidate(candidate)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="interviews">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming Interviews</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Interview scheduling functionality coming soon.</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="offers">
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending Offers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Offer management functionality coming soon.</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Add Candidate Dialog */}
+      <Dialog open={addCandidateOpen} onOpenChange={setAddCandidateOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add New Candidate</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  value={newCandidate.name}
+                  onChange={(e) => setNewCandidate({ ...newCandidate, name: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="position">Position</Label>
+                <Select
+                  value={newCandidate.position}
+                  onValueChange={(value) => setNewCandidate({ ...newCandidate, position: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openPositions.map((position) => (
+                      <SelectItem key={position.id} value={position.title}>
+                        {position.title}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newCandidate.email}
+                  onChange={(e) => setNewCandidate({ ...newCandidate, email: e.target.value })}
+                  placeholder="john.doe@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={newCandidate.phone}
+                  onChange={(e) => setNewCandidate({ ...newCandidate, phone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="skills">Skills (comma separated)</Label>
+              <Input
+                id="skills"
+                value={newCandidate.skills.join(', ')}
+                onChange={(e) =>
+                  setNewCandidate({
+                    ...newCandidate,
+                    skills: e.target.value.split(',').map((skill) => skill.trim())
+                  })
+                }
+                placeholder="React, TypeScript, Node.js"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="experience">Experience</Label>
+              <Textarea
+                id="experience"
+                value={newCandidate.experience}
+                onChange={(e) => setNewCandidate({ ...newCandidate, experience: e.target.value })}
+                placeholder="Briefly describe the candidate's experience"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={newCandidate.notes}
+                onChange={(e) => setNewCandidate({ ...newCandidate, notes: e.target.value })}
+                placeholder="Any additional notes about the candidate"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="resumeUrl">Resume URL</Label>
+              <Input
+                id="resumeUrl"
+                value={newCandidate.resumeUrl}
+                onChange={(e) => setNewCandidate({ ...newCandidate, resumeUrl: e.target.value })}
+                placeholder="https://example.com/resume.pdf"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddCandidateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddCandidate}>Add Candidate</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Candidate Dialog */}
+      {selectedCandidate && (
+        <Dialog open={viewCandidateOpen} onOpenChange={setViewCandidateOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Candidate Details</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                  <User className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedCandidate.name}</h3>
+                  <p className="text-muted-foreground">{selectedCandidate.position}</p>
+                </div>
+                <Badge className={`ml-auto ${getStatusColor(selectedCandidate.status)}`}>
+                  {selectedCandidate.status.charAt(0).toUpperCase() + selectedCandidate.status.slice(1)}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span>Email</span>
+                  </div>
+                  <p>{selectedCandidate.email}</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-4 w-4" />
+                    <span>Phone</span>
+                  </div>
+                  <p>{selectedCandidate.phone}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Skills</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCandidate.skills.map((skill, i) => (
+                    <Badge key={i} variant="secondary">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Experience</h4>
+                <p className="text-sm">{selectedCandidate.experience}</p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Notes</h4>
+                <p className="text-sm">{selectedCandidate.notes}</p>
+              </div>
+
+              {selectedCandidate.resumeUrl && (
+                <div className="space-y-2">
+                  <h4 className="font-medium">Resume</h4>
+                  <Button variant="outline" className="w-full" asChild>
+                    <a href={selectedCandidate.resumeUrl} target="_blank" rel="noopener noreferrer">
+                      <FileText className="mr-2 h-4 w-4" /> View Resume
+                    </a>
+                  </Button>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Update Status</h4>
+                <Select
+                  value={selectedCandidate.status}
+                  onValueChange={(value: RecruitmentCandidate['status']) =>
+                    handleUpdateCandidateStatus(selectedCandidate.id, value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="screening">Screening</SelectItem>
+                    <SelectItem value="interviewing">Interviewing</SelectItem>
+                    <SelectItem value="offer">Offer</SelectItem>
+                    <SelectItem value="hired">Hired</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
 const JobDetailsModal = ({
   open,
   onClose,
@@ -273,7 +857,7 @@ const CandidateDetailsModal = ({
   );
 };
 
-export default function Recruitment() {
+export default function RecruitmentPage() {
   // State management
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [candidates, setCandidates] = useState<RecruitmentCandidate[]>([]);
