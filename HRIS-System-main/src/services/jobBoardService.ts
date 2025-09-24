@@ -11,8 +11,8 @@ export interface JobPosting {
     description: string;
     requirements: string[];
     status: 'draft' | 'published' | 'closed';
-    postedDate: Date;
-    closingDate?: Date;
+    postedDate?: Date | null;
+    closingDate?: Date | null;
 }
 
 export interface JobApplication {

@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
 import { Input } from '../../../../components/ui/input';
 import { Badge } from '../../../../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
-import { 
-  Briefcase, 
-  Users, 
-  TrendingUp, 
-  Clock, 
-  CheckCircle, 
+import { Dialog, DialogContent, DialogHeader } from '../../../../components/ui/dialog';
+import {
+  Briefcase,
+  Users,
+  Clock,
+  CheckCircle,
   AlertTriangle,
   Plus,
   Filter,
@@ -20,127 +19,475 @@ import {
   Edit,
   User,
   Mail,
-  Phone,
   MapPin,
   Calendar,
   DollarSign,
-  Building
+  Building,
+  Loader2,
+  X
 } from 'lucide-react';
 
-// Mock data
-const mockJobs = [
-  { 
-    id: 1, 
-    title: 'Senior Frontend Developer', 
-    company: 'TechCorp', 
-    location: 'San Francisco, CA', 
-    type: 'Full-time', 
-    salary: '$120k - $150k', 
-    status: 'Active', 
-    applications: 24, 
-    posted: '2025-01-15',
-    department: 'Engineering'
-  },
-  { 
-    id: 2, 
-    title: 'Marketing Manager', 
-    company: 'Growth Inc', 
-    location: 'New York, NY', 
-    type: 'Full-time', 
-    salary: '$90k - $110k', 
-    status: 'Active', 
-    applications: 18, 
-    posted: '2025-01-10',
-    department: 'Marketing'
-  },
-  { 
-    id: 3, 
-    title: 'UX Designer', 
-    company: 'Design Studio', 
-    location: 'Remote', 
-    type: 'Contract', 
-    salary: '$80k - $100k', 
-    status: 'Active', 
-    applications: 31, 
-    posted: '2025-01-08',
-    department: 'Design'
-  },
-  { 
-    id: 4, 
-    title: 'Data Scientist', 
-    company: 'Analytics Pro', 
-    location: 'Austin, TX', 
-    type: 'Full-time', 
-    salary: '$130k - $160k', 
-    status: 'Closed', 
-    applications: 42, 
-    posted: '2024-12-20',
-    department: 'Data Science'
-  },
-];
+// Import Firebase services
+import { recruitmentService, RecruitmentCandidate } from '../../../../services/recruitmentService';
+import { jobBoardService, JobPosting } from '../../../../services/jobBoardService';
 
-const mockCandidates = [
-  { 
-    id: 1, 
-    name: 'Sarah Chen', 
-    email: 'sarah.chen@email.com', 
-    phone: '+1 (555) 123-4567', 
-    position: 'Senior Frontend Developer', 
-    status: 'Interview Scheduled', 
-    experience: '5 years', 
-    location: 'San Francisco, CA',
-    avatar: 'SC'
-  },
-  { 
-    id: 2, 
-    name: 'Michael Rodriguez', 
-    email: 'm.rodriguez@email.com', 
-    phone: '+1 (555) 987-6543', 
-    position: 'Marketing Manager', 
-    status: 'Under Review', 
-    experience: '7 years', 
-    location: 'New York, NY',
-    avatar: 'MR'
-  },
-  { 
-    id: 3, 
-    name: 'Emily Watson', 
-    email: 'emily.w@email.com', 
-    phone: '+1 (555) 456-7890', 
-    position: 'UX Designer', 
-    status: 'Hired', 
-    experience: '4 years', 
-    location: 'Remote',
-    avatar: 'EW'
-  },
-];
+// Simple inline components for missing UI elements
+const Label = ({ className = "", ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
+  <label className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`} {...props} />
+);
 
-const jobStatuses = ['All Statuses', 'Active', 'Closed', 'Draft'];
-const departments = ['All Departments', 'Engineering', 'Marketing', 'Design', 'Data Science', 'Sales', 'HR'];
+const Textarea = ({ className = "", ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+  <textarea
+    className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    {...props}
+  />
+);
+
+const Alert = ({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={`relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground ${className}`} {...props} />
+);
+
+const AlertDescription = ({ className = "", ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
+  <div className={`text-sm [&_p]:leading-relaxed ${className}`} {...props} />
+);
+
+// Job Details Modal Component
+const JobDetailsModal = ({
+  open,
+  onClose,
+  job,
+  onEdit,
+  loading
+}: {
+  open: boolean;
+  onClose: () => void;
+  job: JobPosting | null;
+  onEdit: () => void;
+  loading: boolean;
+}) => {
+  if (!open || !job) return null;
+
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return '';
+    if (typeof date === 'string') return new Date(date).toLocaleDateString();
+    if (date instanceof Date) return date.toLocaleDateString();
+    return '';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background rounded-lg shadow-lg max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-full">
+              <Briefcase className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">{job.title}</h2>
+              <p className="text-sm text-muted-foreground">{job.department}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Location</Label>
+              <p className="text-sm mt-1">{job.location}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Job Type</Label>
+              <p className="text-sm mt-1 capitalize">{job.type}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Salary Range</Label>
+              <p className="text-sm mt-1">{job.salaryRange}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+              <Badge className={
+                job.status === 'published' ? 'bg-green-100 text-green-800 border-green-200' :
+                  job.status === 'closed' ? 'bg-red-100 text-red-800 border-red-200' :
+                    'bg-gray-100 text-gray-800 border-gray-200'
+              }>
+                {job.status}
+              </Badge>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+            <div className="mt-1 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm">{job.description}</p>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Requirements</Label>
+            <div className="mt-1 p-3 bg-muted/50 rounded-lg">
+              <ul className="text-sm space-y-1">
+                {job.requirements.map((req, index) => (
+                  <li key={index} className="flex items-start gap-2">
+                    <span className="text-muted-foreground">•</span>
+                    <span>{req}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Posted Date</Label>
+              <p className="text-sm mt-1">{formatDate(job.postedDate)}</p>
+            </div>
+            {job.closingDate && (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Closing Date</Label>
+                <p className="text-sm mt-1">{formatDate(job.closingDate)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 p-6 border-t">
+          <Button
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={onEdit}
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Edit className="h-4 w-4 mr-2" />}
+            Edit Job
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Candidate Details Modal Component
+const CandidateDetailsModal = ({
+  open,
+  onClose,
+  candidate,
+  onEdit,
+  loading
+}: {
+  open: boolean;
+  onClose: () => void;
+  candidate: RecruitmentCandidate | null;
+  onEdit: () => void;
+  loading: boolean;
+}) => {
+  if (!open || !candidate) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background rounded-lg shadow-lg max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-full">
+              <User className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">{candidate.name}</h2>
+              <p className="text-sm text-muted-foreground">{candidate.position}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+              <p className="text-sm mt-1">{candidate.email}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
+              <p className="text-sm mt-1">{candidate.phone}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Experience</Label>
+              <p className="text-sm mt-1">{candidate.experience}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+              <Badge className={
+                candidate.status === 'hired' ? 'bg-green-100 text-green-800 border-green-200' :
+                  candidate.status === 'interviewing' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                    candidate.status === 'rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-orange-100 text-orange-800 border-orange-200'
+              }>
+                {candidate.status}
+              </Badge>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Skills</Label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {candidate.skills.map((skill, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {candidate.notes && (
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
+              <div className="mt-1 p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm">{candidate.notes}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 p-6 border-t">
+          <Button
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={onEdit}
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Edit className="h-4 w-4 mr-2" />}
+            Edit Candidate
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function Recruitment() {
+  // State management
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [candidates, setCandidates] = useState<RecruitmentCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Filter states
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Dialog states
   const [jobDialogOpen, setJobDialogOpen] = useState(false);
   const [candidateDialogOpen, setCandidateDialogOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<RecruitmentCandidate | null>(null);
+  const [jobDetailsOpen, setJobDetailsOpen] = useState(false);
+  const [candidateDetailsOpen, setCandidateDetailsOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Form states
+  const [newJobForm, setNewJobForm] = useState({
+    title: '',
+    department: '',
+    location: '',
+    type: 'full-time' as 'full-time' | 'part-time' | 'contract' | 'internship',
+    salaryRange: '',
+    description: '',
+    requirements: ['']
+  });
+
+  const [newCandidateForm, setNewCandidateForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    position: '',
+    experience: '',
+    skills: [''],
+    notes: ''
+  });
+
+  // Load data on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [jobsData, candidatesData] = await Promise.all([
+          jobBoardService.getJobPostings(),
+          recruitmentService.getCandidates()
+        ]);
+        // Convert Firebase Timestamps to JavaScript Dates
+        const jobsWithDates = jobsData.map(job => ({
+          ...job,
+          postedDate: job.postedDate ? new Date(job.postedDate) : null,
+          closingDate: job.closingDate ? new Date(job.closingDate) : null,
+        }));
+        setJobs(jobsWithDates);
+        setCandidates(candidatesData);
+      } catch (error) {
+        console.error('Error loading recruitment data:', error);
+        setError('Failed to load recruitment data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Clear messages after 5 seconds
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
 
   // Filter logic
-  const filteredJobs = mockJobs.filter(job =>
-    (!selectedStatus || selectedStatus === 'All Statuses' || job.status === selectedStatus) &&
-    (!selectedDepartment || selectedDepartment === 'All Departments' || job.department === selectedDepartment) &&
-    (!searchQuery || job.title.toLowerCase().includes(searchQuery.toLowerCase()) || job.company.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredJobs = useMemo(() => {
+    return jobs.filter(job =>
+      (!selectedStatus || selectedStatus === 'All Statuses' || job.status === selectedStatus) &&
+      (!selectedDepartment || selectedDepartment === 'All Departments' || job.department === selectedDepartment) &&
+      (!searchQuery ||
+        job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.location.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    );
+  }, [jobs, selectedStatus, selectedDepartment, searchQuery]);
+
+  // Get unique departments and statuses for filters
+  const departments = ['All Departments', ...Array.from(new Set(jobs.map(job => job.department)))];
+  const jobStatuses = ['All Statuses', 'draft', 'published', 'closed'];
+
+  // Handle add new job
+  const handleAddJob = async () => {
+    if (!newJobForm.title || !newJobForm.department || !newJobForm.location) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const jobData = {
+        ...newJobForm,
+        requirements: newJobForm.requirements.filter(req => req.trim() !== ''),
+        status: 'published' as const,
+        postedDate: new Date()
+      };
+
+      await jobBoardService.createJobPosting(jobData);
+      setSuccess(`Job posting created: ${jobData.title}`);
+      setJobDialogOpen(false);
+      setNewJobForm({
+        title: '',
+        department: '',
+        location: '',
+        type: 'full-time',
+        salaryRange: '',
+        description: '',
+        requirements: ['']
+      });
+
+      // Reload jobs
+      const updatedJobs = await jobBoardService.getJobPostings();
+      setJobs(updatedJobs);
+    } catch (error) {
+      console.error('Error adding job:', error);
+      setError('Failed to create job posting. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle add new candidate
+  const handleAddCandidate = async () => {
+    if (!newCandidateForm.name || !newCandidateForm.email || !newCandidateForm.position) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const candidateData = {
+        ...newCandidateForm,
+        skills: newCandidateForm.skills.filter(skill => skill.trim() !== ''),
+        status: 'new' as const,
+        resumeUrl: '' // This would be handled by file upload in a real implementation
+      };
+
+      await recruitmentService.addCandidate(candidateData);
+      setSuccess(`Candidate added: ${candidateData.name}`);
+      setCandidateDialogOpen(false);
+      setNewCandidateForm({
+        name: '',
+        email: '',
+        phone: '',
+        position: '',
+        experience: '',
+        skills: [''],
+        notes: ''
+      });
+
+      // Reload candidates
+      const updatedCandidates = await recruitmentService.getCandidates();
+      setCandidates(updatedCandidates);
+    } catch (error) {
+      console.error('Error adding candidate:', error);
+      setError('Failed to add candidate. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Summary stats
-  const totalJobs = mockJobs.length;
-  const activeJobs = mockJobs.filter(job => job.status === 'Active').length;
-  const totalApplications = mockJobs.reduce((sum, job) => sum + job.applications, 0);
-  const averageApplications = Math.round(totalApplications / totalJobs);
-  const hiredCandidates = mockCandidates.filter(candidate => candidate.status === 'Hired').length;
+  const totalJobs = jobs.length;
+  const activeJobs = jobs.filter(job => job.status === 'published').length;
+  const totalCandidates = candidates.length;
+  const hiredCandidates = candidates.filter(candidate => candidate.status === 'hired').length;
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading recruitment data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Success/Error Messages */}
+      {success && (
+        <Alert className="mb-6 border-green-200 bg-green-50 text-green-800">
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {error && (
+        <Alert className="mb-6 border-red-200 bg-red-50 text-red-800">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Header Section */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
@@ -156,62 +503,8 @@ export default function Recruitment() {
         </div>
       </div>
 
-      {/* Filters Section */}
-      <Card className="mb-8 border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <TypographyH3 className="text-lg font-semibold">Search & Filters</TypographyH3>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Search Jobs</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search by job title or company..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Job Status</label>
-              <Select value={selectedStatus || "all"} onValueChange={(value) => setSelectedStatus(value === "all" ? null : value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {jobStatuses.slice(1).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Department</label>
-              <Select value={selectedDepartment || "all"} onValueChange={(value) => setSelectedDepartment(value === "all" ? null : value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Departments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.slice(1).map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button className="bg-green-600 hover:bg-green-700 text-white px-6">
-              <Plus className="h-4 w-4 mr-2" />
-              Post Job
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -244,25 +537,11 @@ export default function Recruitment() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Total Applications</p>
-                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{totalApplications}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Total Candidates</p>
+                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{totalCandidates}</p>
               </div>
               <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full">
                 <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Avg Applications</p>
-                <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{averageApplications}</p>
-              </div>
-              <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
           </CardContent>
@@ -283,90 +562,158 @@ export default function Recruitment() {
         </Card>
       </div>
 
+      {/* Filters Section */}
+      <Card className="mb-8 border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <TypographyH3 className="text-lg font-semibold">Search & Filters</TypographyH3>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Search Jobs</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by job title, department, or location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Job Status</label>
+              <Select value={selectedStatus || "all"} onValueChange={(value) => setSelectedStatus(value === "all" ? null : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {jobStatuses.slice(1).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Department</label>
+              <Select value={selectedDepartment || "all"} onValueChange={(value) => setSelectedDepartment(value === "all" ? null : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments.slice(1).map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="bg-green-600 hover:bg-green-700 text-white px-6" onClick={() => setJobDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Post Job
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Job Listings */}
       <Card className="mb-8 border-0 shadow-lg bg-card/50 backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Briefcase className="h-4 w-4 text-muted-foreground" />
-              <TypographyH3 className="text-lg font-semibold">Open Positions</TypographyH3>
+              <TypographyH3 className="text-lg font-semibold">Open Positions ({filteredJobs.length})</TypographyH3>
             </div>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setJobDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Job
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredJobs.map((job) => (
-              <Card key={job.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-card to-card/80">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1 pr-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
-                          <Building className="h-4 w-4 text-green-600 dark:text-green-400" />
+          {filteredJobs.length === 0 ? (
+            <div className="text-center py-12">
+              <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium text-muted-foreground mb-2">No job postings found</p>
+              <p className="text-sm text-muted-foreground">
+                {jobs.length === 0 ? 'No jobs have been posted yet.' : 'Try adjusting your filters.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredJobs.map((job) => (
+                <Card key={job.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-card to-card/80">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1 pr-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
+                            <Building className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-lg text-foreground">{job.title}</h4>
+                            <p className="text-sm text-muted-foreground">{job.department}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-lg text-foreground">{job.title}</h4>
-                          <p className="text-sm text-muted-foreground">{job.company}</p>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground mb-4">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>{job.location}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="capitalize">{job.type}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4" />
+                            <span>{job.salaryRange}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>Posted {new Date(job.postedDate).toLocaleDateString()}</span>
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground mb-4">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{job.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>{job.type}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4" />
-                          <span>{job.salary}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          <span>Posted {job.posted}</span>
-                        </div>
+                      <Badge
+                        className={
+                          job.status === 'published' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
+                            job.status === 'closed' ? 'bg-red-100 text-red-800 border-red-200 px-3 py-1' :
+                              'bg-gray-100 text-gray-800 border-gray-200 px-3 py-1'
+                        }
+                      >
+                        {job.status}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="text-xs bg-muted px-2 py-1 rounded">{job.department}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                          onClick={() => {
+                            setSelectedJob(job);
+                            setJobDetailsOpen(true);
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hover:bg-green-50 hover:border-green-200 hover:text-green-700"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
                       </div>
                     </div>
-                    <Badge 
-                      className={
-                        job.status === 'Active' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                        job.status === 'Closed' ? 'bg-red-100 text-red-800 border-red-200 px-3 py-1' :
-                        'bg-gray-100 text-gray-800 border-gray-200 px-3 py-1'
-                      }
-                    >
-                      {job.status}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        {job.applications} applications
-                      </span>
-                      <span className="text-xs bg-muted px-2 py-1 rounded">{job.department}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700">
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      <Button size="sm" variant="outline" className="hover:bg-green-50 hover:border-green-200 hover:text-green-700">
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -376,7 +723,7 @@ export default function Recruitment() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
-              <TypographyH3 className="text-lg font-semibold">Top Candidates</TypographyH3>
+              <TypographyH3 className="text-lg font-semibold">Top Candidates ({candidates.length})</TypographyH3>
             </div>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setCandidateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -385,68 +732,117 @@ export default function Recruitment() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Candidate</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Position</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Experience</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Location</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {mockCandidates.map((candidate) => (
-                  <tr key={candidate.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-full">
-                          <span className="text-sm font-semibold text-muted-foreground">{candidate.avatar}</span>
-                        </div>
-                        <div>
-                          <p className="font-medium">{candidate.name}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            <span>{candidate.email}</span>
+          {candidates.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium text-muted-foreground mb-2">No candidates found</p>
+              <p className="text-sm text-muted-foreground">No candidates have been added yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Candidate</th>
+                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Position</th>
+                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Experience</th>
+                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Status</th>
+                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {candidates.map((candidate) => (
+                    <tr key={candidate.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-muted rounded-full">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{candidate.name}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Mail className="h-3 w-3" />
+                              <span>{candidate.email}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">{candidate.position}</td>
-                    <td className="px-4 py-3">{candidate.experience}</td>
-                    <td className="px-4 py-3">{candidate.location}</td>
-                    <td className="px-4 py-3">
-                      <Badge 
-                        className={
-                          candidate.status === 'Hired' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
-                          candidate.status === 'Interview Scheduled' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
-                          'bg-orange-100 text-orange-800 border-orange-200 px-3 py-1'
-                        }
-                      >
-                        {candidate.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700">
-                          <Eye className="h-3 w-3 mr-1" />
-                          View
-                        </Button>
-                        <Button size="sm" variant="outline" className="hover:bg-green-50 hover:border-green-200 hover:text-green-700">
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+                      <td className="px-4 py-3">{candidate.position}</td>
+                      <td className="px-4 py-3">{candidate.experience}</td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          className={
+                            candidate.status === 'hired' ? 'bg-green-100 text-green-800 border-green-200 px-3 py-1' :
+                              candidate.status === 'interviewing' ? 'bg-blue-100 text-blue-800 border-blue-200 px-3 py-1' :
+                                candidate.status === 'rejected' ? 'bg-red-100 text-red-800 border-red-200 px-3 py-1' :
+                                  'bg-orange-100 text-orange-800 border-orange-200 px-3 py-1'
+                          }
+                        >
+                          {candidate.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                            onClick={() => {
+                              setSelectedCandidate(candidate);
+                              setCandidateDetailsOpen(true);
+                            }}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="hover:bg-green-50 hover:border-green-200 hover:text-green-700"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Job Details Modal */}
+      <JobDetailsModal
+        open={jobDetailsOpen}
+        onClose={() => {
+          setJobDetailsOpen(false);
+          setSelectedJob(null);
+        }}
+        job={selectedJob}
+        onEdit={() => {
+          // Handle edit job
+          setJobDetailsOpen(false);
+        }}
+        loading={actionLoading}
+      />
+
+      {/* Candidate Details Modal */}
+      <CandidateDetailsModal
+        open={candidateDetailsOpen}
+        onClose={() => {
+          setCandidateDetailsOpen(false);
+          setSelectedCandidate(null);
+        }}
+        candidate={selectedCandidate}
+        onEdit={() => {
+          // Handle edit candidate
+          setCandidateDetailsOpen(false);
+        }}
+        loading={actionLoading}
+      />
 
       {/* Add Job Dialog */}
       <Dialog open={jobDialogOpen} onOpenChange={setJobDialogOpen}>
@@ -457,30 +853,40 @@ export default function Recruitment() {
           <div className="space-y-6 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Job Title</label>
-                <Input placeholder="e.g., Senior Developer" />
+                <Label className="text-sm font-medium text-muted-foreground">Job Title</Label>
+                <Input
+                  placeholder="e.g., Senior Developer"
+                  value={newJobForm.title}
+                  onChange={(e) => setNewJobForm(prev => ({ ...prev, title: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Department</label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.slice(1).map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium text-muted-foreground">Department</Label>
+                <Input
+                  placeholder="e.g., Engineering"
+                  value={newJobForm.department}
+                  onChange={(e) => setNewJobForm(prev => ({ ...prev, department: e.target.value }))}
+                />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Location</label>
-                <Input placeholder="e.g., San Francisco, CA" />
+                <Label className="text-sm font-medium text-muted-foreground">Location</Label>
+                <Input
+                  placeholder="e.g., San Francisco, CA"
+                  value={newJobForm.location}
+                  onChange={(e) => setNewJobForm(prev => ({ ...prev, location: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Job Type</label>
-                <Select>
+                <Label className="text-sm font-medium text-muted-foreground">Job Type</Label>
+                <Select
+                  value={newJobForm.type}
+                  onValueChange={(value: 'full-time' | 'part-time' | 'contract' | 'internship') =>
+                    setNewJobForm(prev => ({ ...prev, type: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -495,23 +901,61 @@ export default function Recruitment() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Salary Range</label>
-              <Input placeholder="e.g., $80k - $120k" />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Job Description</label>
-              <textarea 
-                className="w-full p-3 border border-border rounded-md resize-none h-32 focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Describe the role, responsibilities, and requirements..."
+              <Label className="text-sm font-medium text-muted-foreground">Salary Range</Label>
+              <Input
+                placeholder="e.g., $80k - $120k"
+                value={newJobForm.salaryRange}
+                onChange={(e) => setNewJobForm(prev => ({ ...prev, salaryRange: e.target.value }))}
               />
             </div>
 
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">Job Description</Label>
+              <Textarea
+                placeholder="Describe the role, responsibilities, and requirements..."
+                value={newJobForm.description}
+                onChange={(e) => setNewJobForm(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">Requirements</Label>
+              {newJobForm.requirements.map((req, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    placeholder={`Requirement ${index + 1}`}
+                    value={req}
+                    onChange={(e) => {
+                      const newReqs = [...newJobForm.requirements];
+                      newReqs[index] = e.target.value;
+                      setNewJobForm(prev => ({ ...prev, requirements: newReqs }));
+                    }}
+                  />
+                  {index === newJobForm.requirements.length - 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewJobForm(prev => ({ ...prev, requirements: [...prev.requirements, ''] }))}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
             <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setJobDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setJobDialogOpen(false)} disabled={actionLoading}>
                 Cancel
               </Button>
-              <Button className="bg-green-600 hover:bg-green-700 text-white">
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleAddJob}
+                disabled={actionLoading}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                 Post Job
               </Button>
             </div>
@@ -528,59 +972,98 @@ export default function Recruitment() {
           <div className="space-y-6 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-                <Input placeholder="e.g., John Doe" />
+                <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
+                <Input
+                  placeholder="e.g., John Doe"
+                  value={newCandidateForm.name}
+                  onChange={(e) => setNewCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Email</label>
-                <Input placeholder="john.doe@email.com" />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Phone</label>
-                <Input placeholder="+1 (555) 123-4567" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Position</label>
-                <Input placeholder="e.g., Senior Developer" />
+                <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                <Input
+                  placeholder="john.doe@email.com"
+                  value={newCandidateForm.email}
+                  onChange={(e) => setNewCandidateForm(prev => ({ ...prev, email: e.target.value }))}
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Experience</label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select experience" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entry">Entry Level (0-2 years)</SelectItem>
-                    <SelectItem value="mid">Mid Level (3-5 years)</SelectItem>
-                    <SelectItem value="senior">Senior Level (6+ years)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
+                <Input
+                  placeholder="+1 (555) 123-4567"
+                  value={newCandidateForm.phone}
+                  onChange={(e) => setNewCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Location</label>
-                <Input placeholder="e.g., San Francisco, CA" />
+                <Label className="text-sm font-medium text-muted-foreground">Position</Label>
+                <Input
+                  placeholder="e.g., Senior Developer"
+                  value={newCandidateForm.position}
+                  onChange={(e) => setNewCandidateForm(prev => ({ ...prev, position: e.target.value }))}
+                />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Notes</label>
-              <textarea 
-                className="w-full p-3 border border-border rounded-md resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <Label className="text-sm font-medium text-muted-foreground">Experience</Label>
+              <Input
+                placeholder="e.g., 5 years"
+                value={newCandidateForm.experience}
+                onChange={(e) => setNewCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">Skills</Label>
+              {newCandidateForm.skills.map((skill, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    placeholder={`Skill ${index + 1}`}
+                    value={skill}
+                    onChange={(e) => {
+                      const newSkills = [...newCandidateForm.skills];
+                      newSkills[index] = e.target.value;
+                      setNewCandidateForm(prev => ({ ...prev, skills: newSkills }));
+                    }}
+                  />
+                  {index === newCandidateForm.skills.length - 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewCandidateForm(prev => ({ ...prev, skills: [...prev.skills, ''] }))}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
+              <Textarea
                 placeholder="Add any additional notes about the candidate..."
+                value={newCandidateForm.notes}
+                onChange={(e) => setNewCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
               />
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setCandidateDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setCandidateDialogOpen(false)} disabled={actionLoading}>
                 Cancel
               </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleAddCandidate}
+                disabled={actionLoading}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                 Add Candidate
               </Button>
             </div>
