@@ -161,3 +161,4 @@ They will automatically read from the `.env` files once you create them.
 - **Vite** requires the `VITE_` prefix for environment variables
 - Environment variables are loaded at **build time**, not runtime
 
+

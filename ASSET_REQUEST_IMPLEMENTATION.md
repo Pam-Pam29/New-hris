@@ -377,3 +377,4 @@ const getPriorityBadge = (priority: AssetRequest['priority']) => {
 All Firebase collections are ready:
 - `assetRequests` - Asset requests from employees
 - `starterKits` - Starter kit templates
+

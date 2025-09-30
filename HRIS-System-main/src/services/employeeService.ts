@@ -155,8 +155,11 @@ export class MockEmployeeService implements IEmployeeService {
   }
 
   async createEmployee(employee: Omit<Employee, 'id'>): Promise<Employee> {
+    console.log('MockEmployeeService.createEmployee called with:', employee);
     const newEmployee = { ...employee, id: Date.now() } as Employee;
     this.employees.push(newEmployee);
+    console.log('MockEmployeeService.createEmployee returning:', newEmployee);
+    console.log('Total employees now:', this.employees.length);
     return Promise.resolve(newEmployee);
   }
 
@@ -191,13 +194,17 @@ export class MockEmployeeService implements IEmployeeService {
 // Service factory
 export class EmployeeServiceFactory {
   static createService(type: 'firebase' | 'mock', db?: Firestore): IEmployeeService {
+    console.log('EmployeeServiceFactory.createService called with:', { type, hasDb: !!db });
     switch (type) {
       case 'firebase':
         if (!db) throw new Error('Firebase DB instance required');
+        console.log('Creating FirebaseEmployeeService');
         return new FirebaseEmployeeService(db);
       case 'mock':
+        console.log('Creating MockEmployeeService');
         return new MockEmployeeService();
       default:
+        console.log('Creating MockEmployeeService (default)');
         return new MockEmployeeService();
     }
   }
@@ -206,8 +213,10 @@ export class EmployeeServiceFactory {
 // Async function to get the properly configured employee service
 export const getEmployeeService = async (): Promise<IEmployeeService> => {
   try {
+    console.log('Getting employee service...');
     await initializeFirebase(); // Wait for Firebase to be ready
     const config = await getServiceConfig();
+    console.log('Service config:', config);
 
     if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
       console.log('Using Firebase Employee Service');
@@ -217,7 +226,7 @@ export const getEmployeeService = async (): Promise<IEmployeeService> => {
       return EmployeeServiceFactory.createService('mock');
     }
   } catch (error) {
-    console.warn('Failed to initialize Firebase Employee Service, falling back to Mock');
+    console.warn('Failed to initialize Firebase Employee Service, falling back to Mock:', error);
     return new MockEmployeeService();
   }
 };

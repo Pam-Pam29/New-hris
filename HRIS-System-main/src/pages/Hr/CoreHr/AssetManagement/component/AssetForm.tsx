@@ -1,7 +1,7 @@
 import React, { FormEvent } from 'react';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/atoms/Select';
-import { Button } from '@/components/ui/button';
+import { Input } from '../../../../../components/ui/input';
+import { Select } from '../../../../../components/atoms/Select';
+import { Button } from '../../../../../components/ui/button';
 
 interface AssetFormProps {
   form: {

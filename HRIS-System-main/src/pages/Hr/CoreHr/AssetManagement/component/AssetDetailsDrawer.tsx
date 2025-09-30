@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../../../components/ui/sheet';
+import { Button } from '../../../../../components/ui/button';
+import { Separator } from '../../../../../components/ui/separator';
 import { Package, User, Calendar, DollarSign, MapPin, Settings, History, Edit, UserPlus, ArrowRightLeft } from 'lucide-react';
-import { TypographyH3, TypographyP } from '@/components/ui/typography';
+import { TypographyH3, TypographyP } from '../../../../../components/ui/typography';
 
 interface AssetHistoryEntry {
   id: number;

@@ -1,62 +1,155 @@
 import { getServiceConfig } from '../config/firebase';
 import { Firestore } from 'firebase/firestore';
 
+// Import unified types (same as HR platform)
 export interface PayrollRecord {
     id: string;
     employeeId: string;
     employeeName: string;
     department: string;
     position: string;
+
+    // Pay Period
+    payPeriod: PayPeriod;
+
+    // Earnings
     baseSalary: number;
-    bonus: number;
-    deductions: number;
+    overtime: number;
+    bonuses: number;
+    allowances: Allowance[];
+
+    // Deductions
+    deductions: Deduction[];
+
+    // Calculations
+    grossPay: number;
+    totalDeductions: number;
     netPay: number;
-    payPeriod: string;
+
+    // Payment Info
+    paymentStatus: 'pending' | 'processing' | 'paid' | 'cancelled' | 'archived';
     paymentDate: Date | null;
-    status: 'pending' | 'processing' | 'paid' | 'cancelled' | 'archived';
-    createdAt?: Date;
-    updatedAt?: Date;
+    paymentMethod: 'bank_transfer' | 'check' | 'cash';
+    currency: string;
+
+    // Metadata
+    createdAt: Date;
+    updatedAt: Date;
+    createdBy?: string;
+    notes?: string;
+}
+
+export interface PayPeriod {
+    id: string;
+    startDate: Date;
+    endDate: Date;
+    payDate: Date;
+    type: 'weekly' | 'biweekly' | 'monthly' | 'semimonthly';
+    status: 'open' | 'closed' | 'paid';
+}
+
+export interface Allowance {
+    id: string;
+    name: string;
+    amount: number;
+    type: 'fixed' | 'variable';
+    taxable: boolean;
+    description?: string;
+}
+
+export interface Deduction {
+    id: string;
+    name: string;
+    amount: number;
+    type: 'tax' | 'insurance' | 'retirement' | 'loan' | 'other';
+    description?: string;
+}
+
+export interface FinancialRequest {
+    id: string;
+    employeeId: string;
+    employeeName: string;
+    requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
+    amount: number;
+    reason: string;
+    status: 'pending' | 'approved' | 'rejected' | 'paid';
+    attachments?: string[];
+    approvedBy?: string;
+    approvedAt?: Date;
+    rejectionReason?: string;
+    paidAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface BenefitsEnrollment {
+    id: string;
+    employeeId: string;
+    benefitType: string;
+    provider: string;
+    enrollmentStatus: 'active' | 'inactive' | 'pending';
+    contribution: number;
+    employerContribution: number;
+    effectiveDate: Date;
+    coverage: string;
+    beneficiaries?: Beneficiary[];
+}
+
+export interface Beneficiary {
+    id: string;
+    name: string;
+    relationship: string;
+    percentage: number;
+}
+
+// Helper functions
+export function calculateGrossPay(record: Partial<PayrollRecord>): number {
+    const base = record.baseSalary || 0;
+    const overtime = record.overtime || 0;
+    const bonuses = record.bonuses || 0;
+    const allowancesTotal = record.allowances?.reduce((sum, a) => sum + a.amount, 0) || 0;
+    return base + overtime + bonuses + allowancesTotal;
+}
+
+export function calculateTotalDeductions(record: Partial<PayrollRecord>): number {
+    return record.deductions?.reduce((sum, d) => sum + d.amount, 0) || 0;
+}
+
+export function calculateNetPay(record: Partial<PayrollRecord>): number {
+    const gross = calculateGrossPay(record);
+    const totalDed = calculateTotalDeductions(record);
+    return gross - totalDed;
 }
 
 export interface IPayrollService {
-    getPayrollRecords(): Promise<PayrollRecord[]>;
+    // Payroll Records (Employee only sees their own)
+    getMyPayrollRecords(employeeId: string): Promise<PayrollRecord[]>;
     getPayrollRecord(id: string): Promise<PayrollRecord | null>;
-    createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string>;
-    updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void>;
-    deletePayrollRecord(id: string): Promise<void>;
-    getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]>;
-    getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]>;
+
+    // Financial Requests
+    getMyFinancialRequests(employeeId: string): Promise<FinancialRequest[]>;
+    createFinancialRequest(request: Omit<FinancialRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<string>;
+
+    // Benefits
+    getMyBenefits(employeeId: string): Promise<BenefitsEnrollment[]>;
 }
 
 export class FirebasePayrollService implements IPayrollService {
     constructor(private db: Firestore) { }
 
-    async getPayrollRecords(): Promise<PayrollRecord[]> {
+    async getMyPayrollRecords(employeeId: string): Promise<PayrollRecord[]> {
         try {
-            const { collection, getDocs, Timestamp } = await import('firebase/firestore');
+            const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const snapshot = await getDocs(payrollRef);
-            return snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    employeeId: data.employeeId,
-                    employeeName: data.employeeName,
-                    department: data.department,
-                    position: data.position,
-                    baseSalary: data.baseSalary,
-                    bonus: data.bonus,
-                    deductions: data.deductions,
-                    netPay: data.netPay,
-                    payPeriod: data.payPeriod,
-                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
-                    status: data.status,
-                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
-                } as PayrollRecord;
-            });
+            const q = query(
+                payrollRef,
+                where('employeeId', '==', employeeId),
+                orderBy('payPeriod.payDate', 'desc')
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
         } catch (error) {
-            console.error('Error fetching payroll records:', error);
+            console.error('Error fetching my payroll records:', error);
             throw error;
         }
     }
@@ -66,291 +159,160 @@ export class FirebasePayrollService implements IPayrollService {
             const { doc, getDoc } = await import('firebase/firestore');
             const payrollRef = doc(this.db, 'payroll_records', id);
             const snapshot = await getDoc(payrollRef);
-            
+
             if (!snapshot.exists()) {
                 return null;
             }
-            
-            const data = snapshot.data();
-            return {
-                id: snapshot.id,
-                employeeId: data.employeeId,
-                employeeName: data.employeeName,
-                department: data.department,
-                position: data.position,
-                baseSalary: data.baseSalary,
-                bonus: data.bonus,
-                deductions: data.deductions,
-                netPay: data.netPay,
-                payPeriod: data.payPeriod,
-                paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
-                status: data.status,
-                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
-            } as PayrollRecord;
+
+            return this.docToPayrollRecord(snapshot);
         } catch (error) {
             console.error(`Error fetching payroll record ${id}:`, error);
             throw error;
         }
     }
 
-    async createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string> {
+    async getMyFinancialRequests(employeeId: string): Promise<FinancialRequest[]> {
+        try {
+            const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
+            const requestsRef = collection(this.db, 'financial_requests');
+            const q = query(
+                requestsRef,
+                where('employeeId', '==', employeeId),
+                orderBy('createdAt', 'desc')
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+        } catch (error) {
+            console.error('Error fetching my financial requests:', error);
+            throw error;
+        }
+    }
+
+    async createFinancialRequest(request: Omit<FinancialRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
             const { collection, addDoc, Timestamp } = await import('firebase/firestore');
-            const payrollRef = collection(this.db, 'payroll_records');
-            
-            // Add timestamps
+            const requestsRef = collection(this.db, 'financial_requests');
+
             const now = Timestamp.now();
-            const payrollWithTimestamps = {
-                ...record,
-                paymentDate: record.paymentDate ? Timestamp.fromDate(record.paymentDate) : null,
+            const requestWithTimestamps = {
+                ...request,
+                status: 'pending', // Always starts as pending
                 createdAt: now,
                 updatedAt: now
             };
-            
-            const docRef = await addDoc(payrollRef, payrollWithTimestamps);
+
+            const docRef = await addDoc(requestsRef, requestWithTimestamps);
+            console.log('✅ Financial request created:', docRef.id);
             return docRef.id;
         } catch (error) {
-            console.error('Error creating payroll record:', error);
+            console.error('Error creating financial request:', error);
             throw error;
         }
     }
 
-    async updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void> {
-        try {
-            const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
-            const payrollRef = doc(this.db, 'payroll_records', id);
-            
-            // Add updated timestamp
-            const dataToUpdate = {
-                ...record,
-                updatedAt: Timestamp.now()
-            };
-            
-            // Convert Date objects to Firestore Timestamps
-            if (record.paymentDate) {
-                dataToUpdate.paymentDate = Timestamp.fromDate(record.paymentDate);
-            }
-            
-            await updateDoc(payrollRef, dataToUpdate);
-        } catch (error) {
-            console.error(`Error updating payroll record ${id}:`, error);
-            throw error;
-        }
-    }
-
-    async deletePayrollRecord(id: string): Promise<void> {
-        try {
-            const { doc, deleteDoc } = await import('firebase/firestore');
-            const payrollRef = doc(this.db, 'payroll_records', id);
-            await deleteDoc(payrollRef);
-        } catch (error) {
-            console.error(`Error deleting payroll record ${id}:`, error);
-            throw error;
-        }
-    }
-    
-    // Get payroll records by department
-    async getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]> {
+    async getMyBenefits(employeeId: string): Promise<BenefitsEnrollment[]> {
         try {
             const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const payrollRef = collection(this.db, 'payroll_records');
-            const q = query(payrollRef, where('department', '==', department));
+            const benefitsRef = collection(this.db, 'benefits_enrollments');
+            const q = query(
+                benefitsRef,
+                where('employeeId', '==', employeeId)
+            );
             const snapshot = await getDocs(q);
-            
-            return snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    employeeId: data.employeeId,
-                    employeeName: data.employeeName,
-                    department: data.department,
-                    position: data.position,
-                    baseSalary: data.baseSalary,
-                    bonus: data.bonus,
-                    deductions: data.deductions,
-                    netPay: data.netPay,
-                    payPeriod: data.payPeriod,
-                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
-                    status: data.status,
-                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
-                } as PayrollRecord;
-            });
+            return snapshot.docs.map(doc => this.docToBenefitsEnrollment(doc));
         } catch (error) {
-            console.error('Error getting payroll records by department:', error);
+            console.error('Error fetching my benefits:', error);
             throw error;
         }
     }
-    
-    // Get payroll records by status
-    async getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]> {
-        try {
-            const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const payrollRef = collection(this.db, 'payroll_records');
-            const q = query(payrollRef, where('status', '==', status));
-            const snapshot = await getDocs(q);
-            
-            return snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    employeeId: data.employeeId,
-                    employeeName: data.employeeName,
-                    department: data.department,
-                    position: data.position,
-                    baseSalary: data.baseSalary,
-                    bonus: data.bonus,
-                    deductions: data.deductions,
-                    netPay: data.netPay,
-                    payPeriod: data.payPeriod,
-                    paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
-                    status: data.status,
-                    createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                    updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
-                } as PayrollRecord;
-            });
-        } catch (error) {
-            console.error('Error getting payroll records by status:', error);
-            throw error;
-        }
+
+    // Helper methods
+    private docToPayrollRecord(doc: any): PayrollRecord {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            employeeId: data.employeeId,
+            employeeName: data.employeeName,
+            department: data.department,
+            position: data.position,
+            payPeriod: {
+                id: data.payPeriod.id,
+                startDate: data.payPeriod.startDate.toDate(),
+                endDate: data.payPeriod.endDate.toDate(),
+                payDate: data.payPeriod.payDate.toDate(),
+                type: data.payPeriod.type,
+                status: data.payPeriod.status
+            },
+            baseSalary: data.baseSalary,
+            overtime: data.overtime || 0,
+            bonuses: data.bonuses || 0,
+            allowances: data.allowances || [],
+            deductions: data.deductions || [],
+            grossPay: data.grossPay,
+            totalDeductions: data.totalDeductions,
+            netPay: data.netPay,
+            paymentStatus: data.paymentStatus,
+            paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
+            paymentMethod: data.paymentMethod,
+            currency: data.currency,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate(),
+            createdBy: data.createdBy,
+            notes: data.notes
+        };
+    }
+
+    private docToFinancialRequest(doc: any): FinancialRequest {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            employeeId: data.employeeId,
+            employeeName: data.employeeName,
+            requestType: data.requestType,
+            amount: data.amount,
+            reason: data.reason,
+            status: data.status,
+            attachments: data.attachments,
+            approvedBy: data.approvedBy,
+            approvedAt: data.approvedAt ? data.approvedAt.toDate() : undefined,
+            rejectionReason: data.rejectionReason,
+            paidAt: data.paidAt ? data.paidAt.toDate() : undefined,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate()
+        };
+    }
+
+    private docToBenefitsEnrollment(doc: any): BenefitsEnrollment {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            employeeId: data.employeeId,
+            benefitType: data.benefitType,
+            provider: data.provider,
+            enrollmentStatus: data.enrollmentStatus,
+            contribution: data.contribution,
+            employerContribution: data.employerContribution,
+            effectiveDate: data.effectiveDate.toDate(),
+            coverage: data.coverage,
+            beneficiaries: data.beneficiaries
+        };
     }
 }
 
-export class MockPayrollService implements IPayrollService {
-    private mockRecords: PayrollRecord[] = [
-        {
-            id: 'mock-id-1',
-            employeeId: 'emp-001',
-            employeeName: 'John Doe',
-            department: 'Engineering',
-            position: 'Software Engineer',
-            baseSalary: 5000,
-            bonus: 500,
-            deductions: 1000,
-            netPay: 4500,
-            payPeriod: 'January 2023',
-            paymentDate: new Date('2023-01-31'),
-            status: 'paid',
-            createdAt: new Date('2023-01-15'),
-            updatedAt: new Date('2023-01-15')
-        },
-        {
-            id: 'mock-id-2',
-            employeeId: 'emp-002',
-            employeeName: 'Jane Smith',
-            department: 'Marketing',
-            position: 'Marketing Manager',
-            baseSalary: 6000,
-            bonus: 1000,
-            deductions: 1500,
-            netPay: 5500,
-            payPeriod: 'January 2023',
-            paymentDate: new Date('2023-01-31'),
-            status: 'paid',
-            createdAt: new Date('2023-01-15'),
-            updatedAt: new Date('2023-01-15')
-        },
-        {
-            id: 'mock-id-3',
-            employeeId: 'emp-003',
-            employeeName: 'Bob Johnson',
-            department: 'Finance',
-            position: 'Financial Analyst',
-            baseSalary: 5500,
-            bonus: 800,
-            deductions: 1200,
-            netPay: 5100,
-            payPeriod: 'February 2023',
-            paymentDate: null,
-            status: 'pending',
-            createdAt: new Date('2023-02-01'),
-            updatedAt: new Date('2023-02-01')
-        }
-    ];
-    
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async getPayrollRecords(): Promise<PayrollRecord[]> {
-        return [...this.mockRecords];
-    }
+// Singleton pattern
+let payrollService: IPayrollService | null = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async getPayrollRecord(id: string): Promise<PayrollRecord | null> {
-        const record = this.mockRecords.find(r => r.id === id);
-        return record ? {...record} : null;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async createPayrollRecord(record: Omit<PayrollRecord, 'id'>): Promise<string> {
-        const id = `mock-id-${this.mockRecords.length + 1}`;
-        const now = new Date();
-        const newRecord = {
-            ...record,
-            id,
-            createdAt: now,
-            updatedAt: now
-        } as PayrollRecord;
-        
-        this.mockRecords.push(newRecord);
-        return id;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void> {
-        const index = this.mockRecords.findIndex(r => r.id === id);
-        if (index !== -1) {
-            this.mockRecords[index] = {
-                ...this.mockRecords[index],
-                ...record,
-                updatedAt: new Date()
-            };
+export const getPayrollService = async (): Promise<IPayrollService> => {
+    if (!payrollService) {
+        const config = await getServiceConfig();
+        if (config.firebase.enabled && config.firebase.db) {
+            console.log('🔥 Using Firebase Payroll Service (Employee)');
+            payrollService = new FirebasePayrollService(config.firebase.db);
+        } else {
+            throw new Error('Firebase not configured for payroll service');
         }
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async deletePayrollRecord(id: string): Promise<void> {
-        const index = this.mockRecords.findIndex(r => r.id === id);
-        if (index !== -1) {
-            this.mockRecords.splice(index, 1);
-        }
-    }
-    
-    // Get payroll records by department
-    async getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]> {
-        return this.mockRecords.filter(record => record.department === department);
-    }
-    
-    // Get payroll records by status
-    async getPayrollRecordsByStatus(status: PayrollRecord['status']): Promise<PayrollRecord[]> {
-        return this.mockRecords.filter(record => record.status === status);
-    }
-}
-
-export class PayrollServiceFactory {
-    static createService(type: 'firebase' | 'mock', db?: Firestore): IPayrollService {
-        switch (type) {
-            case 'firebase':
-                if (!db) throw new Error('Firebase DB instance required');
-                return new FirebasePayrollService(db);
-            case 'mock':
-                return new MockPayrollService();
-            default:
-                throw new Error('Invalid service type');
-        }
-    }
-}
-
-// Initialize the service based on config
-let payrollService: IPayrollService = new MockPayrollService();
-
-getServiceConfig().then((config: { defaultService: 'firebase' | 'mock'; firebase: { enabled: boolean; db: Firestore | null }; mock: { enabled: boolean } }) => {
-    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-        console.log('Using Firebase Payroll Service');
-        payrollService = PayrollServiceFactory.createService('firebase', config.firebase.db);
-    } else {
-        console.log('Using Mock Payroll Service');
-        payrollService = PayrollServiceFactory.createService('mock');
-    }
-});
+    return payrollService;
+};
 
 export { payrollService };

@@ -3,6 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Input } from '@/components/ui/input';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmployeeFullProfile } from './EmployeeFullProfile';
 import type { Employee } from "../types";
 
 interface EmployeeProfileDrawerProps {
@@ -29,7 +31,7 @@ export const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
   setDocumentsOpen,
 }) => (
   <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="right" className="w-full !w-1/2 !max-w-none p-0">
+    <SheetContent side="right" className="!w-1/2 !max-w-none p-0">
       <div className="flex h-full">
         {/* Left panel: Employee list */}
         <div className="hidden md:flex flex-col w-72 border-r bg-muted/40 h-full">
@@ -60,36 +62,55 @@ export const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
             <SheetTitle>Employee Profile</SheetTitle>
           </SheetHeader>
           {selectedEmployee && (
-            <div className="flex flex-col gap-6 mt-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="w-16 h-16">
-                  {selectedEmployee.avatar ? (
-                    <img src={selectedEmployee.avatar} alt={selectedEmployee.name} className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <span className="text-lg font-semibold bg-muted rounded-full w-full h-full flex items-center justify-center">
-                      {selectedEmployee.name.split(' ').map(n => n[0]).join('')}
-                    </span>
-                  )}
-                </Avatar>
-                <div>
-                  <div className="text-xl font-bold">{selectedEmployee.name}</div>
-                  <div className="text-sm text-muted-foreground">{selectedEmployee.role}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 text-sm">
-                <div><span className="font-medium">Email:</span> {selectedEmployee.email || <span className="italic text-muted-foreground">N/A</span>}</div>
-                <div><span className="font-medium">Department:</span> {selectedEmployee.department}</div>
-                <div><span className="font-medium">Employee Type:</span> {selectedEmployee.employmentType}</div>
-                <div><span className="font-medium">Status:</span> {selectedEmployee.status}</div>
-                {selectedEmployee.dateStarted && <div><span className="font-medium">Date Started:</span> {selectedEmployee.dateStarted}</div>}
-                {selectedEmployee.phone && <div><span className="font-medium">Phone:</span> {selectedEmployee.phone}</div>}
-                {selectedEmployee.address && <div><span className="font-medium">Address:</span> {selectedEmployee.address}</div>}
-                {selectedEmployee.location && <div><span className="font-medium">Location:</span> {selectedEmployee.location}</div>}
-                {selectedEmployee.gender && <div><span className="font-medium">Gender:</span> {selectedEmployee.gender}</div>}
-                {selectedEmployee.dob && <div><span className="font-medium">Date of Birth:</span> {selectedEmployee.dob}</div>}
-                {selectedEmployee.nationalId && <div><span className="font-medium">National ID:</span> {selectedEmployee.nationalId}</div>}
-                {selectedEmployee.manager && <div><span className="font-medium">Manager:</span> {selectedEmployee.manager}</div>}
-              </div>
+            <div className="mt-4">
+              <Tabs defaultValue="summary" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="summary">Summary</TabsTrigger>
+                  <TabsTrigger value="full">Full Profile</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="summary" className="mt-4">
+                  <div className="flex flex-col gap-6">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="w-16 h-16">
+                        {selectedEmployee.avatar ? (
+                          <img src={selectedEmployee.avatar} alt={selectedEmployee.name} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <span className="text-lg font-semibold bg-muted rounded-full w-full h-full flex items-center justify-center">
+                            {selectedEmployee.name.split(' ').map(n => n[0]).join('')}
+                          </span>
+                        )}
+                      </Avatar>
+                      <div>
+                        <div className="text-xl font-bold">{selectedEmployee.name}</div>
+                        <div className="text-sm text-muted-foreground">{selectedEmployee.role}</div>
+                        {selectedEmployee.employeeId && (
+                          <div className="text-sm text-muted-foreground">ID: {selectedEmployee.employeeId}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      <div><span className="font-medium">Email:</span> {selectedEmployee.email || <span className="italic text-muted-foreground">N/A</span>}</div>
+                      <div><span className="font-medium">Department:</span> {selectedEmployee.department}</div>
+                      <div><span className="font-medium">Employee Type:</span> {selectedEmployee.employmentType}</div>
+                      <div><span className="font-medium">Status:</span> {selectedEmployee.status}</div>
+                      {selectedEmployee.dateStarted && <div><span className="font-medium">Date Started:</span> {selectedEmployee.dateStarted}</div>}
+                      {selectedEmployee.phone && <div><span className="font-medium">Phone:</span> {selectedEmployee.phone}</div>}
+                      {selectedEmployee.address && <div><span className="font-medium">Address:</span> {selectedEmployee.address}</div>}
+                      {selectedEmployee.location && <div><span className="font-medium">Location:</span> {selectedEmployee.location}</div>}
+                      {selectedEmployee.gender && <div><span className="font-medium">Gender:</span> {selectedEmployee.gender}</div>}
+                      {selectedEmployee.dob && <div><span className="font-medium">Date of Birth:</span> {selectedEmployee.dob}</div>}
+                      {selectedEmployee.nationalId && <div><span className="font-medium">National ID:</span> {selectedEmployee.nationalId}</div>}
+                      {selectedEmployee.manager && <div><span className="font-medium">Manager:</span> {selectedEmployee.manager}</div>}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="full" className="mt-4">
+                  <EmployeeFullProfile employee={selectedEmployee} />
+                </TabsContent>
+              </Tabs>
+
               {selectedEmployee.documents && selectedEmployee.documents.length > 0 && (
                 <div className="bg-card border rounded-lg p-4 mt-2">
                   <button

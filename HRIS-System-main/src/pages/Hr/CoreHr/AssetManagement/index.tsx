@@ -4,14 +4,14 @@ import { TypographyH2 } from '../../../../components/ui/typography';
 import { AtomicTanstackTable } from '../../../../components/TanstackTable/TanstackTable';
 import { ColumnDef } from "@tanstack/react-table";
 import { StatCard } from '../../../../components/molecules/StatCard';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
-import { 
-  PlusCircle, 
-  Package, 
-  Users, 
-  AlertTriangle, 
-  CheckCircle, 
-  UserPlus, 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../../components/ui/dialog';
+import {
+  PlusCircle,
+  Package,
+  Users,
+  AlertTriangle,
+  CheckCircle,
+  UserPlus,
   ArrowRightLeft,
   Search,
   Filter,
@@ -37,7 +37,7 @@ import { employeeService } from '../../../../services/employeeService';
 import { Employee } from '../EmployeeManagement/types';
 import { Asset } from './types';
 import { getAssetService } from './services/assetService';
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "../../../../hooks/use-toast";
 
 interface StatCardProps {
   title: string;
@@ -73,6 +73,7 @@ interface AssetDetailsDrawerProps {
 }
 
 export default function AssetManagement() {
+  const { toast } = useToast();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -377,7 +378,7 @@ export default function AssetManagement() {
           };
           const config = statusConfig[asset.status];
           const IconComponent = config.icon;
-          
+
           return (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -444,29 +445,32 @@ export default function AssetManagement() {
           const isAssigned = asset.status === 'Assigned';
 
           return (
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => openDetailsDrawer(asset)}
-                className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 hover:bg-info/10 text-info rounded-lg transition-colors text-sm"
                 title="View Details"
               >
                 <Eye className="h-4 w-4" />
+                <span>View</span>
               </button>
               {(isAvailable || isAssigned) && (
                 <button
                   onClick={() => openAssignmentDialog(asset)}
-                  className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors text-sm"
                   title={isAvailable ? "Assign Asset" : "Manage Assignment"}
                 >
                   {isAvailable ? <UserPlus className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
+                  <span>{isAvailable ? "Assign" : "Manage"}</span>
                 </button>
               )}
               <button
-                onClick={() => {/* Edit asset */}}
-                className="p-2 hover:bg-secondary/10 text-secondary rounded-lg transition-colors"
+                onClick={() => {/* Edit asset */ }}
+                className="flex items-center gap-1 px-3 py-1.5 hover:bg-secondary/10 text-secondary rounded-lg transition-colors text-sm"
                 title="Edit Asset"
               >
                 <Edit className="h-4 w-4" />
+                <span>Edit</span>
               </button>
             </div>
           );
@@ -535,8 +539,8 @@ export default function AssetManagement() {
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>
-            <Button 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200" 
+            <Button
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200"
               onClick={() => setDialogOpen(true)}
             >
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -699,6 +703,9 @@ export default function AssetManagement() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add New Asset</DialogTitle>
+            <DialogDescription>
+              Fill in the details below to add a new asset to the system.
+            </DialogDescription>
           </DialogHeader>
           <AssetForm
             form={form}

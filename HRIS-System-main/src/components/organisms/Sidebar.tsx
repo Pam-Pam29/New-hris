@@ -15,31 +15,31 @@ const navStructure = [
   {
     heading: 'Core HR',
     links: [
-      { label: 'Employee Management', href: '/Hr/CoreHr/EmployeeManagement', icon: Users },
-      { label: 'Policy Management', href: '/Hr/CoreHr/PolicyManagement', icon: FileText },
-      { label: 'Asset Management', href: '/Hr/CoreHr/AssetManagement', icon: Briefcase },
-      { label: 'Performance Management', href: '/Hr/CoreHr/PerformanceManagement', icon: BarChart2 },
-      { label: 'Time Management', href: '/Hr/CoreHr/TimeManagement', icon: Clock },
-      { label: 'Leave Management', href: '/Hr/CoreHr/LeaveManagement', icon: Calendar },
+      { label: 'Employee Management', href: '/hr/core-hr/employee-management', icon: Users },
+      { label: 'Policy Management', href: '/hr/core-hr/policy-management', icon: FileText },
+      { label: 'Asset Management', href: '/hr/core-hr/asset-management', icon: Briefcase },
+      { label: 'Performance Management', href: '/hr/core-hr/performance-management', icon: BarChart2 },
+      { label: 'Time Management', href: '/hr/core-hr/time-management', icon: Clock },
+      { label: 'Leave Management', href: '/hr/core-hr/leave-management', icon: Calendar },
     ],
   },
   {
     heading: 'Hiring & Onboarding',
     links: [
-      { label: 'Recruitment', href: '/Hr/Hiring/Recruitment', icon: UserPlus },
-      // { label: 'Onboarding', href: '/Hr/Hiring/Onboarding', icon: ClipboardList },
-      { label: 'Job Board', href: '/Hr/Hiring/JobBoard', icon: BookOpen },
+      { label: 'Recruitment', href: '/hr/hiring/recruitment', icon: UserPlus },
+      // { label: 'Onboarding', href: '/hr/hiring/onboarding', icon: ClipboardList },
+      { label: 'Job Board', href: '/hr/hiring/job-board', icon: BookOpen },
     ],
   },
   {
     heading: 'Payroll',
     links: [
-      { label: 'Payroll', href: '/Hr/Payroll/Payroll', icon: DollarSign },
-      // { label: 'Wallet', href: '/Hr/Payroll/Wallet', icon: Wallet },
-      // { label: 'Salaries', href: '/Hr/Payroll/Salaries', icon: DollarSign },
-      // { label: 'Benefit', href: '/Hr/Payroll/Benefit', icon: Gift },
-      // { label: 'Pension', href: '/Hr/Payroll/Pension', icon: Shield },
-      // { label: 'Tax', href: '/Hr/Payroll/Tax', icon: Percent },
+      { label: 'Payroll', href: '/hr/payroll', icon: DollarSign },
+      // { label: 'Wallet', href: '/hr/payroll/wallet', icon: Wallet },
+      // { label: 'Salaries', href: '/hr/payroll/salaries', icon: DollarSign },
+      // { label: 'Benefit', href: '/hr/payroll/benefit', icon: Gift },
+      // { label: 'Pension', href: '/hr/payroll/pension', icon: Shield },
+      // { label: 'Tax', href: '/hr/payroll/tax', icon: Percent },
     ],
   },
 ];
@@ -105,8 +105,8 @@ export function Sidebar() {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setCollapsed((c) => !c)}
         >
-          {collapsed ? 
-            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" /> : 
+          {collapsed ?
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" /> :
             <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
           }
         </button>
@@ -135,7 +135,7 @@ export function Sidebar() {
               </ul>
             </div>
           ))}
-          
+
           {/* Help, Support, Settings links */}
           <div className="flex flex-col gap-1 mt-4">
             <ul className={`flex flex-col gap-1 items-start`}>
@@ -186,19 +186,18 @@ function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; 
         className={
           `flex items-center gap-3 rounded-xl font-medium transition-all duration-200 group relative
           ${collapsed ? 'justify-center w-12 h-12 p-0' : 'px-4 py-3 text-sm w-full'}
-          ${isActive 
-            ? 'bg-gradient-to-r from-primary/20 to-secondary/20 text-primary font-semibold shadow-soft' 
+          ${isActive
+            ? 'bg-gradient-to-r from-primary/20 to-secondary/20 text-primary font-semibold shadow-soft'
             : 'hover:bg-accent/50 hover:shadow-soft text-foreground hover:text-primary'
           }
           `
         }
         title={collapsed ? link.label : undefined}
       >
-        <link.icon className={`w-5 h-5 transition-all duration-200 ${
-          isActive 
-            ? 'text-primary scale-110' 
+        <link.icon className={`w-5 h-5 transition-all duration-200 ${isActive
+            ? 'text-primary scale-110'
             : 'text-muted-foreground group-hover:text-primary group-hover:scale-105'
-        }`} />
+          }`} />
         {!collapsed && (
           <span className="transition-all duration-200 group-hover:translate-x-1">
             {link.label}

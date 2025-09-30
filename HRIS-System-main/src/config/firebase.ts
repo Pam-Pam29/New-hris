@@ -1,21 +1,23 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Analytics, getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC6ovwlhX4Mr8WpHoS045wLxHA7t8fRXPI",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hris-system-baa22.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hris-system-baa22",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hris-system-baa22.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "563898942372",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:563898942372:web:8c5ebae1dfaf072858b731",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-1DJP5DJX92"
 };
 
 let app: FirebaseApp;
 let db: Firestore;
 let auth: Auth;
+let storage: FirebaseStorage;
 let analytics: Analytics | null = null;
 let firebaseInitialized = false;
 
@@ -34,6 +36,7 @@ const initializeFirebase = async (): Promise<boolean> => {
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       auth = getAuth(app);
+      storage = getStorage(app);
 
       // Initialize Analytics only when available and supported (browser + measurementId)
       try {
@@ -68,7 +71,7 @@ const initializeFirebase = async (): Promise<boolean> => {
 initializeFirebase();
 
 // Export Firebase services
-export { db, auth, analytics };
+export { db, auth, storage, analytics };
 export default app;
 
 // Helper function to check if Firebase is properly configured
@@ -90,33 +93,44 @@ export const getServiceConfig = async () => {
   const preferredService = import.meta.env.VITE_DEFAULT_SERVICE || 'firebase';
   const useFirebase = (preferredService === 'firebase' && isFirebaseConfigured());
 
+  console.log('Service config check:', {
+    preferredService,
+    isFirebaseConfigured: isFirebaseConfigured(),
+    useFirebase,
+    firebaseConfig: {
+      apiKey: firebaseConfig.apiKey,
+      projectId: firebaseConfig.projectId
+    }
+  });
+
   return {
-    // Use environment variable or fallback based on Firebase configuration
-    defaultService: useFirebase ? 'firebase' : 'mock' as 'firebase' | 'mock',
+    // Use Firebase for production
+    defaultService: useFirebase ? 'firebase' : 'mock',
 
     // Firebase configuration
     firebase: {
-      enabled: isFirebaseConfigured(),
-      db: isFirebaseConfigured() ? db : null
+      enabled: useFirebase,
+      db: isFirebaseConfigured() ? db : null,
+      storage: isFirebaseConfigured() ? storage : null
     },
 
     // Mock service configuration
     mock: {
-      enabled: true
+      enabled: !useFirebase
     }
   };
 };
 
-// For backwards compatibility, export a SERVICE_CONFIG that defaults to mock
-// but can be overridden by calling getServiceConfig()
+// For backwards compatibility, export a SERVICE_CONFIG that defaults to Firebase for production
 export const SERVICE_CONFIG = {
   defaultService: 'firebase' as 'firebase' | 'mock',
   firebase: {
-    enabled: isFirebaseConfigured(),
-    db: isFirebaseConfigured() ? db : null
+    enabled: true,
+    db: isFirebaseConfigured() ? db : null,
+    storage: isFirebaseConfigured() ? storage : null
   },
   mock: {
-    enabled: !isFirebaseConfigured()
+    enabled: false
   }
 };
 

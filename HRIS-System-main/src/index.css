@@ -1,9 +1,9 @@
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
@@ -14,23 +14,23 @@
     --card-foreground: 224 71% 4%;
     --popover: 0 0% 100%;
     --popover-foreground: 224 71% 4%;
-    
+
     /* Primary - Professional Blue */
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-    
+
     /* Secondary - Complementary Purple */
     --secondary: 262 83% 58%;
     --secondary-foreground: 210 40% 98%;
-    
+
     /* Muted - Subtle Gray */
     --muted: 220 14% 96%;
     --muted-foreground: 220 9% 46%;
-    
+
     /* Accent - Light Blue */
     --accent: 220 14% 96%;
     --accent-foreground: 224 71% 4%;
-    
+
     /* Status Colors */
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
@@ -40,19 +40,19 @@
     --warning-foreground: 224 71% 4%;
     --info: 199 89% 48%;
     --info-foreground: 210 40% 98%;
-    
+
     /* UI Elements */
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 221 83% 53%;
-    
+
     /* Chart Colors - Professional Palette */
     --chart-1: 221 83% 53%;
     --chart-2: 142 76% 36%;
     --chart-3: 38 92% 50%;
     --chart-4: 262 83% 58%;
     --chart-5: 0 84% 60%;
-    
+
     --radius: 0.75rem;
   }
 
@@ -64,23 +64,23 @@
     --card-foreground: 210 40% 98%;
     --popover: 224 71% 4%;
     --popover-foreground: 210 40% 98%;
-    
+
     /* Primary - Bright Blue for Dark Mode */
     --primary: 217 91% 60%;
     --primary-foreground: 224 71% 4%;
-    
+
     /* Secondary - Bright Purple */
     --secondary: 262 83% 68%;
     --secondary-foreground: 224 71% 4%;
-    
+
     /* Muted - Dark Gray */
     --muted: 215 28% 17%;
     --muted-foreground: 217 11% 65%;
-    
+
     /* Accent - Darker Blue */
     --accent: 215 28% 17%;
     --accent-foreground: 210 40% 98%;
-    
+
     /* Status Colors - Adjusted for Dark Mode */
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
@@ -90,12 +90,12 @@
     --warning-foreground: 224 71% 4%;
     --info: 199 89% 48%;
     --info-foreground: 224 71% 4%;
-    
+
     /* UI Elements */
     --border: 215 28% 17%;
     --input: 215 28% 17%;
     --ring: 217 91% 60%;
-    
+
     /* Chart Colors - Dark Mode Optimized */
     --chart-1: 217 91% 60%;
     --chart-2: 142 71% 45%;
@@ -122,35 +122,64 @@
   }
 
   /* Typography Improvements */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-semibold tracking-tight;
     line-height: 1.2;
   }
 
-  h1 { @apply text-3xl lg:text-4xl; }
-  h2 { @apply text-2xl lg:text-3xl; }
-  h3 { @apply text-xl lg:text-2xl; }
-  h4 { @apply text-lg lg:text-xl; }
-  h5 { @apply text-base lg:text-lg; }
-  h6 { @apply text-sm lg:text-base; }
+  h1 {
+    @apply text-3xl lg:text-4xl;
+  }
+
+  h2 {
+    @apply text-2xl lg:text-3xl;
+  }
+
+  h3 {
+    @apply text-xl lg:text-2xl;
+  }
+
+  h4 {
+    @apply text-lg lg:text-xl;
+  }
+
+  h5 {
+    @apply text-base lg:text-lg;
+  }
+
+  h6 {
+    @apply text-sm lg:text-base;
+  }
 
   /* Code and Monospace */
-  code, pre, .font-mono {
+  code,
+  pre,
+  .font-mono {
     font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
   }
 
   /* Smooth transitions for interactive elements */
-  button, a, input, select, textarea, [role="button"] {
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"] {
     transition-property: all;
     transition-duration: 200ms;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Focus styles */
-  button:focus-visible, 
-  a:focus-visible, 
-  input:focus-visible, 
-  select:focus-visible, 
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
   textarea:focus-visible,
   [role="button"]:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
@@ -198,13 +227,27 @@
 
   /* Animation improvements */
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes slideIn {
-    from { opacity: 0; transform: translateX(-10px); }
-    to { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .animate-fade-in {
@@ -216,18 +259,45 @@
   }
 
   /* Status color utilities */
-  .text-success { color: hsl(var(--success)); }
-  .text-warning { color: hsl(var(--warning)); }
-  .text-info { color: hsl(var(--info)); }
-  .bg-success { background-color: hsl(var(--success)); }
-  .bg-warning { background-color: hsl(var(--warning)); }
-  .bg-info { background-color: hsl(var(--info)); }
-  .border-success { border-color: hsl(var(--success)); }
-  .border-warning { border-color: hsl(var(--warning)); }
-  .border-info { border-color: hsl(var(--info)); }
+  .text-success {
+    color: hsl(var(--success));
+  }
+
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+
+  .text-info {
+    color: hsl(var(--info));
+  }
+
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+
+  .bg-info {
+    background-color: hsl(var(--info));
+  }
+
+  .border-success {
+    border-color: hsl(var(--success));
+  }
+
+  .border-warning {
+    border-color: hsl(var(--warning));
+  }
+
+  .border-info {
+    border-color: hsl(var(--info));
+  }
 }
 
 @layer components {
+
   /* Card improvements */
   .card-modern {
     @apply bg-card border border-border rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200;

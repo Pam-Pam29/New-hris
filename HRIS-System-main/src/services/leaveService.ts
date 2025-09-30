@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 // Fixed: Correct import path for Firebase configuration
-import { db } from '../config/firebase';
+import { getServiceConfig, initializeFirebase } from '../config/firebase';
 
 // Types
 interface LeaveRequest {

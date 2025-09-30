@@ -13,4 +13,18 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: './index-default.html'
+      }
+    }
+  },
+  server: {
+    port: 5175,
+    open: '/',
+    host: true
+  },
+  root: '.',
+  publicDir: 'public'
 });

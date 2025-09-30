@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { LeaveEntitlement, getLeaveBalance } from '../leaveBalanceUtils';
 
@@ -41,6 +41,9 @@ export const LeaveDetailsDrawer: React.FC<LeaveDetailsDrawerProps> = ({ open, on
       <DialogContent className="max-w-2xl w-full p-8 bg-background rounded-2xl shadow-2xl border border-border flex flex-col">
         <DialogHeader>
           <DialogTitle>Leave Request Details</DialogTitle>
+          <DialogDescription>
+            View and manage leave request details.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div><span className="font-semibold">Employee:</span> {request.employeeName}</div>

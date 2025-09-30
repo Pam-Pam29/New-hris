@@ -41,8 +41,9 @@ import {
     XCircle
 } from 'lucide-react';
 import { PayrollRecord, PayPeriod, Allowance, Deduction, FinancialRequest, BenefitsEnrollment, Beneficiary } from '../types';
+import { getPayrollService } from '../../../services/payrollService';
 
-// Mock data - replace with actual API calls
+// Mock data - replace with actual API calls (will be removed)
 const mockPayrollRecords: PayrollRecord[] = [
     {
         id: 'pr-001',
@@ -247,12 +248,52 @@ const mockBenefitsEnrollments: BenefitsEnrollment[] = [
 ];
 
 export default function PayrollCompensation() {
-    const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(mockPayrollRecords);
-    const [financialRequests, setFinancialRequests] = useState<FinancialRequest[]>(mockFinancialRequests);
-    const [benefitsEnrollments, setBenefitsEnrollments] = useState<BenefitsEnrollment[]>(mockBenefitsEnrollments);
+    const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
+    const [financialRequests, setFinancialRequests] = useState<FinancialRequest[]>([]);
+    const [benefitsEnrollments, setBenefitsEnrollments] = useState<BenefitsEnrollment[]>([]);
     const [showRequestForm, setShowRequestForm] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState<string>('current');
+    const [error, setError] = useState<string | null>(null);
+
+    // Get current employee ID from auth/context (hardcoded for now)
+    const currentEmployeeId = 'emp-001'; // TODO: Get from auth context
+
+    // Load payroll data from Firebase
+    useEffect(() => {
+        const fetchPayrollData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                const payrollService = await getPayrollService();
+
+                // Fetch my payroll records
+                console.log('📊 Loading payroll for employee:', currentEmployeeId);
+                const records = await payrollService.getMyPayrollRecords(currentEmployeeId);
+                setPayrollRecords(records);
+                console.log('✅ Loaded', records.length, 'payroll records');
+
+                // Fetch my financial requests
+                const requests = await payrollService.getMyFinancialRequests(currentEmployeeId);
+                setFinancialRequests(requests);
+                console.log('💰 Loaded', requests.length, 'financial requests');
+
+                // Fetch my benefits
+                const benefits = await payrollService.getMyBenefits(currentEmployeeId);
+                setBenefitsEnrollments(benefits);
+                console.log('🎁 Loaded', benefits.length, 'benefits');
+
+                setLoading(false);
+            } catch (err) {
+                console.error('❌ Error loading payroll data:', err);
+                setError('Failed to load payroll data. Please try again.');
+                setLoading(false);
+            }
+        };
+
+        fetchPayrollData();
+    }, [currentEmployeeId]);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -329,18 +370,27 @@ export default function PayrollCompensation() {
 
         setLoading(true);
         try {
-            const newRequest: FinancialRequest = {
-                id: `fr-${Date.now()}`,
-                employeeId: 'emp-001',
+            const payrollService = await getPayrollService();
+
+            // Get employee name (would come from auth context in production)
+            const employeeName = 'Current Employee'; // TODO: Get from auth context
+
+            const newRequest = {
+                employeeId: currentEmployeeId,
+                employeeName,
                 requestType: formData.requestType as any,
                 amount: parseFloat(formData.amount),
                 reason: formData.reason,
-                status: 'pending',
-                createdAt: new Date(),
-                updatedAt: new Date()
+                status: 'pending' as const
             };
 
-            setFinancialRequests(prev => [newRequest, ...prev]);
+            console.log('💰 Submitting financial request:', newRequest);
+            await payrollService.createFinancialRequest(newRequest);
+
+            // Refresh requests
+            const requests = await payrollService.getMyFinancialRequests(currentEmployeeId);
+            setFinancialRequests(requests);
+
             setShowRequestForm(false);
             setFormData({
                 requestType: '',
@@ -348,8 +398,11 @@ export default function PayrollCompensation() {
                 reason: '',
                 attachments: []
             });
+
+            console.log('✅ Financial request submitted successfully');
         } catch (error) {
-            console.error('Error submitting financial request:', error);
+            console.error('❌ Error submitting financial request:', error);
+            alert('Failed to submit request. Please try again.');
         } finally {
             setLoading(false);
         }

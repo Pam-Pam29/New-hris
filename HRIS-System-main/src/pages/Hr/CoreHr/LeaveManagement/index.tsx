@@ -1,568 +1,209 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
+import { Badge } from '../../../../components/ui/badge';
+import { Input } from '../../../../components/ui/input';
+import { Label } from '../../../../components/ui/label';
+import { Textarea } from '../../../../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../components/ui/tabs';
+import { Alert, AlertDescription } from '../../../../components/ui/alert';
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
-  Users,
-  FileText,
-  Plus,
-  Eye,
-  Download,
-  Filter,
-  Search,
   CheckCircle,
   XCircle,
-  AlertTriangle,
+  AlertCircle,
+  Plus,
+  Filter,
+  Search,
+  Download,
+  Upload,
+  FileText,
   User,
-  Loader2,
-  X
+  Mail,
+  Phone,
+  MapPin,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  Loader,
+  Settings,
+  Users
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { leaveService, LeaveRequest, LeaveType, LeaveBalance } from '../../../Employee/services/leaveService';
 
-// FIXED: Update import path to match your service file location
-import {
-  leaveRequestService,
-  leaveTypeService,
-  employeeService,
-  dataTransforms,
-  handleFirebaseError,
-  initializeDefaultData
-} from './services/leaveService'; // Relative path from your component
-
-// Simple inline components for missing UI elements
-const Input = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input
-    className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    {...props}
-  />
-);
-
-const Label = ({ className = "", ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
-  <label className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`} {...props} />
-);
-
-const Textarea = ({ className = "", ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea
-    className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    {...props}
-  />
-);
-
-const Alert = ({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground ${className}`} {...props} />
-);
-
-const AlertDescription = ({ className = "", ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <div className={`text-sm [&_p]:leading-relaxed ${className}`} {...props} />
-);
-
-interface LeaveRequest {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  department: string;
-  type: string;
-  startDate: string;
-  endDate: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
-  reason: string;
-  submittedDate: any; // Firestore timestamp
-  approver: string;
-  approvedDate: string;
-  totalDays: number;
-}
-
-interface LeaveType {
-  id: string;
-  name: string;
-  daysAllowed: number;
-  color: string;
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  department: string;
-  position: string;
-}
-
-// Leave Details Modal Component
-const LeaveDetailsModal = ({
-  open,
-  onClose,
-  request,
-  onApprove,
-  onReject,
-  loading
-}: {
-  open: boolean;
-  onClose: () => void;
-  request: LeaveRequest | null;
-  onApprove: () => void;
-  onReject: () => void;
-  loading: boolean;
-}) => {
-  if (!open || !request) return null;
-
-  // Handle Firestore timestamp
-  const formatDate = (date: any) => {
-    if (!date) return '';
-    if (typeof date === 'string') return new Date(date).toLocaleDateString();
-    if (date.toDate) return date.toDate().toLocaleDateString();
-    return new Date(date).toLocaleDateString();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-background rounded-lg shadow-lg max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-full">
-              <FileText className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold">Leave Request Details</h2>
-              <p className="text-sm text-muted-foreground">Request #{request.id}</p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Employee Info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium text-muted-foreground">Employee</Label>
-              <p className="text-sm mt-1 font-medium">{request.employeeName}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium text-muted-foreground">Department</Label>
-              <p className="text-sm mt-1">{request.department}</p>
-            </div>
-          </div>
-
-          {/* Leave Details */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Leave Type</Label>
-                <p className="text-sm mt-1 font-medium">{request.type}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Total Days</Label>
-                <p className="text-sm mt-1 font-medium">{request.totalDays} days</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Start Date</Label>
-                <p className="text-sm mt-1">{formatDate(request.startDate)}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">End Date</Label>
-                <p className="text-sm mt-1">{formatDate(request.endDate)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div>
-            <Label className="text-sm font-medium text-muted-foreground">Reason</Label>
-            <div className="mt-1 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm">{request.reason}</p>
-            </div>
-          </div>
-
-          {/* Status and Approval Info */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Status</Label>
-                <div className="mt-1">
-                  <Badge
-                    className={
-                      request.status === 'Pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                        request.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
-                          request.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
-                            'bg-gray-100 text-gray-800 border-gray-200'
-                    }
-                  >
-                    {request.status}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Submitted Date</Label>
-                <p className="text-sm mt-1">{formatDate(request.submittedDate)}</p>
-              </div>
-            </div>
-
-            {request.approver && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Approver</Label>
-                  <p className="text-sm mt-1">{request.approver}</p>
-                </div>
-                {request.approvedDate && (
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Decision Date</Label>
-                    <p className="text-sm mt-1">{new Date(request.approvedDate).toLocaleDateString()}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        {request.status === 'Pending' && (
-          <div className="flex gap-3 p-6 border-t">
-            <Button
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-              onClick={onApprove}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-              Approve
-            </Button>
-            <Button
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-              onClick={onReject}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
-              Reject
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Leave Type Management Component
-const LeaveTypeManagement = ({
-  leaveTypes,
-  onUpdate,
-  loading
-}: {
-  leaveTypes: LeaveType[];
-  onUpdate: () => void;
-  loading: boolean;
-}) => {
-  const [types] = useState<LeaveType[]>(leaveTypes);
-  const [newType, setNewType] = useState({ name: '', daysAllowed: 0, color: '#3B82F6' });
-  const [isAddingType, setIsAddingType] = useState(false);
-
-  const addLeaveType = async () => {
-    if (!newType.name || newType.daysAllowed <= 0) return;
-
-    setIsAddingType(true);
-    try {
-      await leaveTypeService.add({
-        name: newType.name,
-        daysAllowed: newType.daysAllowed,
-        color: newType.color
-      });
-
-      setNewType({ name: '', daysAllowed: 0, color: '#3B82F6' });
-      onUpdate(); // Refresh the data
-    } catch (error) {
-      console.error('Error adding leave type:', error);
-    } finally {
-      setIsAddingType(false);
-    }
-  };
-
-  const removeLeaveType = async (id: string) => {
-    try {
-      await leaveTypeService.delete(id);
-      onUpdate(); // Refresh the data
-    } catch (error) {
-      console.error('Error removing leave type:', error);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Manage Leave Types</h3>
-
-        {/* Add New Leave Type */}
-        <div className="space-y-4 mb-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <Label>Leave Type Name</Label>
-              <Input
-                value={newType.name}
-                onChange={(e) => setNewType(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Annual Leave"
-                disabled={isAddingType}
-              />
-            </div>
-            <div>
-              <Label>Days Allowed</Label>
-              <Input
-                type="number"
-                value={newType.daysAllowed || ''}
-                onChange={(e) => setNewType(prev => ({ ...prev, daysAllowed: parseInt(e.target.value) || 0 }))}
-                placeholder="21"
-                disabled={isAddingType}
-              />
-            </div>
-            <div>
-              <Label>Color</Label>
-              <Input
-                type="color"
-                value={newType.color}
-                onChange={(e) => setNewType(prev => ({ ...prev, color: e.target.value }))}
-                disabled={isAddingType}
-              />
-            </div>
-          </div>
-          <Button
-            onClick={addLeaveType}
-            className="bg-blue-600 hover:bg-blue-700"
-            disabled={isAddingType || loading}
-          >
-            {isAddingType ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4 mr-2" />
-            )}
-            Add Leave Type
-          </Button>
-        </div>
-
-        {/* Current Leave Types */}
-        <div className="space-y-2">
-          <h4 className="font-medium">Current Leave Types</h4>
-          {loading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            types.map((type) => (
-              <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: type.color }}
-                  />
-                  <span className="font-medium">{type.name}</span>
-                  <span className="text-sm text-muted-foreground">({type.daysAllowed} days)</span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => removeLeaveType(type.id)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  Remove
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default function LeaveManagement() {
-  // State management
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+export default function HRLeaveManagement() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [typeFilter, setTypeFilter] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Dialog states
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [leaveTypeDialogOpen, setLeaveTypeDialogOpen] = useState(false);
-  const [addLeaveDialogOpen, setAddLeaveDialogOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
+  const [approvalComments, setApprovalComments] = useState('');
 
-  // Form state
-  const [newLeaveForm, setNewLeaveForm] = useState({
-    employeeId: 'NONE',
-    type: 'NONE',
-    startDate: '',
-    endDate: '',
-    reason: ''
+  // Leave type form state
+  const [leaveTypeForm, setLeaveTypeForm] = useState({
+    name: '',
+    description: '',
+    maxDays: 20,
+    accrualRate: 1.67,
+    carryForward: true,
+    requiresApproval: true,
+    color: '#3B82F6'
   });
 
-  // Initialize Firebase data and set up real-time listeners
+  // Load data on component mount
   useEffect(() => {
-    let unsubscribeRequests: (() => void) | undefined;
-    let unsubscribeTypes: (() => void) | undefined;
-    let unsubscribeEmployees: (() => void) | undefined;
-
-    const initializeData = async () => {
-      try {
-        setLoading(true);
-
-        // Initialize default data if needed
-        await initializeDefaultData();
-
-        // Set up real-time listeners
-        unsubscribeRequests = leaveRequestService.subscribe((requests) => {
-          setRequests(requests);
-        });
-
-        unsubscribeTypes = leaveTypeService.subscribe((types) => {
-          setLeaveTypes(types);
-        });
-
-        unsubscribeEmployees = employeeService.subscribe((employees) => {
-          setEmployees(employees);
-        });
-
-        setLoading(false);
-      } catch (error) {
-        console.error('Error initializing data:', error);
-        setError(handleFirebaseError(error));
-        setLoading(false);
-      }
-    };
-
-    initializeData();
-
-    // Cleanup listeners on unmount
-    return () => {
-      if (unsubscribeRequests) unsubscribeRequests();
-      if (unsubscribeTypes) unsubscribeTypes();
-      if (unsubscribeEmployees) unsubscribeEmployees();
-    };
+    loadData();
   }, []);
 
-  // Clear messages after 5 seconds
-  useEffect(() => {
-    if (success || error) {
-      const timer = setTimeout(() => {
-        setSuccess('');
-        setError('');
-      }, 5000);
-      return () => clearTimeout(timer);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [types, requests] = await Promise.all([
+        leaveService.getLeaveTypes(),
+        leaveService.getAllLeaveRequests()
+      ]);
+
+      setLeaveTypes(types);
+      setLeaveRequests(requests);
+    } catch (err) {
+      setError('Failed to load leave data');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  }, [success, error]);
-
-  // Calculate total days between dates
-  const calculateDays = (start: string, end: string): number => {
-    return dataTransforms.calculateDays(start, end);
   };
 
-  // Format date for display
-  const formatRequestDate = (date: any): string => {
-    if (!date) return '';
-    if (typeof date === 'string') return new Date(date).toLocaleDateString();
-    if (date.toDate) return date.toDate().toLocaleDateString();
-    return new Date(date).toLocaleDateString();
-  };
-
-  // Filter requests
-  const filteredRequests = useMemo(() => {
-    return requests.filter(request => {
-      const matchesStatus = statusFilter === 'ALL' || request.status === statusFilter;
-      const matchesType = typeFilter === 'ALL' || request.type === typeFilter;
-      const matchesSearch = !searchQuery ||
-        request.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.type.toLowerCase().includes(searchQuery.toLowerCase());
-
-      return matchesStatus && matchesType && matchesSearch;
-    });
-  }, [requests, statusFilter, typeFilter, searchQuery]);
-
-  // Handle approve request
-  const handleApprove = async () => {
+  const handleApproveRequest = async () => {
     if (!selectedRequest) return;
 
-    setActionLoading(true);
+    setSubmitting(true);
     try {
-      await leaveRequestService.approve(selectedRequest.id, 'HR Manager');
-      setSuccess(`Leave request approved for ${selectedRequest.employeeName}`);
-      setDetailsOpen(false);
-    } catch (error) {
-      setError(handleFirebaseError(error));
+      const success = await leaveService.approveLeaveRequest(
+        selectedRequest.id,
+        'HR Manager', // This would come from auth context
+        approvalComments
+      );
+
+      if (success) {
+        setShowApprovalModal(false);
+        setSelectedRequest(null);
+        setApprovalComments('');
+        await loadData();
+      } else {
+        setError('Failed to approve leave request');
+      }
+    } catch (err) {
+      setError('Failed to approve leave request');
+      console.error(err);
     } finally {
-      setActionLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // Handle reject request
-  const handleReject = async () => {
+  const handleRejectRequest = async () => {
     if (!selectedRequest) return;
 
-    setActionLoading(true);
+    setSubmitting(true);
     try {
-      await leaveRequestService.reject(selectedRequest.id, 'HR Manager');
-      setSuccess(`Leave request rejected for ${selectedRequest.employeeName}`);
-      setDetailsOpen(false);
-    } catch (error) {
-      setError(handleFirebaseError(error));
+      const success = await leaveService.rejectLeaveRequest(
+        selectedRequest.id,
+        'HR Manager', // This would come from auth context
+        approvalComments
+      );
+
+      if (success) {
+        setShowApprovalModal(false);
+        setSelectedRequest(null);
+        setApprovalComments('');
+        await loadData();
+      } else {
+        setError('Failed to reject leave request');
+      }
+    } catch (err) {
+      setError('Failed to reject leave request');
+      console.error(err);
     } finally {
-      setActionLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // Handle add new leave request
-  const handleAddLeave = async () => {
-    if (newLeaveForm.employeeId === 'NONE' || newLeaveForm.type === 'NONE' || !newLeaveForm.startDate || !newLeaveForm.endDate) {
+  const handleCreateLeaveType = async () => {
+    if (!leaveTypeForm.name || !leaveTypeForm.description) {
       setError('Please fill in all required fields');
       return;
     }
 
-    setActionLoading(true);
+    setSubmitting(true);
     try {
-      const selectedEmployee = employees.find(emp => emp.id === newLeaveForm.employeeId);
-      const requestData = dataTransforms.formatLeaveRequest(newLeaveForm, selectedEmployee);
+      const success = await leaveService.createLeaveType(leaveTypeForm);
 
-      await leaveRequestService.add(requestData);
-      setSuccess(`Leave request submitted for ${requestData.employeeName}`);
-      setAddLeaveDialogOpen(false);
-      setNewLeaveForm({ employeeId: 'NONE', type: 'NONE', startDate: '', endDate: '', reason: '' });
-    } catch (error) {
-      setError(handleFirebaseError(error));
+      if (success) {
+        setShowLeaveTypeModal(false);
+        setLeaveTypeForm({
+          name: '',
+          description: '',
+          maxDays: 20,
+          accrualRate: 1.67,
+          carryForward: true,
+          requiresApproval: true,
+          color: '#3B82F6'
+        });
+        await loadData();
+      } else {
+        setError('Failed to create leave type');
+      }
+    } catch (err) {
+      setError('Failed to create leave type');
+      console.error(err);
     } finally {
-      setActionLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // Handle leave type updates
-  const handleLeaveTypeUpdate = () => {
-    // The real-time listener will automatically update the data
+  const openApprovalModal = (request: LeaveRequest, action: 'approve' | 'reject') => {
+    setSelectedRequest(request);
+    setApprovalAction(action);
+    setApprovalComments('');
+    setShowApprovalModal(true);
   };
 
-  // Summary statistics
-  const totalRequests = requests.length;
-  const pendingRequests = requests.filter(r => r.status === 'Pending').length;
-  const approvedRequests = requests.filter(r => r.status === 'Approved').length;
-  const rejectedRequests = requests.filter(r => r.status === 'Rejected').length;
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { variant: 'secondary', text: 'Pending', icon: Clock },
+      approved: { variant: 'default', text: 'Approved', icon: CheckCircle },
+      rejected: { variant: 'destructive', text: 'Rejected', icon: XCircle },
+      cancelled: { variant: 'outline', text: 'Cancelled', icon: XCircle }
+    };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant as any} className="flex items-center space-x-1">
+        <Icon className="h-3 w-3" />
+        <span>{config.text}</span>
+      </Badge>
+    );
+  };
+
+  const getPendingRequests = () => leaveRequests.filter(req => req.status === 'pending');
+  const getApprovedRequests = () => leaveRequests.filter(req => req.status === 'approved');
+  const getRejectedRequests = () => leaveRequests.filter(req => req.status === 'rejected');
 
   if (loading) {
     return (
-      <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading leave management data...</p>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p>Loading leave management...</p>
+            </div>
           </div>
         </div>
       </div>
@@ -570,404 +211,425 @@ export default function LeaveManagement() {
   }
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-      {/* Success/Error Messages */}
-      {success && (
-        <Alert className="mb-6 border-green-200 bg-green-50 text-green-800">
-          <CheckCircle className="h-4 w-4" />
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert className="mb-6 border-red-200 bg-red-50 text-red-800">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
-            <Calendar className="h-6 w-6 text-violet-600 dark:text-violet-400" />
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">
-              Leave Management
-            </h1>
-            <p className="text-muted-foreground text-sm">Manage employee leave requests and policies</p>
+            <h1 className="text-3xl font-bold text-foreground">Leave Management</h1>
+            <p className="text-muted-foreground mt-2">
+              Manage employee leave requests and leave types
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowLeaveTypeModal(true)}
+              className="flex items-center space-x-2"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Manage Leave Types</span>
+            </Button>
+            <Button className="flex items-center space-x-2">
+              <Download className="h-4 w-4" />
+              <span>Export Report</span>
+            </Button>
           </div>
         </div>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Total Requests</p>
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalRequests}</p>
-              </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-950/20 dark:to-yellow-900/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Pending</p>
-                <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">{pendingRequests}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div className="ml-2">
+                  <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                  <p className="text-2xl font-bold">{getPendingRequests().length}</p>
+                </div>
               </div>
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-                <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <div className="ml-2">
+                  <p className="text-sm font-medium text-muted-foreground">Approved</p>
+                  <p className="text-2xl font-bold">{getApprovedRequests().length}</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <XCircle className="h-4 w-4 text-red-600" />
+                <div className="ml-2">
+                  <p className="text-sm font-medium text-muted-foreground">Rejected</p>
+                  <p className="text-2xl font-bold">{getRejectedRequests().length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Users className="h-4 w-4 text-blue-600" />
+                <div className="ml-2">
+                  <p className="text-sm font-medium text-muted-foreground">Total Requests</p>
+                  <p className="text-2xl font-bold">{leaveRequests.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Approved</p>
-                <p className="text-3xl font-bold text-green-600 dark:text-green-400">{approvedRequests}</p>
-              </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="pending" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="pending">Pending ({getPendingRequests().length})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({getApprovedRequests().length})</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected ({getRejectedRequests().length})</TabsTrigger>
+            <TabsTrigger value="types">Leave Types</TabsTrigger>
+          </TabsList>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Rejected</p>
-                <p className="text-3xl font-bold text-red-600 dark:text-red-400">{rejectedRequests}</p>
-              </div>
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
-                <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Actions and Filters */}
-      <Card className="mb-8 border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold">Filters & Actions</h3>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                className="bg-violet-600 hover:bg-violet-700 text-white"
-                onClick={() => setAddLeaveDialogOpen(true)}
-                disabled={actionLoading}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Leave Request
-              </Button>
-              <Button
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setLeaveTypeDialogOpen(true)}
-                disabled={actionLoading}
-              >
-                Manage Leave Types
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by employee, department, or leave type..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Statuses</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Approved">Approved</SelectItem>
-                <SelectItem value="Rejected">Rejected</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Type Filter */}
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="All Leave Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Leave Types</SelectItem>
-                {leaveTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Leave Requests Table */}
-      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">Leave Requests ({filteredRequests.length})</h3>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {filteredRequests.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-medium text-muted-foreground mb-2">No leave requests found</p>
-              <p className="text-sm text-muted-foreground">
-                {requests.length === 0 ? 'No requests have been submitted yet.' : 'Try adjusting your filters.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-muted">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Employee</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Duration</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Submitted</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRequests.map((request) => (
-                    <tr key={request.id} className="border-b border-muted/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                            <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{request.employeeName}</p>
-                            <p className="text-sm text-muted-foreground">{request.department}</p>
-                          </div>
+          {/* Pending Requests */}
+          <TabsContent value="pending" className="space-y-4">
+            <div className="space-y-4">
+              {getPendingRequests().map(request => (
+                <Card key={request.id}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-semibold">{request.leaveTypeName}</h3>
+                          {getStatusBadge(request.status)}
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{
-                              backgroundColor: leaveTypes.find(t => t.name === request.type)?.color || '#3B82F6'
-                            }}
-                          />
-                          <span className="font-medium">{request.type}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div>
-                          <p className="font-medium">{request.totalDays} days</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatRequestDate(request.startDate)} - {formatRequestDate(request.endDate)}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge
-                          className={
-                            request.status === 'Pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                              request.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
-                                request.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
-                                  'bg-gray-100 text-gray-800 border-gray-200'
-                          }
-                        >
-                          {request.status}
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground">
-                        {formatRequestDate(request.submittedDate)}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex justify-end gap-2">
+                        <p className="text-sm text-muted-foreground">
+                          Employee: {request.employeeId}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(request.startDate, 'MMM dd')} - {format(request.endDate, 'MMM dd, yyyy')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {request.totalDays} day{request.totalDays !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-sm">{request.reason}</p>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Submitted: {format(request.submittedAt, 'MMM dd, yyyy')}
+                        </p>
+                        <div className="flex space-x-2">
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedRequest(request);
-                              setDetailsOpen(true);
-                            }}
+                            onClick={() => openApprovalModal(request, 'approve')}
+                            className="bg-green-600 hover:bg-green-700"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => openApprovalModal(request, 'reject')}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Reject
                           </Button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {getPendingRequests().length === 0 && (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Pending Requests</h3>
+                      <p className="text-muted-foreground">
+                        All leave requests have been processed.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </TabsContent>
 
-      {/* Leave Details Modal */}
-      <LeaveDetailsModal
-        open={detailsOpen}
-        onClose={() => {
-          setDetailsOpen(false);
-          setSelectedRequest(null);
-        }}
-        request={selectedRequest}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        loading={actionLoading}
-      />
-
-      {/* Leave Type Management Dialog */}
-      <Dialog open={leaveTypeDialogOpen} onOpenChange={setLeaveTypeDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Leave Type Management</DialogTitle>
-          </DialogHeader>
-          <LeaveTypeManagement
-            leaveTypes={leaveTypes}
-            onUpdate={handleLeaveTypeUpdate}
-            loading={loading}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Leave Request Dialog */}
-      <Dialog open={addLeaveDialogOpen} onOpenChange={setAddLeaveDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add New Leave Request</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Employee</Label>
-                <Select
-                  value={newLeaveForm.employeeId}
-                  onValueChange={(value) => setNewLeaveForm(prev => ({ ...prev, employeeId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name} - {employee.department}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Leave Type</Label>
-                <Select
-                  value={newLeaveForm.type}
-                  onValueChange={(value) => setNewLeaveForm(prev => ({ ...prev, type: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Leave Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leaveTypes.map((type) => (
-                      <SelectItem key={type.id} value={type.name}>
-                        {type.name} ({type.daysAllowed} days allowed)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Approved Requests */}
+          <TabsContent value="approved" className="space-y-4">
+            <div className="space-y-4">
+              {getApprovedRequests().map(request => (
+                <Card key={request.id}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-semibold">{request.leaveTypeName}</h3>
+                          {getStatusBadge(request.status)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Employee: {request.employeeId}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(request.startDate, 'MMM dd')} - {format(request.endDate, 'MMM dd, yyyy')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {request.totalDays} day{request.totalDays !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-sm">{request.reason}</p>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Approved: {request.reviewedAt ? format(request.reviewedAt, 'MMM dd, yyyy') : 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          By: {request.reviewedBy || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          </TabsContent>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Start Date</Label>
-                <Input
-                  type="date"
-                  value={newLeaveForm.startDate}
-                  onChange={(e) => setNewLeaveForm(prev => ({ ...prev, startDate: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>End Date</Label>
-                <Input
-                  type="date"
-                  value={newLeaveForm.endDate}
-                  onChange={(e) => setNewLeaveForm(prev => ({ ...prev, endDate: e.target.value }))}
-                />
-              </div>
+          {/* Rejected Requests */}
+          <TabsContent value="rejected" className="space-y-4">
+            <div className="space-y-4">
+              {getRejectedRequests().map(request => (
+                <Card key={request.id}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-semibold">{request.leaveTypeName}</h3>
+                          {getStatusBadge(request.status)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Employee: {request.employeeId}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(request.startDate, 'MMM dd')} - {format(request.endDate, 'MMM dd, yyyy')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {request.totalDays} day{request.totalDays !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-sm">{request.reason}</p>
+                        {request.comments && (
+                          <p className="text-sm text-red-600">Reason: {request.comments}</p>
+                        )}
+                      </div>
+                      <div className="text-right space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Rejected: {request.reviewedAt ? format(request.reviewedAt, 'MMM dd, yyyy') : 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          By: {request.reviewedBy || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          </TabsContent>
 
-            {newLeaveForm.startDate && newLeaveForm.endDate && (
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-medium">
-                  Total Days: {calculateDays(newLeaveForm.startDate, newLeaveForm.endDate)} days
-                </p>
-              </div>
-            )}
-
-            <div>
-              <Label>Reason</Label>
-              <Textarea
-                value={newLeaveForm.reason}
-                onChange={(e) => setNewLeaveForm(prev => ({ ...prev, reason: e.target.value }))}
-                placeholder="Please provide a reason for the leave request..."
-                rows={4}
-              />
+          {/* Leave Types */}
+          <TabsContent value="types" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {leaveTypes.map(leaveType => (
+                <Card key={leaveType.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{leaveType.name}</CardTitle>
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: leaveType.color }}
+                      />
+                    </div>
+                    <CardDescription>{leaveType.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Max Days:</span>
+                        <span className="font-medium">{leaveType.maxDays}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Accrual Rate:</span>
+                        <span className="font-medium">{leaveType.accrualRate} days/month</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Carry Forward:</span>
+                        <span className="font-medium">{leaveType.carryForward ? 'Yes' : 'No'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Requires Approval:</span>
+                        <span className="font-medium">{leaveType.requiresApproval ? 'Yes' : 'No'}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          </TabsContent>
+        </Tabs>
 
-            <div className="flex gap-3">
-              <Button
-                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
-                onClick={handleAddLeave}
-                disabled={actionLoading}
-              >
-                {actionLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Submit Request
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setAddLeaveDialogOpen(false)}
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-            </div>
+        {/* Approval Modal */}
+        {showApprovalModal && selectedRequest && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>
+                  {approvalAction === 'approve' ? 'Approve' : 'Reject'} Leave Request
+                </CardTitle>
+                <CardDescription>
+                  {approvalAction === 'approve'
+                    ? 'Are you sure you want to approve this leave request?'
+                    : 'Are you sure you want to reject this leave request?'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm"><strong>Employee:</strong> {selectedRequest.employeeId}</p>
+                  <p className="text-sm"><strong>Leave Type:</strong> {selectedRequest.leaveTypeName}</p>
+                  <p className="text-sm"><strong>Dates:</strong> {format(selectedRequest.startDate, 'MMM dd')} - {format(selectedRequest.endDate, 'MMM dd, yyyy')}</p>
+                  <p className="text-sm"><strong>Days:</strong> {selectedRequest.totalDays}</p>
+                  <p className="text-sm"><strong>Reason:</strong> {selectedRequest.reason}</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="comments">Comments</Label>
+                  <Textarea
+                    id="comments"
+                    placeholder={`Enter comments for ${approvalAction}...`}
+                    value={approvalComments}
+                    onChange={(e) => setApprovalComments(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={approvalAction === 'approve' ? handleApproveRequest : handleRejectRequest}
+                    disabled={submitting}
+                    className={`flex-1 ${approvalAction === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      `${approvalAction === 'approve' ? 'Approve' : 'Reject'} Request`
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowApprovalModal(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+
+        {/* Leave Type Modal */}
+        {showLeaveTypeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Create Leave Type</CardTitle>
+                <CardDescription>
+                  Add a new leave type for employees
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g., Annual Leave"
+                    value={leaveTypeForm.name}
+                    onChange={(e) => setLeaveTypeForm(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe this leave type..."
+                    value={leaveTypeForm.description}
+                    onChange={(e) => setLeaveTypeForm(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="maxDays">Max Days</Label>
+                    <Input
+                      id="maxDays"
+                      type="number"
+                      value={leaveTypeForm.maxDays}
+                      onChange={(e) => setLeaveTypeForm(prev => ({ ...prev, maxDays: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="accrualRate">Accrual Rate (days/month)</Label>
+                    <Input
+                      id="accrualRate"
+                      type="number"
+                      step="0.01"
+                      value={leaveTypeForm.accrualRate}
+                      onChange={(e) => setLeaveTypeForm(prev => ({ ...prev, accrualRate: parseFloat(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleCreateLeaveType}
+                    disabled={submitting}
+                    className="flex-1"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Leave Type'
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowLeaveTypeModal(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

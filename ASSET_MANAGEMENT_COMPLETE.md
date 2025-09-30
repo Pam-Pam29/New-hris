@@ -376,3 +376,4 @@ The foundation is **100% complete** with Firebase backend, type-safe interfaces,
 **Features:** Asset CRUD, Assignments, Requests, Starter Kits, Real-time Sync
 
 🚀 **Ready to transform your HRIS asset management!**
+

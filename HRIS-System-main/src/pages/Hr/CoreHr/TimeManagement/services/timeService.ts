@@ -1,8 +1,8 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import { getServiceConfig, initializeFirebase } from '../../../../../config/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { AttendanceRecord, TimeAdjustment, TimeOffRequest } from '../types';
-import { isFirebaseConfigured } from '@/config/firebase';
+import { isFirebaseConfigured } from '../../../../../config/firebase';
 
 export interface ITimeService {
   // Attendance Records
@@ -11,14 +11,14 @@ export interface ITimeService {
   createAttendanceRecord(record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord>;
   updateAttendanceRecord(id: string, record: Partial<AttendanceRecord>): Promise<AttendanceRecord>;
   deleteAttendanceRecord(id: string): Promise<void>;
-  
+
   // Time Adjustments
   getTimeAdjustments(): Promise<TimeAdjustment[]>;
   getTimeAdjustmentById(id: string): Promise<TimeAdjustment | null>;
   createTimeAdjustment(adjustment: Omit<TimeAdjustment, 'id'>): Promise<TimeAdjustment>;
   updateTimeAdjustment(id: string, adjustment: Partial<TimeAdjustment>): Promise<TimeAdjustment>;
   deleteTimeAdjustment(id: string): Promise<void>;
-  
+
   // Time Off Requests
   getTimeOffRequests(): Promise<TimeOffRequest[]>;
   getTimeOffRequestById(id: string): Promise<TimeOffRequest | null>;
@@ -143,7 +143,38 @@ export class FirebaseTimeService implements ITimeService {
 }
 
 export class MockTimeService implements ITimeService {
-  private attendanceRecords: AttendanceRecord[] = [];
+  private attendanceRecords: AttendanceRecord[] = [
+    {
+      id: '1',
+      employee: 'John Doe',
+      date: '2024-01-15',
+      status: 'Present',
+      clockIn: '09:00',
+      clockOut: '17:00',
+      notes: 'Regular working day',
+      reason: ''
+    },
+    {
+      id: '2',
+      employee: 'Jane Smith',
+      date: '2024-01-15',
+      status: 'Late',
+      clockIn: '09:30',
+      clockOut: '17:30',
+      notes: 'Traffic delay',
+      reason: 'traffic'
+    },
+    {
+      id: '3',
+      employee: 'Mike Johnson',
+      date: '2024-01-15',
+      status: 'Present',
+      clockIn: '08:45',
+      clockOut: '16:45',
+      notes: 'Early start, early finish',
+      reason: ''
+    }
+  ];
   private timeAdjustments: TimeAdjustment[] = [];
   private timeOffRequests: TimeOffRequest[] = [];
 
@@ -230,9 +261,13 @@ export class TimeServiceFactory {
   static async createTimeService(): Promise<ITimeService> {
     await initializeFirebase();
     const config = await getServiceConfig();
+
     if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+      console.log('TimeServiceFactory: Using FirebaseTimeService for Time Management');
       return new FirebaseTimeService(config.firebase.db as Firestore);
     }
+
+    console.log('TimeServiceFactory: Using MockTimeService for Time Management');
     return new MockTimeService();
   }
 }

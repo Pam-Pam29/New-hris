@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Select } from '@/components/atoms/Select';
-import { TypographyP } from '@/components/ui/typography';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../../../components/ui/dialog';
+import { Button } from '../../../../../components/ui/button';
+import { Select } from '../../../../../components/atoms/Select';
+import { TypographyP } from '../../../../../components/ui/typography';
 import { Package, User } from 'lucide-react';
 
 import { Asset } from '../types';
@@ -36,9 +36,9 @@ export const AssetAssignmentDialog: React.FC<AssetAssignmentDialogProps> = ({
 
   const handleAction = async () => {
     if (!selectedEmployee && isAvailable) return;
-    
+
     setLoading(true);
-    
+
     // Simulate API call
     setTimeout(() => {
       if (isAvailable) {
@@ -50,7 +50,7 @@ export const AssetAssignmentDialog: React.FC<AssetAssignmentDialogProps> = ({
           onUnassign(asset.id);
         }
       }
-      
+
       setLoading(false);
       setSelectedEmployee('');
       onOpenChange(false);
@@ -76,8 +76,16 @@ export const AssetAssignmentDialog: React.FC<AssetAssignmentDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{getDialogTitle()}</DialogTitle>
+          <DialogDescription>
+            {isAvailable
+              ? 'Select an employee to assign this asset to.'
+              : isAssigned
+                ? 'Transfer this asset to another employee or unassign it.'
+                : 'Manage asset assignment settings.'
+            }
+          </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           {/* Asset Info */}
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">

@@ -1,49 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { TypographyH2 } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useToast } from '@/hooks/use-toast';
-import { 
-  DollarSign, 
-  Users, 
-  TrendingUp, 
-  Calendar, 
-  Download, 
-  Plus, 
-  Search, 
-  Filter, 
-  FileText, 
-  AlertCircle, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  CheckCircle2, 
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
+import { TypographyH2 } from '../../../components/ui/typography';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Badge } from '../../../components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../../components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
+import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { useToast } from '../../../hooks/use-toast';
+import {
+  DollarSign,
+  Users,
+  TrendingUp,
+  Calendar,
+  Download,
+  Plus,
+  Search,
+  Filter,
+  FileText,
+  AlertCircle,
+  Eye,
+  Edit,
+  Trash2,
+  CheckCircle2,
   Building,
   Briefcase
 } from 'lucide-react';
 
 // Import Firebase services
-import { getServiceConfig } from '@/config/firebase';
-import { PayrollRecord } from '@/services/payrollService';
+import { getServiceConfig, initializeFirebase } from '../../../config/firebase';
+import { PayrollRecord } from '../../../services/payrollService';
 
 // Firebase service instances
-const { db } = getServiceConfig();
 let payrollServiceInstance: any = null;
 
 // Initialize services
 const getPayrollService = async () => {
   if (!payrollServiceInstance) {
     const { FirebasePayrollService } = await import('../../../services/payrollService');
-    payrollServiceInstance = new FirebasePayrollService(db);
+    const config = await getServiceConfig();
+    if (config.firebase.enabled && config.firebase.db) {
+      payrollServiceInstance = new FirebasePayrollService(config.firebase.db);
+    }
   }
   return payrollServiceInstance;
 };
@@ -52,14 +54,14 @@ export default function Payroll() {
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // State for dialogs
   const [addPayrollOpen, setAddPayrollOpen] = useState(false);
   const [viewPayrollOpen, setViewPayrollOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<PayrollRecord | null>(null);
   const [payrollToDelete, setPayrollToDelete] = useState<string | null>(null);
-  
+
   // Form states
   const [newPayroll, setNewPayroll] = useState({
     employeeId: '',
@@ -74,43 +76,43 @@ export default function Payroll() {
     paymentDate: null,
     status: 'pending' as const
   });
-  
+
   const { toast } = useToast();
-  
+
   // State for department data
-  const [departmentData, setDepartmentData] = useState<{[key: string]: {count: number, total: number, average: number}}>({});
-  
+  const [departmentData, setDepartmentData] = useState<{ [key: string]: { count: number, total: number, average: number } }>({});
+
   // State for status counts
-  const [statusCounts, setStatusCounts] = useState<{[key: string]: number}>({});
-  
+  const [statusCounts, setStatusCounts] = useState<{ [key: string]: number }>({});
+
   // Fetch data on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
+
         // Get payroll service
         const payrollService = await getPayrollService();
-        
+
         // Fetch payroll records
         const recordsData = await payrollService.getPayrollRecords();
         setPayrollRecords(recordsData);
-        
+
         // Get active payroll records (not archived)
         const activeRecords = await payrollService.getPayrollRecordsByStatus('paid');
         const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
         const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
-        
+
         // Set status counts
         setStatusCounts({
           paid: activeRecords.length,
           pending: pendingRecords.length,
           processing: processingRecords.length
         });
-        
+
         // Process department data
-        const deptData: {[key: string]: {count: number, total: number, average: number}} = {};
-        
+        const deptData: { [key: string]: { count: number, total: number, average: number } } = {};
+
         // Group by department
         recordsData.forEach(record => {
           if (!deptData[record.department]) {
@@ -120,16 +122,16 @@ export default function Payroll() {
               average: 0
             };
           }
-          
+
           deptData[record.department].count++;
           deptData[record.department].total += record.baseSalary + (record.bonus || 0);
         });
-        
+
         // Calculate averages
         Object.keys(deptData).forEach(dept => {
           deptData[dept].average = deptData[dept].total / deptData[dept].count;
         });
-        
+
         setDepartmentData(deptData);
         setLoading(false);
       } catch (err) {
@@ -138,34 +140,34 @@ export default function Payroll() {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
-  
+
   // Handle deleting a payroll record
   const handleDeletePayroll = async (id: string) => {
     try {
       const payrollService = await getPayrollService();
       await payrollService.deletePayrollRecord(id);
-      
+
       // Update local state
       setPayrollRecords(prev => prev.filter(record => record.id !== id));
-      
+
       // Refresh status counts
       const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
       const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
       const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
-      
+
       setStatusCounts({
         paid: paidRecords.length,
         pending: pendingRecords.length,
         processing: processingRecords.length
       });
-      
+
       // Refresh department data
       const recordsData = await payrollService.getPayrollRecords();
-      const deptData: {[key: string]: {count: number, total: number, average: number}} = {};
-      
+      const deptData: { [key: string]: { count: number, total: number, average: number } } = {};
+
       // Group by department
       recordsData.forEach(record => {
         if (!deptData[record.department]) {
@@ -175,18 +177,18 @@ export default function Payroll() {
             average: 0
           };
         }
-        
+
         deptData[record.department].count++;
         deptData[record.department].total += record.baseSalary + (record.bonus || 0);
       });
-      
+
       // Calculate averages
       Object.keys(deptData).forEach(dept => {
         deptData[dept].average = deptData[dept].total / deptData[dept].count;
       });
-      
+
       setDepartmentData(deptData);
-      
+
       toast({
         title: 'Success',
         description: 'Payroll record deleted successfully',
@@ -200,42 +202,42 @@ export default function Payroll() {
       });
     }
   };
-  
+
   // Handle adding a new payroll record
   const handleAddPayroll = async () => {
     try {
       const payrollService = await getPayrollService();
-      
+
       // Calculate net pay
       const netPay = newPayroll.baseSalary + newPayroll.bonus - newPayroll.deductions;
-      
+
       // Create payroll record
       const payrollToAdd = {
         ...newPayroll,
         netPay,
         paymentDate: newPayroll.paymentDate || new Date(),
       };
-      
+
       await payrollService.createPayrollRecord(payrollToAdd);
-      
+
       // Refresh payroll records list
       const recordsData = await payrollService.getPayrollRecords();
       setPayrollRecords(recordsData);
-      
+
       // Refresh status counts
       const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
       const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
       const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
-      
+
       setStatusCounts({
         paid: paidRecords.length,
         pending: pendingRecords.length,
         processing: processingRecords.length
       });
-      
+
       // Refresh department data
-      const deptData: {[key: string]: {count: number, total: number, average: number}} = {};
-      
+      const deptData: { [key: string]: { count: number, total: number, average: number } } = {};
+
       // Group by department
       recordsData.forEach(record => {
         if (!deptData[record.department]) {
@@ -245,18 +247,18 @@ export default function Payroll() {
             average: 0
           };
         }
-        
+
         deptData[record.department].count++;
         deptData[record.department].total += record.baseSalary + (record.bonus || 0);
       });
-      
+
       // Calculate averages
       Object.keys(deptData).forEach(dept => {
         deptData[dept].average = deptData[dept].total / deptData[dept].count;
       });
-      
+
       setDepartmentData(deptData);
-      
+
       // Close dialog and reset form
       setAddPayrollOpen(false);
       setNewPayroll({
@@ -272,7 +274,7 @@ export default function Payroll() {
         paymentDate: null,
         status: 'pending'
       });
-      
+
       toast({
         title: 'Success',
         description: 'Payroll record added successfully',
@@ -286,43 +288,43 @@ export default function Payroll() {
       });
     }
   };
-  
+
   // View payroll details
   const viewPayroll = (payroll: PayrollRecord) => {
     setSelectedPayroll(payroll);
     setViewPayrollOpen(true);
   };
-  
+
   // Update payroll status
   const handleUpdatePayrollStatus = async (id: string, status: PayrollRecord['status']) => {
     try {
       const payrollService = await getPayrollService();
-      
+
       await payrollService.updatePayrollRecord(id, { status });
-      
+
       // Update local state
-      setPayrollRecords(prev => 
-        prev.map(record => 
+      setPayrollRecords(prev =>
+        prev.map(record =>
           record.id === id ? { ...record, status } : record
         )
       );
-      
+
       // If we're viewing this record, update the selected record too
       if (selectedPayroll && selectedPayroll.id === id) {
         setSelectedPayroll({ ...selectedPayroll, status });
       }
-      
+
       // Refresh status counts
       const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
       const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
       const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
-      
+
       setStatusCounts({
         paid: paidRecords.length,
         pending: pendingRecords.length,
         processing: processingRecords.length
       });
-      
+
       toast({
         title: 'Success',
         description: `Payroll status updated to ${status}`,
@@ -336,15 +338,15 @@ export default function Payroll() {
       });
     }
   };
-  
+
   // Calculate total payroll amount
   const totalPayroll = payrollRecords.reduce((sum, record) => sum + record.netPay, 0);
-  
+
   // Calculate average salary
-  const averageSalary = payrollRecords.length > 0 
-    ? payrollRecords.reduce((sum, record) => sum + record.baseSalary, 0) / payrollRecords.length 
+  const averageSalary = payrollRecords.length > 0
+    ? payrollRecords.reduce((sum, record) => sum + record.baseSalary, 0) / payrollRecords.length
     : 0;
-  
+
   return (
     <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <div className="flex justify-between items-center mb-8">
@@ -465,15 +467,15 @@ export default function Payroll() {
               )}
             </CardContent>
           </Card>
-          
+
           {/* Payroll Records */}
           <div className="mt-8">
             <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Payroll Records</CardTitle>
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Search employees..." 
+                  <Input
+                    placeholder="Search employees..."
                     className="max-w-xs"
                   />
                   <Button variant="outline" size="icon">
@@ -527,26 +529,26 @@ export default function Payroll() {
                               <TableCell>${record.baseSalary.toLocaleString()}</TableCell>
                               <TableCell>${record.netPay.toLocaleString()}</TableCell>
                               <TableCell>
-                                <Badge 
-                                  variant={record.status === 'paid' ? 'default' : 
-                                         record.status === 'pending' ? 'outline' : 
-                                         record.status === 'processing' ? 'secondary' : 'destructive'}
+                                <Badge
+                                  variant={record.status === 'paid' ? 'default' :
+                                    record.status === 'pending' ? 'outline' :
+                                      record.status === 'processing' ? 'secondary' : 'destructive'}
                                 >
                                   {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                                 </Badge>
                               </TableCell>
                               <TableCell>
                                 <div className="flex space-x-2">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => viewPayroll(record)}
                                   >
                                     <Eye className="h-4 w-4 mr-1" />
                                     View
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     className="text-destructive hover:text-destructive"
                                     onClick={() => {
@@ -570,7 +572,7 @@ export default function Payroll() {
             </Card>
           </div>
         </div>
-        
+
         {/* Add Payroll Dialog */}
         <Dialog open={addPayrollOpen} onOpenChange={setAddPayrollOpen}>
           <DialogContent className="sm:max-w-[600px]">
@@ -601,7 +603,7 @@ export default function Payroll() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="department">Department</Label>
@@ -630,7 +632,7 @@ export default function Payroll() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="baseSalary">Base Salary</Label>
@@ -663,7 +665,7 @@ export default function Payroll() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="payPeriod">Pay Period</Label>
@@ -707,7 +709,7 @@ export default function Payroll() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
           <DialogContent className="sm:max-w-[425px]">
@@ -719,8 +721,8 @@ export default function Payroll() {
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 onClick={() => {
                   if (payrollToDelete) {
                     handleDeletePayroll(payrollToDelete);
@@ -734,7 +736,7 @@ export default function Payroll() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+
         {/* View Payroll Dialog */}
         <Dialog open={viewPayrollOpen} onOpenChange={setViewPayrollOpen}>
           <DialogContent className="sm:max-w-[600px]">
@@ -758,7 +760,7 @@ export default function Payroll() {
                     <p className="text-xs text-muted-foreground">{selectedPayroll.position}</p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <h4 className="text-sm font-medium">Base Salary</h4>
@@ -773,7 +775,7 @@ export default function Payroll() {
                     <p className="text-sm">${selectedPayroll.deductions.toLocaleString()}</p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <h4 className="text-sm font-medium">Net Pay</h4>
@@ -785,39 +787,39 @@ export default function Payroll() {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium">Status</h4>
-                    <Badge 
-                      variant={selectedPayroll.status === 'paid' ? 'default' : 
-                              selectedPayroll.status === 'pending' ? 'outline' : 
-                              selectedPayroll.status === 'processing' ? 'secondary' : 'destructive'}
+                    <Badge
+                      variant={selectedPayroll.status === 'paid' ? 'default' :
+                        selectedPayroll.status === 'pending' ? 'outline' :
+                          selectedPayroll.status === 'processing' ? 'secondary' : 'destructive'}
                     >
                       {selectedPayroll.status.charAt(0).toUpperCase() + selectedPayroll.status.slice(1)}
                     </Badge>
                   </div>
                 </div>
-                
+
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">Payment Actions</h4>
                   <div className="flex gap-2">
                     {selectedPayroll.status === 'pending' && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={() => handleUpdatePayrollStatus(selectedPayroll.id, 'processing')}
                       >
                         Start Processing
                       </Button>
                     )}
                     {selectedPayroll.status === 'processing' && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={() => handleUpdatePayrollStatus(selectedPayroll.id, 'paid')}
                       >
                         Mark as Paid
                       </Button>
                     )}
                     {selectedPayroll.status !== 'cancelled' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleUpdatePayrollStatus(selectedPayroll.id, 'cancelled')}
                       >
                         Cancel Payment
@@ -901,7 +903,7 @@ export default function Payroll() {
               Payroll System Coming Soon
             </h3>
             <p className="text-amber-700 dark:text-amber-300">
-              We're working on a comprehensive payroll system that will include salary management, 
+              We're working on a comprehensive payroll system that will include salary management,
               benefits administration, tax calculations, and more. Stay tuned for updates!
             </p>
           </div>

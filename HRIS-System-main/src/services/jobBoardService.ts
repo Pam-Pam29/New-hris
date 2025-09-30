@@ -55,7 +55,7 @@ export interface IJobBoardService {
     updateCandidate(id: string, candidate: Partial<Candidate>): Promise<void>;
 }
 
-class FirebaseJobBoardService implements IJobBoardService {
+export class FirebaseJobBoardService implements IJobBoardService {
     constructor(private db: Firestore) { }
 
     // Job Posting methods
@@ -150,7 +150,7 @@ class FirebaseJobBoardService implements IJobBoardService {
     }
 }
 
-class MockJobBoardService implements IJobBoardService {
+export class MockJobBoardService implements IJobBoardService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async getJobPostings(): Promise<JobPosting[]> {
         return [];

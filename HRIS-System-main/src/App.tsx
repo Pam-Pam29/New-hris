@@ -1,68 +1,83 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Dashboard from './pages/Hr/Dashboard';
-import { Sidebar } from './components/organisms/Sidebar';
 import React from 'react';
-import FirebaseConnectionTest from './components/FirebaseConnectionTest';
-import EmployeeDirectory from './pages/Hr/CoreHr/EmployeeManagement/EmployeeDirectory';
-import AssetManagement from './pages/Hr/CoreHr/AssetManagement';
-import PolicyManagement from './pages/Hr/CoreHr/PolicyManagement';
-// import OnboardingPage from './pages/Hr/Hiring/Onboarding';
-import LeaveManagement from './pages/Hr/CoreHr/LeaveManagement';
-import TimeManagement from './pages/Hr/CoreHr/TimeManagement';
-import PerformanceManagement from './pages/Hr/CoreHr/PerformanceManagement';
-import Recruitment from './pages/Hr/Hiring/Recruitment';
-import JobBoard from './pages/Hr/Hiring/JobBoard';
-import Payroll from './pages/Hr/Payroll/Payroll';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import HrApp from './App-hr';
+import EmployeeApp from './App-employee';
 
-// Stubs for missing components
-// const Payroll = () => <div>Payroll Page (Coming Soon)</div>;
-// const Wallet = () => <div>Wallet Page (Coming Soon)</div>;
-// const Benefit = () => <div>Benefit Page (Coming Soon)</div>;
-// const Pension = () => <div>Pension Page (Coming Soon)</div>;
-// const Tax = () => <div>Tax Page (Coming Soon)</div>;
+// Platform Selection Component
+const PlatformSelector: React.FC = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center">
+      <div className="max-w-md w-full space-y-8 p-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-foreground mb-2">HRIS System</h1>
+          <p className="text-muted-foreground">Choose your platform</p>
+        </div>
+
+        <div className="space-y-4">
+          <a
+            href="/hr"
+            className="w-full flex items-center justify-center px-6 py-4 border border-border rounded-lg hover:bg-accent transition-colors group"
+          >
+            <div className="text-center">
+              <div className="text-lg font-semibold group-hover:text-accent-foreground">HR Platform</div>
+              <div className="text-sm text-muted-foreground group-hover:text-accent-foreground/80">
+                Manage employees, policies, and performance
+              </div>
+            </div>
+          </a>
+
+          <a
+            href="/employee"
+            className="w-full flex items-center justify-center px-6 py-4 border border-border rounded-lg hover:bg-accent transition-colors group"
+          >
+            <div className="text-center">
+              <div className="text-lg font-semibold group-hover:text-accent-foreground">Employee Portal</div>
+              <div className="text-sm text-muted-foreground group-hover:text-accent-foreground/80">
+                View profile, request leave, manage goals
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
+  console.log('🔄 App: Component rendered');
+
   return (
     <Router>
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 min-h-screen bg-gradient-to-br from-background via-background to-muted/20 text-foreground overflow-hidden">
-          <div className="h-full overflow-y-auto">
-            <Routes>
-              {/* Dashboard Routes */}
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+      <Routes>
+        {/* Platform Selection */}
+        <Route path="/" element={<PlatformSelector />} />
 
-              {/* Core HR Routes */}
-              <Route path="/Hr/CoreHr/EmployeeManagement" element={<EmployeeDirectory />} />
-              <Route path="/Hr/CoreHr/PolicyManagement" element={<PolicyManagement />} />
-              <Route path="/Hr/CoreHr/AssetManagement" element={<AssetManagement />} />
-              <Route path="/Hr/CoreHr/PerformanceManagement" element={<PerformanceManagement />} />
-              <Route path="/Hr/CoreHr/TimeManagement" element={<TimeManagement />} />
-              <Route path="/Hr/CoreHr/LeaveManagement" element={<LeaveManagement />} />
+        {/* HR Platform Routes */}
+        <Route path="/hr/*" element={<HrApp />} />
 
-              {/* Hiring & Onboarding Routes */}
-              <Route path="/Hr/Hiring/Recruitment" element={<Recruitment />} />
-              {/* <Route path="/Hr/Hiring/Onboarding" element={<OnboardingPage />} /> */}
-              <Route path="/Hr/Hiring/JobBoard" element={<JobBoard />} />
-              {/* <Route path="/onboarding/:employeeId" element={<OnboardingPage />} /> */}
+        {/* Employee Platform Routes */}
+        <Route path="/employee/*" element={<EmployeeApp />} />
 
-              {/* Payroll Routes */}
-              <Route path="/Hr/Payroll/Payroll" element={<Payroll />} />
-              {/* <Route path="/Hr/Payroll/Wallet" element={<Wallet />} /> */}
-              {/* <Route path="/Hr/Payroll/Salaries" element={<Salaries />} /> */}
-              {/* <Route path="/Hr/Payroll/Benefit" element={<Benefit />} /> */}
-              {/* <Route path="/Hr/Payroll/Pension" element={<Pension />} /> */}
-              {/* <Route path="/Hr/Payroll/Tax" element={<Tax />} /> */}
+        {/* Legacy Routes for Backward Compatibility */}
+        <Route path="/profile" element={<EmployeeApp />} />
+        <Route path="/dashboard" element={<EmployeeApp />} />
 
-              {/* Legacy Routes (for backward compatibility) */}
-              <Route path="/employee" element={<EmployeeDirectory />} />
-              <Route path="/leavemanagement" element={<LeaveManagement />} />
-              <Route path="/timetracking" element={<TimeManagement />} />
-            </Routes>
+        {/* Fallback */}
+        <Route path="*" element={
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-4">Page Not Found</h1>
+              <p className="text-muted-foreground mb-6">The page you're looking for doesn't exist.</p>
+              <a
+                href="/"
+                className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              >
+                Go Home
+              </a>
+            </div>
           </div>
-        </main>
-      </div>
+        } />
+      </Routes>
     </Router>
   );
 }

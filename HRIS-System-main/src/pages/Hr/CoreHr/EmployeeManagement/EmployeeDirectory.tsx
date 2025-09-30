@@ -1,26 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  UserPlus, 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Calendar,
+import { useState, useEffect } from 'react';
+import {
+  Users,
+  UserPlus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Mail,
+  Phone,
   Building,
   Briefcase,
   CheckCircle,
   Clock,
-  AlertCircle,
   Download,
   Upload,
   Eye,
-  X,
-  Plus
+  X
 } from 'lucide-react';
 
 interface Employee {
@@ -58,6 +53,8 @@ export default function EmployeeDirectory() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedViewEmployee, setSelectedViewEmployee] = useState<Employee | null>(null);
   const [employeeService, setEmployeeService] = useState<IEmployeeService | null>(null);
 
   // Form states
@@ -68,6 +65,11 @@ export default function EmployeeDirectory() {
     department: ''
   });
 
+  // Debug form data changes
+  useEffect(() => {
+    console.log('Form data changed:', formData);
+  }, [formData]);
+
   // Initialize employee service and load employees
   useEffect(() => {
     initializeService();
@@ -76,9 +78,12 @@ export default function EmployeeDirectory() {
   const initializeService = async () => {
     try {
       setLoading(true);
+      console.log('Initializing employee service...');
       const service = await getEmployeeService();
+      console.log('Employee service initialized:', service);
       setEmployeeService(service);
       const data = await service.getEmployees();
+      console.log('Employees loaded:', data);
       setEmployees(data);
     } catch (error) {
       console.error('Error initializing service or loading employees:', error);
@@ -89,15 +94,25 @@ export default function EmployeeDirectory() {
 
   const handleAddEmployee = async () => {
     try {
+      console.log('handleAddEmployee called', { formData, employeeService });
       if (formData.name && formData.role && formData.department && employeeService) {
+        console.log('Creating employee with data:', formData);
         const newEmployee = await employeeService.createEmployee({
           ...formData,
           employmentType: 'Full-time',
           status: 'Active'
         });
+        console.log('Employee created successfully:', newEmployee);
         setEmployees((prev: Employee[]) => [...prev, newEmployee]);
         setShowAddDialog(false);
         setFormData({ name: '', email: '', role: '', department: '' });
+      } else {
+        console.log('Missing required fields or service not available:', {
+          name: formData.name,
+          role: formData.role,
+          department: formData.department,
+          employeeService: !!employeeService
+        });
       }
     } catch (error) {
       console.error('Error adding employee:', error);
@@ -142,6 +157,11 @@ export default function EmployeeDirectory() {
     setShowEditDialog(true);
   };
 
+  const openViewDialog = (employee: Employee) => {
+    setSelectedViewEmployee(employee);
+    setShowViewDialog(true);
+  };
+
   if (loading) {
     return (
       <div className="p-8 min-h-screen animate-fade-in flex items-center justify-center">
@@ -167,6 +187,11 @@ export default function EmployeeDirectory() {
                 Employee Management
               </h1>
               <p className="text-muted-foreground">Manage your workforce efficiently and effectively</p>
+              <div className="mt-2">
+                <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                  Service: {employeeService ? 'Firebase Service' : 'Loading...'}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex gap-3">
@@ -303,9 +328,8 @@ export default function EmployeeDirectory() {
                             e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name)}&background=random&color=fff&size=40`;
                           }}
                         />
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${
-                          employee.status === 'Active' ? 'bg-success' : 'bg-warning'
-                        }`} />
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${employee.status === 'Active' ? 'bg-success' : 'bg-warning'
+                          }`} />
                       </div>
                       <div>
                         <div className="font-semibold text-foreground">{employee.name}</div>
@@ -348,37 +372,39 @@ export default function EmployeeDirectory() {
                       ) : (
                         <Clock className="h-4 w-4 text-warning" />
                       )}
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        employee.status === 'Active' 
-                          ? 'bg-success/10 text-success border border-success/20' 
-                          : 'bg-warning/10 text-warning border border-warning/20'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${employee.status === 'Active'
+                        ? 'bg-success/10 text-success border border-success/20'
+                        : 'bg-warning/10 text-warning border border-warning/20'
+                        }`}>
                         {employee.status}
                       </span>
                     </div>
                   </td>
                   <td>
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => {/* View employee details */}}
-                        className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                        onClick={() => openViewDialog(employee)}
+                        className="flex items-center gap-1 px-3 py-1.5 hover:bg-info/10 text-info rounded-lg transition-colors text-sm"
                         title="View Details"
                       >
                         <Eye className="h-4 w-4" />
+                        <span>View</span>
                       </button>
                       <button
                         onClick={() => openEditDialog(employee)}
-                        className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                        className="flex items-center gap-1 px-3 py-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors text-sm"
                         title="Edit Employee"
                       >
                         <Edit className="h-4 w-4" />
+                        <span>Edit</span>
                       </button>
                       <button
                         onClick={() => handleDeleteEmployee(employee.id.toString())}
-                        className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                        className="flex items-center gap-1 px-3 py-1.5 hover:bg-destructive/10 text-destructive rounded-lg transition-colors text-sm"
                         title="Delete Employee"
                       >
                         <Trash2 className="h-4 w-4" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </td>
@@ -386,7 +412,7 @@ export default function EmployeeDirectory() {
               ))}
             </tbody>
           </table>
-          
+
           {employees.length === 0 && (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -426,7 +452,7 @@ export default function EmployeeDirectory() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Name *</label>
@@ -438,7 +464,7 @@ export default function EmployeeDirectory() {
                     placeholder="Enter employee name"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Email</label>
                   <div className="relative">
@@ -452,7 +478,7 @@ export default function EmployeeDirectory() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Role *</label>
                   <div className="relative">
@@ -466,7 +492,7 @@ export default function EmployeeDirectory() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Department *</label>
                   <div className="relative">
@@ -481,7 +507,7 @@ export default function EmployeeDirectory() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex gap-3 mt-6 pt-4 border-t border-border">
                 <button
                   onClick={() => {
@@ -493,7 +519,10 @@ export default function EmployeeDirectory() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleAddEmployee}
+                  onClick={() => {
+                    console.log('Add Employee button clicked!');
+                    handleAddEmployee();
+                  }}
                   className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
                 >
                   Add Employee
@@ -527,7 +556,7 @@ export default function EmployeeDirectory() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Name *</label>
@@ -539,7 +568,7 @@ export default function EmployeeDirectory() {
                     placeholder="Enter employee name"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Email</label>
                   <div className="relative">
@@ -553,7 +582,7 @@ export default function EmployeeDirectory() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Role *</label>
                   <div className="relative">
@@ -567,7 +596,7 @@ export default function EmployeeDirectory() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Department *</label>
                   <div className="relative">
@@ -582,7 +611,7 @@ export default function EmployeeDirectory() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex gap-3 mt-6 pt-4 border-t border-border">
                 <button
                   onClick={() => {
@@ -599,6 +628,154 @@ export default function EmployeeDirectory() {
                   className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
                 >
                   Update Employee
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Employee Dialog */}
+      {showViewDialog && selectedViewEmployee && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-border">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                  <div className="p-2 bg-info/10 rounded-lg">
+                    <Eye className="h-6 w-6 text-info" />
+                  </div>
+                  Employee Details
+                </h2>
+                <button
+                  onClick={() => setShowViewDialog(false)}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Full Name</label>
+                    <p className="text-lg font-semibold">{selectedViewEmployee.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <p className="text-lg">{selectedViewEmployee.email || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <p className="text-lg">{selectedViewEmployee.phone || 'Not provided'}</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Role</label>
+                    <p className="text-lg font-semibold">{selectedViewEmployee.role}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Department</label>
+                    <p className="text-lg">{selectedViewEmployee.department}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Employment Type</label>
+                    <p className="text-lg">{selectedViewEmployee.employmentType}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Status</label>
+                    <p className="text-lg font-semibold">{selectedViewEmployee.status}</p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${selectedViewEmployee.status === 'Active'
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : selectedViewEmployee.status === 'Inactive'
+                      ? 'bg-red-100 text-red-800 border border-red-200'
+                      : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                    }`}>
+                    {selectedViewEmployee.status}
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              {(selectedViewEmployee.dateStarted || selectedViewEmployee.location || selectedViewEmployee.gender) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {selectedViewEmployee.dateStarted && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Start Date</label>
+                      <p className="text-lg">{selectedViewEmployee.dateStarted}</p>
+                    </div>
+                  )}
+                  {selectedViewEmployee.location && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <p className="text-lg">{selectedViewEmployee.location}</p>
+                    </div>
+                  )}
+                  {selectedViewEmployee.gender && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Gender</label>
+                      <p className="text-lg">{selectedViewEmployee.gender}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manager */}
+              {selectedViewEmployee.manager && (
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <label className="text-sm font-medium text-muted-foreground">Reports to</label>
+                  <p className="text-lg font-semibold">{selectedViewEmployee.manager}</p>
+                </div>
+              )}
+
+              {/* Emergency Contact */}
+              {selectedViewEmployee.emergencyContact && (
+                <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <label className="text-sm font-medium text-muted-foreground">Emergency Contact</label>
+                  <div className="mt-2">
+                    <p className="text-lg font-semibold">{selectedViewEmployee.emergencyContact.name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedViewEmployee.emergencyContact.relationship}</p>
+                    <p className="text-sm text-muted-foreground">{selectedViewEmployee.emergencyContact.phone}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedViewEmployee.notes && (
+                <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 rounded-lg border border-gray-200 dark:border-gray-800">
+                  <label className="text-sm font-medium text-muted-foreground">Notes</label>
+                  <p className="text-lg mt-2">{selectedViewEmployee.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-border">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowViewDialog(false)}
+                  className="px-6 py-2 border border-border hover:bg-muted rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowViewDialog(false);
+                    openEditDialog(selectedViewEmployee);
+                  }}
+                  className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+                >
+                  Edit Employee
                 </button>
               </div>
             </div>

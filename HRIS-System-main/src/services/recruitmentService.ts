@@ -7,6 +7,7 @@ export interface RecruitmentCandidate {
     email: string;
     phone: string;
     position: string;
+    jobId?: string; // Link to specific job posting
     status: 'new' | 'screening' | 'interviewing' | 'offer' | 'hired' | 'rejected';
     resumeUrl: string;
     skills: string[];
@@ -42,9 +43,11 @@ export interface IRecruitmentService {
     addCandidate(candidate: Omit<RecruitmentCandidate, 'id'>): Promise<string>;
     updateCandidate(id: string, candidate: Partial<RecruitmentCandidate>): Promise<void>;
     updateCandidateStatus(id: string, status: RecruitmentCandidate['status']): Promise<void>;
+    deleteCandidate(id: string): Promise<void>;
 
     // Interviews
     scheduleInterview(interview: Omit<Interview, 'id'>): Promise<string>;
+    getInterviews(): Promise<Interview[]>;
     getInterviewsForCandidate(candidateId: string): Promise<Interview[]>;
     updateInterviewFeedback(id: string, feedback: string): Promise<void>;
     cancelInterview(id: string): Promise<void>;
@@ -55,7 +58,7 @@ export interface IRecruitmentService {
     updateOfferStatus(id: string, status: Offer['status']): Promise<void>;
 }
 
-class FirebaseRecruitmentService implements IRecruitmentService {
+export class FirebaseRecruitmentService implements IRecruitmentService {
     constructor(private db: Firestore) { }
 
     // Candidate methods
@@ -93,12 +96,29 @@ class FirebaseRecruitmentService implements IRecruitmentService {
         await this.updateCandidate(id, { status });
     }
 
+    async deleteCandidate(id: string): Promise<void> {
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        const candidateRef = doc(this.db, 'recruitment_candidates', id);
+        await deleteDoc(candidateRef);
+    }
+
     // Interview methods
     async scheduleInterview(interview: Omit<Interview, 'id'>): Promise<string> {
         const { collection, addDoc } = await import('firebase/firestore');
         const interviewsRef = collection(this.db, 'interviews');
         const docRef = await addDoc(interviewsRef, interview);
         return docRef.id;
+    }
+
+    async getInterviews(): Promise<Interview[]> {
+        const { collection, getDocs, orderBy, query } = await import('firebase/firestore');
+        const interviewsRef = collection(this.db, 'interviews');
+        const q = query(interviewsRef, orderBy('scheduledTime', 'asc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Interview));
     }
 
     async getInterviewsForCandidate(candidateId: string): Promise<Interview[]> {
@@ -146,7 +166,7 @@ class FirebaseRecruitmentService implements IRecruitmentService {
     }
 }
 
-class MockRecruitmentService implements IRecruitmentService {
+export class MockRecruitmentService implements IRecruitmentService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async getCandidates(): Promise<RecruitmentCandidate[]> {
         return [];
@@ -173,8 +193,18 @@ class MockRecruitmentService implements IRecruitmentService {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async deleteCandidate(id: string): Promise<void> {
+        // No-op
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async scheduleInterview(interview: Omit<Interview, 'id'>): Promise<string> {
         return 'mock-id';
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async getInterviews(): Promise<Interview[]> {
+        return [];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

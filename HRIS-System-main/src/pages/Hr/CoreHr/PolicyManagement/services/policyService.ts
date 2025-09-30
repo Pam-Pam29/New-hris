@@ -1,8 +1,8 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { getServiceConfig, initializeFirebase } from '@/config/firebase';
+import { getServiceConfig, initializeFirebase } from '../../../../../config/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { Policy, PolicyAcknowledgment, PolicyRevision, PolicyCategory } from '../types';
-import { isFirebaseConfigured } from '@/config/firebase';
+import { isFirebaseConfigured } from '../../../../../config/firebase';
 
 export interface IPolicyService {
   // Policy Management
@@ -14,7 +14,7 @@ export interface IPolicyService {
   searchPolicies(query: string): Promise<Policy[]>;
   getPoliciesByCategory(categoryId: string): Promise<Policy[]>;
   getPoliciesByStatus(status: Policy['status']): Promise<Policy[]>;
-  
+
   // Policy Acknowledgments
   getPolicyAcknowledgments(): Promise<PolicyAcknowledgment[]>;
   getPolicyAcknowledgmentById(id: string): Promise<PolicyAcknowledgment | null>;
@@ -23,7 +23,7 @@ export interface IPolicyService {
   deletePolicyAcknowledgment(id: string): Promise<void>;
   getAcknowledgmentsByPolicy(policyId: string): Promise<PolicyAcknowledgment[]>;
   getAcknowledgmentsByEmployee(employeeId: string): Promise<PolicyAcknowledgment[]>;
-  
+
   // Policy Revisions
   getPolicyRevisions(): Promise<PolicyRevision[]>;
   getPolicyRevisionById(id: string): Promise<PolicyRevision | null>;
@@ -31,7 +31,7 @@ export interface IPolicyService {
   updatePolicyRevision(id: string, revision: Partial<PolicyRevision>): Promise<PolicyRevision>;
   deletePolicyRevision(id: string): Promise<void>;
   getRevisionsByPolicy(policyId: string): Promise<PolicyRevision[]>;
-  
+
   // Policy Categories
   getPolicyCategories(): Promise<PolicyCategory[]>;
   getPolicyCategoryById(id: string): Promise<PolicyCategory | null>;
@@ -90,7 +90,7 @@ export class FirebasePolicyService implements IPolicyService {
     const q = query(policiesRef, orderBy('title'));
     const snapshot = await getDocs(q);
     const policies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Policy));
-    
+
     return policies.filter(policy =>
       policy.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       policy.description.toLowerCase().includes(searchQuery.toLowerCase()) ||

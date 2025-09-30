@@ -1,7 +1,7 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '../../../../../components/ui/dialog';
+import { Button } from "../../../../../components/ui/button";
+import { Badge } from "../../../../../components/ui/badge";
 
 import { Policy } from '../types';
 

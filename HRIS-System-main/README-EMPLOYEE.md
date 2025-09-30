@@ -190,3 +190,4 @@ VITE_FIREBASE_APP_ID=your_app_id
 For technical support or feature requests, contact the development team or refer to the main HRIS documentation.
 
 
+

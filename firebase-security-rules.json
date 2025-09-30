@@ -1,0 +1,41 @@
+{
+    "rules": {
+        "employees": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "leaveTypes": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "leaveRequests": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "policies": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "performanceGoals": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "performanceReviews": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "meetingSchedules": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "notifications": {
+            ".read": "true",
+            ".write": "true"
+        },
+        "assets": {
+            ".read": "true",
+            ".write": "true"
+        }
+    }
+}
+

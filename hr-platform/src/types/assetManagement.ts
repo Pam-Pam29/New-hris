@@ -69,3 +69,4 @@ export interface AssetStatistics {
   assetsByCategory: { category: AssetCategory; count: number }[];
   assetsByCondition: { condition: AssetCondition; count: number }[];
 }
+

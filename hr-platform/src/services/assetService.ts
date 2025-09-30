@@ -312,3 +312,4 @@ export const getAssetService = (): AssetService => {
   }
   return assetServiceInstance;
 };
+

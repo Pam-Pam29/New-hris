@@ -1,8 +1,8 @@
 import React from 'react';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/atoms/Select';
-import { Button } from '@/components/ui/button';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Input } from '../../../../../components/ui/input';
+import { Select } from '../../../../../components/atoms/Select';
+import { Button } from '../../../../../components/ui/button';
+import { RichTextEditor } from '../../../../../components/ui/rich-text-editor';
 
 interface PolicyFormProps {
   form: any;

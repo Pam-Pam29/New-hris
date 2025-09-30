@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 // Fixed: Correct import path for Firebase configuration
-import { db } from '../../../../../config/firebase';
+import { getServiceConfig, initializeFirebase } from '../../../../../config/firebase';
 
 // Types
 interface LeaveRequest {
@@ -51,9 +51,17 @@ interface Employee {
 class FirebaseLeaveRequestService {
   private collectionName = 'leaveRequests';
 
+  private async getDb() {
+    const config = await getServiceConfig();
+    if (!config.firebase.enabled || !config.firebase.db) {
+      throw new Error('Firebase not available');
+    }
+    return config.firebase.db;
+  }
+
   async getAll(): Promise<LeaveRequest[]> {
     try {
-      const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
+      const q = query(collection(await this.getDb(), this.collectionName), orderBy('submittedDate', 'desc'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -67,7 +75,7 @@ class FirebaseLeaveRequestService {
 
   async add(data: Partial<LeaveRequest>): Promise<string> {
     try {
-      const docRef = await addDoc(collection(db, this.collectionName), {
+      const docRef = await addDoc(collection(await this.getDb(), this.collectionName), {
         ...data,
         submittedDate: Timestamp.now(),
         status: 'Pending'
@@ -81,7 +89,7 @@ class FirebaseLeaveRequestService {
 
   async update(id: string, data: Partial<LeaveRequest>): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await updateDoc(docRef, data);
     } catch (error) {
       console.error('Error updating leave request:', error);
@@ -91,7 +99,7 @@ class FirebaseLeaveRequestService {
 
   async approve(id: string, approver: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await updateDoc(docRef, {
         status: 'Approved',
         approver,
@@ -105,7 +113,7 @@ class FirebaseLeaveRequestService {
 
   async reject(id: string, approver: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await updateDoc(docRef, {
         status: 'Rejected',
         approver,
@@ -119,7 +127,7 @@ class FirebaseLeaveRequestService {
 
   async delete(id: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting leave request:', error);
@@ -127,27 +135,40 @@ class FirebaseLeaveRequestService {
     }
   }
 
-  subscribe(callback: (requests: LeaveRequest[]) => void): () => void {
-    const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
+  async subscribe(callback: (requests: LeaveRequest[]) => void): Promise<() => void> {
+    try {
+      const q = query(collection(await this.getDb(), this.collectionName), orderBy('submittedDate', 'desc'));
 
-    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
-      const requests = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as LeaveRequest));
-      callback(requests);
-    }, (error) => {
-      console.error('Error in leave requests subscription:', error);
-    });
+      return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
+        const requests = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as LeaveRequest));
+        callback(requests);
+      }, (error) => {
+        console.error('Error in leave requests subscription:', error);
+      });
+    } catch (error) {
+      console.error('Error setting up leave requests subscription:', error);
+      throw error;
+    }
   }
 }
 
 class FirebaseLeaveTypeService {
   private collectionName = 'leaveTypes';
 
+  private async getDb() {
+    const config = await getServiceConfig();
+    if (!config.firebase.enabled || !config.firebase.db) {
+      throw new Error('Firebase not available');
+    }
+    return config.firebase.db;
+  }
+
   async getAll(): Promise<LeaveType[]> {
     try {
-      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      const querySnapshot = await getDocs(collection(await this.getDb(), this.collectionName));
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -160,7 +181,7 @@ class FirebaseLeaveTypeService {
 
   async add(data: Omit<LeaveType, 'id'>): Promise<string> {
     try {
-      const docRef = await addDoc(collection(db, this.collectionName), data);
+      const docRef = await addDoc(collection(await this.getDb(), this.collectionName), data);
       return docRef.id;
     } catch (error) {
       console.error('Error adding leave type:', error);
@@ -170,7 +191,7 @@ class FirebaseLeaveTypeService {
 
   async update(id: string, data: Partial<LeaveType>): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await updateDoc(docRef, data);
     } catch (error) {
       console.error('Error updating leave type:', error);
@@ -180,7 +201,7 @@ class FirebaseLeaveTypeService {
 
   async delete(id: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(await this.getDb(), this.collectionName, id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting leave type:', error);
@@ -188,25 +209,39 @@ class FirebaseLeaveTypeService {
     }
   }
 
-  subscribe(callback: (types: LeaveType[]) => void): () => void {
-    return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
-      const types = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as LeaveType));
-      callback(types);
-    }, (error) => {
-      console.error('Error in leave types subscription:', error);
-    });
+  async subscribe(callback: (types: LeaveType[]) => void): Promise<() => void> {
+    try {
+      const db = await this.getDb();
+      return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
+        const types = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as LeaveType));
+        callback(types);
+      }, (error) => {
+        console.error('Error in leave types subscription:', error);
+      });
+    } catch (error) {
+      console.error('Error setting up leave types subscription:', error);
+      throw error;
+    }
   }
 }
 
 class FirebaseEmployeeService {
   private collectionName = 'employees';
 
+  private async getDb() {
+    const config = await getServiceConfig();
+    if (!config.firebase.enabled || !config.firebase.db) {
+      throw new Error('Firebase not available');
+    }
+    return config.firebase.db;
+  }
+
   async getAll(): Promise<Employee[]> {
     try {
-      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      const querySnapshot = await getDocs(collection(await this.getDb(), this.collectionName));
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -219,7 +254,7 @@ class FirebaseEmployeeService {
 
   async add(data: Omit<Employee, 'id'>): Promise<string> {
     try {
-      const docRef = await addDoc(collection(db, this.collectionName), data);
+      const docRef = await addDoc(collection(await this.getDb(), this.collectionName), data);
       return docRef.id;
     } catch (error) {
       console.error('Error adding employee:', error);
@@ -227,16 +262,22 @@ class FirebaseEmployeeService {
     }
   }
 
-  subscribe(callback: (employees: Employee[]) => void): () => void {
-    return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
-      const employees = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Employee));
-      callback(employees);
-    }, (error) => {
-      console.error('Error in employees subscription:', error);
-    });
+  async subscribe(callback: (employees: Employee[]) => void): Promise<() => void> {
+    try {
+      const db = await this.getDb();
+      return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
+        const employees = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Employee));
+        callback(employees);
+      }, (error) => {
+        console.error('Error in employees subscription:', error);
+      });
+    } catch (error) {
+      console.error('Error setting up employees subscription:', error);
+      throw error;
+    }
   }
 }
 

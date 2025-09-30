@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  TrendingUp, Target, Users, Award, BarChart3, Calendar, Star,
-  AlertTriangle, Plus, Filter, Download, Eye, Edit, User, X,
+  TrendingUp, Target, Award, Star,
+  AlertTriangle, Plus, Download, Eye, Edit, User, X,
   Save, Loader2, Search, CheckCircle, AlertCircle, Settings,
-  Upload, FileText, Clock, Zap, Activity, PieChart
+  Upload, FileText, Clock, Zap, Activity
 } from 'lucide-react';
+
+// UI Components
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../../components/ui/dialog';
 
 // Firebase imports
 import {
@@ -15,14 +18,13 @@ import {
   doc,
   query,
   orderBy,
-  where,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../../../../config/firebase'; // Adjust path as needed
+import { getServiceConfig } from '../../../../config/firebase';
 
 // Import Employee Service
 import { getEmployeeService, IEmployeeService } from '../../../../services/employeeService';
-import { Employee } from '../CoreHr/EmployeeManagement/types';
+import { Employee } from '../EmployeeManagement/types';
 
 interface PerformanceReview {
   id: string;
@@ -40,8 +42,8 @@ interface PerformanceReview {
   email?: string;
   hireDate?: string;
   lastReviewDate?: string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: unknown;
+  updatedAt?: unknown;
   reviewHistory?: Array<{
     date: string;
     rating: number;
@@ -243,7 +245,13 @@ export default function PerformanceManagement() {
       setLoading(true);
       setError('');
 
-      const reviewsRef = collection(db, 'performance_reviews');
+      // Get Firebase service config
+      const config = await getServiceConfig();
+      if (!config.firebase.enabled || !config.firebase.db) {
+        throw new Error('Firebase not available');
+      }
+
+      const reviewsRef = collection(config.firebase.db, 'performance_reviews');
       const reviewsQuery = query(reviewsRef, orderBy('createdAt', 'desc'));
       const reviewsSnapshot = await getDocs(reviewsQuery);
 
@@ -362,9 +370,15 @@ export default function PerformanceManagement() {
         updatedAt: serverTimestamp()
       };
 
+      // Get Firebase service config
+      const config = await getServiceConfig();
+      if (!config.firebase.enabled || !config.firebase.db) {
+        throw new Error('Firebase not available');
+      }
+
       if (editingReview) {
         // Update existing review
-        const reviewRef = doc(db, 'performance_reviews', editingReview.id);
+        const reviewRef = doc(config.firebase.db, 'performance_reviews', editingReview.id);
         await updateDoc(reviewRef, reviewData);
 
         setPerformanceReviews(prev => prev.map(review =>
@@ -375,7 +389,7 @@ export default function PerformanceManagement() {
         setSuccess('Performance review updated successfully!');
       } else {
         // Add new review
-        const reviewsRef = collection(db, 'performance_reviews');
+        const reviewsRef = collection(config.firebase.db, 'performance_reviews');
         const docRef = await addDoc(reviewsRef, {
           ...reviewData,
           createdAt: serverTimestamp()
@@ -518,7 +532,7 @@ export default function PerformanceManagement() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button 
+            <button
               onClick={handleExportReport}
               className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors shadow-soft hover:shadow-soft-lg"
             >
@@ -784,10 +798,9 @@ export default function PerformanceManagement() {
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div
-                            className={`h-2 rounded-full transition-all duration-300 ${
-                              (review.completedGoals / review.totalGoals) >= 0.8 ? 'bg-success' :
+                            className={`h-2 rounded-full transition-all duration-300 ${(review.completedGoals / review.totalGoals) >= 0.8 ? 'bg-success' :
                               (review.completedGoals / review.totalGoals) >= 0.6 ? 'bg-warning' : 'bg-destructive'
-                            }`}
+                              }`}
                             style={{ width: `${(review.completedGoals / review.totalGoals) * 100}%` }}
                           />
                         </div>
@@ -798,30 +811,31 @@ export default function PerformanceManagement() {
                         {review.status === 'Exceeding' && <Award className="h-4 w-4 text-success" />}
                         {review.status === 'Meeting' && <CheckCircle className="h-4 w-4 text-info" />}
                         {review.status === 'Needs Improvement' && <AlertTriangle className="h-4 w-4 text-warning" />}
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                          review.status === 'Exceeding' ? 'bg-success/10 text-success border-success/20' :
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${review.status === 'Exceeding' ? 'bg-success/10 text-success border-success/20' :
                           review.status === 'Meeting' ? 'bg-info/10 text-info border-info/20' :
-                          'bg-warning/10 text-warning border-warning/20'
-                        }`}>
+                            'bg-warning/10 text-warning border-warning/20'
+                          }`}>
                           {review.status}
                         </span>
                       </div>
                     </td>
                     <td>
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleViewEmployee(review)}
-                          className="p-2 hover:bg-info/10 text-info rounded-lg transition-colors"
+                          className="flex items-center gap-1 px-3 py-1.5 hover:bg-info/10 text-info rounded-lg transition-colors text-sm"
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />
+                          <span>View</span>
                         </button>
                         <button
                           onClick={() => handleEditReview(review)}
-                          className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
+                          className="flex items-center gap-1 px-3 py-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors text-sm"
                           title="Edit Review"
                         >
                           <Edit className="h-4 w-4" />
+                          <span>Edit</span>
                         </button>
                       </div>
                     </td>
@@ -842,154 +856,154 @@ export default function PerformanceManagement() {
       />
 
       {/* Add/Edit Review Dialog */}
-      {reviewDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setReviewDialogOpen(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold">
-                {editingReview ? 'Edit Performance Review' : 'Add Performance Review'}
-              </h2>
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingReview ? 'Edit Performance Review' : 'Add Performance Review'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingReview ? 'Update the performance review details.' : 'Create a new performance review for an employee.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-600">Employee *</label>
+                <select
+                  value={reviewForm.employeeId}
+                  onChange={(e) => setReviewForm({ ...reviewForm, employeeId: e.target.value })}
+                  disabled={!!editingReview}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${!formValidation.employeeId ? 'border-red-500' : 'border-gray-300'}`}
+                >
+                  <option value="">Select employee</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id.toString()}>
+                      {emp.name} - {emp.department} ({emp.role})
+                    </option>
+                  ))}
+                </select>
+                {employees.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No employees found. Please add employees in Employee Management first.
+                  </p>
+                )}
+                {!formValidation.employeeId && (
+                  <p className="text-xs text-red-500">Please select an employee</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-600">Rating (1-5)</label>
+                <select
+                  value={reviewForm.rating.toString()}
+                  onChange={(e) => setReviewForm({ ...reviewForm, rating: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(rating => (
+                    <option key={rating} value={rating.toString()}>
+                      {rating} Stars
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600">Employee *</label>
-                  <select
-                    value={reviewForm.employeeId}
-                    onChange={(e) => setReviewForm({ ...reviewForm, employeeId: e.target.value })}
-                    disabled={!!editingReview}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${!formValidation.employeeId ? 'border-red-500' : 'border-gray-300'}`}
-                  >
-                    <option value="">Select employee</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id.toString()}>
-                        {emp.name} - {emp.department} ({emp.role})
-                      </option>
-                    ))}
-                  </select>
-                  {employees.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      No employees found. Please add employees in Employee Management first.
-                    </p>
-                  )}
-                  {!formValidation.employeeId && (
-                    <p className="text-xs text-red-500">Please select an employee</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600">Rating (1-5)</label>
-                  <select
-                    value={reviewForm.rating.toString()}
-                    onChange={(e) => setReviewForm({ ...reviewForm, rating: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(rating => (
-                      <option key={rating} value={rating.toString()}>
-                        {rating} Stars
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600">Completed Goals</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={reviewForm.totalGoals}
-                    value={reviewForm.completedGoals}
-                    onChange={(e) => setReviewForm({ ...reviewForm, completedGoals: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600">Total Goals</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={reviewForm.totalGoals}
-                    onChange={(e) => setReviewForm({ ...reviewForm, totalGoals: parseInt(e.target.value) || 10 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">Performance Feedback *</label>
-                <textarea
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-24 ${!formValidation.feedback ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="Provide detailed feedback on employee performance..."
-                  value={reviewForm.feedback}
-                  onChange={(e) => setReviewForm({ ...reviewForm, feedback: e.target.value })}
+                <label className="text-sm font-medium text-gray-600">Completed Goals</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={reviewForm.totalGoals}
+                  value={reviewForm.completedGoals}
+                  onChange={(e) => setReviewForm({ ...reviewForm, completedGoals: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                {!formValidation.feedback && (
-                  <p className="text-xs text-red-500">Please provide performance feedback</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-600">Total Goals</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={reviewForm.totalGoals}
+                  onChange={(e) => setReviewForm({ ...reviewForm, totalGoals: parseInt(e.target.value) || 10 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-600">Performance Feedback *</label>
+              <textarea
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-24 ${!formValidation.feedback ? 'border-red-500' : 'border-gray-300'}`}
+                placeholder="Provide detailed feedback on employee performance..."
+                value={reviewForm.feedback}
+                onChange={(e) => setReviewForm({ ...reviewForm, feedback: e.target.value })}
+              />
+              {!formValidation.feedback && (
+                <p className="text-xs text-red-500">Please provide performance feedback</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-600">Goals & Objectives *</label>
+              <textarea
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-20 ${!formValidation.goals ? 'border-red-500' : 'border-gray-300'}`}
+                placeholder="Set goals and objectives for the next period..."
+                value={reviewForm.goals}
+                onChange={(e) => setReviewForm({ ...reviewForm, goals: e.target.value })}
+              />
+              {!formValidation.goals && (
+                <p className="text-xs text-red-500">Please set goals and objectives</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-600">Next Steps</label>
+              <textarea
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-20"
+                placeholder="Outline action items and next steps..."
+                value={reviewForm.nextSteps}
+                onChange={(e) => setReviewForm({ ...reviewForm, nextSteps: e.target.value })}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <button
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  setReviewDialogOpen(false);
+                  setEditingReview(null);
+                  setReviewForm({
+                    employeeId: '',
+                    rating: 5,
+                    feedback: '',
+                    goals: '',
+                    nextSteps: '',
+                    completedGoals: 0,
+                    totalGoals: 10
+                  });
+                  setFormValidation({ employeeId: true, feedback: true, goals: true });
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors disabled:opacity-50"
+                onClick={handleSubmitReview}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
                 )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">Goals & Objectives *</label>
-                <textarea
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-20 ${!formValidation.goals ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="Set goals and objectives for the next period..."
-                  value={reviewForm.goals}
-                  onChange={(e) => setReviewForm({ ...reviewForm, goals: e.target.value })}
-                />
-                {!formValidation.goals && (
-                  <p className="text-xs text-red-500">Please set goals and objectives</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">Next Steps</label>
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-20"
-                  placeholder="Outline action items and next steps..."
-                  value={reviewForm.nextSteps}
-                  onChange={(e) => setReviewForm({ ...reviewForm, nextSteps: e.target.value })}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => {
-                    setReviewDialogOpen(false);
-                    setEditingReview(null);
-                    setReviewForm({
-                      employeeId: '',
-                      rating: 5,
-                      feedback: '',
-                      goals: '',
-                      nextSteps: '',
-                      completedGoals: 0,
-                      totalGoals: 10
-                    });
-                    setFormValidation({ employeeId: true, feedback: true, goals: true });
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors disabled:opacity-50"
-                  onClick={handleSubmitReview}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  {editingReview ? 'Update Review' : 'Submit Review'}
-                </button>
-              </div>
+                {editingReview ? 'Update Review' : 'Submit Review'}
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
