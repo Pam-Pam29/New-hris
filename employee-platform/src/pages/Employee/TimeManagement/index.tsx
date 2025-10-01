@@ -7,6 +7,7 @@ import { Label } from '../../../components/ui/label';
 import { Textarea } from '../../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog';
 import {
     Clock,
     MapPin,
@@ -31,96 +32,115 @@ import {
     Navigation,
     Battery,
     Wifi,
-    WifiOff
+    WifiOff,
+    Bell,
+    Edit
 } from 'lucide-react';
-import { TimeEntry, GeoLocation, TimeAdjustment, Schedule } from '../types';
+import { TimeEntry as LocalTimeEntry, GeoLocation, TimeAdjustment, Schedule } from '../types';
 
-// Mock data - replace with actual API calls
-const mockTimeEntries: TimeEntry[] = [
-    {
-        id: 'te-001',
-        employeeId: 'emp-001',
-        clockIn: new Date('2024-12-10T09:00:00'),
-        clockOut: new Date('2024-12-10T17:30:00'),
-        location: {
-            latitude: 40.7128,
-            longitude: -74.0060,
-            address: '123 Main St, New York, NY 10001',
-            accuracy: 5,
-            timestamp: new Date('2024-12-10T09:00:00')
-        },
-        photos: ['/photos/clock-in-001.jpg'],
-        breakTime: 60, // 1 hour
-        notes: 'Regular work day',
-        status: 'completed',
-        createdAt: new Date('2024-12-10T09:00:00'),
-        updatedAt: new Date('2024-12-10T17:30:00')
-    },
-    {
-        id: 'te-002',
-        employeeId: 'emp-001',
-        clockIn: new Date('2024-12-09T08:45:00'),
-        clockOut: new Date('2024-12-09T18:15:00'),
-        location: {
-            latitude: 40.7128,
-            longitude: -74.0060,
-            address: '123 Main St, New York, NY 10001',
-            accuracy: 3,
-            timestamp: new Date('2024-12-09T08:45:00')
-        },
-        photos: ['/photos/clock-in-002.jpg'],
-        breakTime: 45,
-        notes: 'Stayed late for project deadline',
-        status: 'completed',
-        createdAt: new Date('2024-12-09T08:45:00'),
-        updatedAt: new Date('2024-12-09T18:15:00')
-    },
-    {
-        id: 'te-003',
-        employeeId: 'emp-001',
-        clockIn: new Date('2024-12-11T09:15:00'),
-        location: {
-            latitude: 40.7128,
-            longitude: -74.0060,
-            address: '123 Main St, New York, NY 10001',
-            accuracy: 4,
-            timestamp: new Date('2024-12-11T09:15:00')
-        },
-        photos: ['/photos/clock-in-003.jpg'],
-        breakTime: 0,
-        notes: 'Currently working',
-        status: 'active',
-        createdAt: new Date('2024-12-11T09:15:00'),
-        updatedAt: new Date('2024-12-11T09:15:00')
-    }
-];
-
-const mockSchedule: Schedule = {
-    id: 'schedule-001',
-    employeeId: 'emp-001',
-    startDate: new Date('2024-01-01'),
-    endDate: new Date('2024-12-31'),
-    shiftType: 'morning',
-    workDays: [1, 2, 3, 4, 5], // Monday to Friday
-    workHours: 8,
-    breakDuration: 60,
-    location: 'Office',
-    isActive: true
-};
+// Import Firebase services
+import { getTimeTrackingService, TimeEntry as FirebaseTimeEntry } from '../../../services/timeTrackingService';
+import { getTimeNotificationService, TimeNotification } from '../../../services/timeNotificationService';
+import { getScheduleService, WorkSchedule as FirebaseSchedule, getShortDayName } from '../../../services/scheduleService';
 
 export default function TimeManagement() {
-    const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(mockTimeEntries);
-    const [schedule, setSchedule] = useState<Schedule>(mockSchedule);
-    const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
+    // Employee info - TODO: Get from actual auth context
+    const employeeId = 'emp-001';
+    const employeeName = 'John Doe';
+
+    const [timeEntries, setTimeEntries] = useState<FirebaseTimeEntry[]>([]);
+    const [schedule, setSchedule] = useState<FirebaseSchedule | null>(null);
+    const [currentEntry, setCurrentEntry] = useState<FirebaseTimeEntry | null>(null);
     const [loading, setLoading] = useState(false);
     const [location, setLocation] = useState<GeoLocation | null>(null);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+    const [notifications, setNotifications] = useState<TimeNotification[]>([]);
+    const [showNotifications, setShowNotifications] = useState(false);
 
+    // Adjustment request dialog
+    const [showAdjustDialog, setShowAdjustDialog] = useState(false);
+    const [selectedEntry, setSelectedEntry] = useState<FirebaseTimeEntry | null>(null);
+    const [adjustForm, setAdjustForm] = useState({
+        requestedClockIn: '',
+        requestedClockOut: '',
+        reason: 'forgot_clock_in' as 'forgot_clock_in' | 'forgot_clock_out' | 'system_error' | 'wrong_time' | 'other',
+        reasonText: '',
+        notes: ''
+    });
+
+    // Break tracking
+    const [onBreak, setOnBreak] = useState(false);
+    const [breakStartTime, setBreakStartTime] = useState<Date | null>(null);
+    const [totalBreakTime, setTotalBreakTime] = useState(0); // in minutes
+    const [todayEntry, setTodayEntry] = useState<FirebaseTimeEntry | null>(null);
+
+    // Set up real-time subscriptions
     useEffect(() => {
-        // Get current active time entry
-        const activeEntry = timeEntries.find(entry => entry.status === 'active');
-        setCurrentEntry(activeEntry || null);
+        let unsubscribeEntries: (() => void) | undefined;
+        let unsubscribeNotifications: (() => void) | undefined;
+        let unsubscribeSchedule: (() => void) | undefined;
+
+        const setupServices = async () => {
+            try {
+                const timeService = await getTimeTrackingService();
+                const notifService = await getTimeNotificationService();
+                const scheduleService = await getScheduleService();
+
+                console.log('📡 Setting up real-time subscriptions...');
+
+                // Subscribe to time entries
+                unsubscribeEntries = timeService.subscribeToTimeEntries(
+                    employeeId,
+                    (entries) => {
+                        console.log('📊 Time entries updated:', entries.length);
+                        setTimeEntries(entries);
+                        const active = entries.find(e => e.status === 'active');
+                        setCurrentEntry(active || null);
+
+                        // Check if already clocked in today
+                        const today = new Date().toISOString().split('T')[0];
+                        const todaysEntry = entries.find(e => {
+                            const entryDate = new Date(e.clockIn).toISOString().split('T')[0];
+                            return entryDate === today;
+                        });
+                        setTodayEntry(todaysEntry || null);
+
+                        // Restore break state if on break
+                        if (active && active.breakTime > 0) {
+                            setTotalBreakTime(active.breakTime);
+                        }
+                    }
+                );
+
+                // Subscribe to notifications
+                unsubscribeNotifications = notifService.subscribeToNotifications(
+                    employeeId,
+                    (notifs) => {
+                        console.log('🔔 Notifications updated:', notifs.length);
+                        setNotifications(notifs);
+                    }
+                );
+
+                // Subscribe to schedule updates (real-time)
+                unsubscribeSchedule = scheduleService.subscribeToSchedules(
+                    (schedules) => {
+                        const activeSchedule = schedules.find(s => s.isActive);
+                        if (activeSchedule) {
+                            setSchedule(activeSchedule);
+                            console.log('📅 Schedule updated:', activeSchedule.shiftType);
+                        }
+                    },
+                    employeeId
+                );
+
+                console.log('✅ Real-time sync initialized successfully');
+            } catch (error) {
+                console.error('❌ Failed to initialize services:', error);
+            }
+        };
+
+        setupServices();
 
         // Monitor online status
         const handleOnline = () => setIsOnline(true);
@@ -137,10 +157,13 @@ export default function TimeManagement() {
         }
 
         return () => {
+            unsubscribeEntries?.();
+            unsubscribeNotifications?.();
+            unsubscribeSchedule?.();
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [timeEntries]);
+    }, [employeeId]);
 
     const getCurrentLocation = (): Promise<GeoLocation> => {
         return new Promise((resolve, reject) => {
@@ -172,28 +195,41 @@ export default function TimeManagement() {
     };
 
     const handleClockIn = async () => {
+        // Check if already clocked in today
+        if (todayEntry) {
+            alert('You have already clocked in today! You can only clock in once per day.');
+            return;
+        }
+
         setLoading(true);
         try {
+            const timeService = await getTimeTrackingService();
+            const notifService = await getTimeNotificationService();
+
+            // Get GPS location
             const currentLocation = await getCurrentLocation();
 
-            const newEntry: TimeEntry = {
-                id: `te-${Date.now()}`,
-                employeeId: 'emp-001',
-                clockIn: new Date(),
-                location: currentLocation,
-                photos: [],
-                breakTime: 0,
-                notes: '',
-                status: 'active',
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
+            // Clock in with Firebase
+            console.log('⏰ Clocking in...');
+            const entry = await timeService.clockIn(
+                employeeId,
+                employeeName,
+                currentLocation
+            );
 
-            setTimeEntries(prev => [newEntry, ...prev]);
-            setCurrentEntry(newEntry);
+            // Send notification to HR
+            await notifService.notifyClockIn(
+                employeeId,
+                employeeName,
+                entry.id,
+                currentLocation.address
+            );
+
+            console.log('✅ Clocked in successfully');
+            alert('Clocked in successfully!');
         } catch (error) {
-            console.error('Error getting location:', error);
-            alert('Unable to get your location. Please enable location services.');
+            console.error('❌ Clock in failed:', error);
+            alert('Unable to clock in. Please check your location services and try again.');
         } finally {
             setLoading(false);
         }
@@ -204,42 +240,168 @@ export default function TimeManagement() {
 
         setLoading(true);
         try {
+            const timeService = await getTimeTrackingService();
+            const notifService = await getTimeNotificationService();
+
+            // Get GPS location
             const currentLocation = await getCurrentLocation();
 
-            const updatedEntry: TimeEntry = {
-                ...currentEntry,
-                clockOut: new Date(),
-                location: currentLocation,
-                status: 'completed',
-                updatedAt: new Date()
-            };
-
-            setTimeEntries(prev =>
-                prev.map(entry =>
-                    entry.id === currentEntry.id ? updatedEntry : entry
-                )
+            // Clock out with Firebase
+            console.log('⏰ Clocking out...');
+            const updated = await timeService.clockOut(
+                currentEntry.id,
+                currentLocation
             );
-            setCurrentEntry(null);
+
+            // Calculate hours worked
+            const clockInTime = new Date(currentEntry.clockIn).getTime();
+            const clockOutTime = new Date(updated.clockOut!).getTime();
+            const hoursWorked = (clockOutTime - clockInTime) / (1000 * 60 * 60);
+
+            // Send notification to HR
+            await notifService.notifyClockOut(
+                employeeId,
+                employeeName,
+                updated.id,
+                hoursWorked
+            );
+
+            console.log('✅ Clocked out successfully');
+            alert('Clocked out successfully!');
         } catch (error) {
-            console.error('Error getting location:', error);
-            alert('Unable to get your location. Please enable location services.');
+            console.error('❌ Clock out failed:', error);
+            alert('Unable to clock out. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleBreakStart = () => {
-        if (!currentEntry) return;
+    const handleRequestAdjustment = (entry: FirebaseTimeEntry) => {
+        setSelectedEntry(entry);
 
-        // Add break time logic here
-        console.log('Break started');
+        // Pre-fill form with current times
+        const clockInDate = new Date(entry.clockIn);
+        const clockInTime = clockInDate.toTimeString().slice(0, 5);
+
+        let clockOutTime = '';
+        if (entry.clockOut) {
+            const clockOutDate = new Date(entry.clockOut);
+            clockOutTime = clockOutDate.toTimeString().slice(0, 5);
+        }
+
+        setAdjustForm({
+            requestedClockIn: clockInTime,
+            requestedClockOut: clockOutTime,
+            reason: 'forgot_clock_in',
+            reasonText: '',
+            notes: ''
+        });
+
+        setShowAdjustDialog(true);
     };
 
-    const handleBreakEnd = () => {
-        if (!currentEntry) return;
+    const handleSubmitAdjustment = async () => {
+        if (!selectedEntry) return;
 
-        // Add break time logic here
-        console.log('Break ended');
+        try {
+            const timeService = await getTimeTrackingService();
+            const notifService = await getTimeNotificationService();
+
+            // Convert time strings to dates
+            const entryDate = new Date(selectedEntry.clockIn);
+            const [inHours, inMinutes] = adjustForm.requestedClockIn.split(':');
+            const requestedClockIn = new Date(entryDate);
+            requestedClockIn.setHours(parseInt(inHours), parseInt(inMinutes), 0, 0);
+
+            let requestedClockOut = new Date();
+            if (adjustForm.requestedClockOut) {
+                const [outHours, outMinutes] = adjustForm.requestedClockOut.split(':');
+                requestedClockOut = new Date(entryDate);
+                requestedClockOut.setHours(parseInt(outHours), parseInt(outMinutes), 0, 0);
+            }
+
+            // Create adjustment request
+            console.log('📝 Submitting adjustment request...');
+            const request = await timeService.createAdjustmentRequest({
+                timeEntryId: selectedEntry.id,
+                employeeId,
+                employeeName,
+                originalClockIn: selectedEntry.clockIn,
+                originalClockOut: selectedEntry.clockOut || new Date(),
+                requestedClockIn,
+                requestedClockOut: adjustForm.requestedClockOut ? requestedClockOut : undefined,
+                reason: adjustForm.reason,
+                reasonText: adjustForm.reasonText,
+                notes: adjustForm.notes,
+                status: 'pending',
+                createdAt: new Date()
+            });
+
+            // Send notification to HR
+            await notifService.notifyAdjustmentRequest(
+                employeeId,
+                employeeName,
+                request.id
+            );
+
+            console.log('✅ Adjustment request submitted');
+            alert('Adjustment request submitted successfully! HR will review your request.');
+
+            setShowAdjustDialog(false);
+            setSelectedEntry(null);
+        } catch (error) {
+            console.error('❌ Failed to submit adjustment:', error);
+            alert('Failed to submit adjustment request. Please try again.');
+        }
+    };
+
+    const handleBreakStart = async () => {
+        if (!currentEntry) {
+            alert('Please clock in first before taking a break.');
+            return;
+        }
+
+        if (onBreak) {
+            alert('You are already on break!');
+            return;
+        }
+
+        setOnBreak(true);
+        setBreakStartTime(new Date());
+        console.log('☕ Break started at', new Date().toLocaleTimeString());
+        alert('Break started. Don\'t forget to end your break!');
+    };
+
+    const handleBreakEnd = async () => {
+        if (!currentEntry) return;
+        if (!onBreak || !breakStartTime) {
+            alert('You are not currently on break.');
+            return;
+        }
+
+        try {
+            const timeService = await getTimeTrackingService();
+
+            // Calculate break duration
+            const breakEndTime = new Date();
+            const breakDuration = Math.floor((breakEndTime.getTime() - breakStartTime.getTime()) / (1000 * 60)); // in minutes
+            const newTotalBreakTime = totalBreakTime + breakDuration;
+
+            // Update the time entry with total break time
+            await timeService.updateTimeEntry(currentEntry.id, {
+                breakTime: newTotalBreakTime
+            });
+
+            setTotalBreakTime(newTotalBreakTime);
+            setOnBreak(false);
+            setBreakStartTime(null);
+
+            console.log(`✅ Break ended. Duration: ${breakDuration} minutes. Total break time: ${newTotalBreakTime} minutes`);
+            alert(`Break ended. You were on break for ${breakDuration} minutes.`);
+        } catch (error) {
+            console.error('❌ Failed to end break:', error);
+            alert('Failed to record break end. Please try again.');
+        }
     };
 
     const formatTime = (date: Date) => {
@@ -304,6 +466,21 @@ export default function TimeManagement() {
                         </p>
                     </div>
                     <div className="flex items-center space-x-2">
+                        {/* Notifications */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="relative"
+                            onClick={() => setShowNotifications(!showNotifications)}
+                        >
+                            <Bell className="h-4 w-4" />
+                            {notifications.filter(n => !n.read).length > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                    {notifications.filter(n => !n.read).length}
+                                </span>
+                            )}
+                        </Button>
+
                         <Badge variant={isOnline ? "default" : "destructive"}>
                             {isOnline ? (
                                 <>
@@ -326,50 +503,128 @@ export default function TimeManagement() {
                     </div>
                 </div>
 
+                {/* Notifications Panel */}
+                {showNotifications && notifications.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Notifications</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                {notifications.slice(0, 5).map((notif) => (
+                                    <div key={notif.id} className={`p-3 border rounded-lg ${notif.read ? 'opacity-60' : 'bg-blue-50'}`}>
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-sm">{notif.title}</p>
+                                                <p className="text-sm text-muted-foreground">{notif.message}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {new Date(notif.createdAt).toLocaleString()}
+                                                </p>
+                                            </div>
+                                            <Badge variant={notif.priority === 'high' ? 'destructive' : 'default'} className="text-xs">
+                                                {notif.type.replace('_', ' ')}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Current Status */}
                 {currentEntry && (
-                    <Card className="border-green-200 bg-green-50">
+                    <Card className={onBreak ? "border-orange-200 bg-orange-50" : "border-green-200 bg-green-50"}>
                         <CardHeader>
-                            <CardTitle className="flex items-center space-x-2 text-green-800">
-                                <Play className="h-5 w-5" />
-                                <span>Currently Working</span>
+                            <CardTitle className={`flex items-center space-x-2 ${onBreak ? 'text-orange-800' : 'text-green-800'}`}>
+                                {onBreak ? (
+                                    <>
+                                        <Coffee className="h-5 w-5" />
+                                        <span>On Break</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="h-5 w-5" />
+                                        <span>Currently Working</span>
+                                    </>
+                                )}
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-lg font-semibold text-green-800">
-                                        Clocked in at {formatTime(currentEntry.clockIn)}
+                                    <p className={`text-lg font-semibold ${onBreak ? 'text-orange-800' : 'text-green-800'}`}>
+                                        Clocked in at {formatTime(new Date(currentEntry.clockIn))}
                                     </p>
-                                    <p className="text-sm text-green-600">
-                                        {formatDate(currentEntry.clockIn)}
+                                    <p className={`text-sm ${onBreak ? 'text-orange-600' : 'text-green-600'}`}>
+                                        {formatDate(new Date(currentEntry.clockIn))}
                                     </p>
                                     {currentEntry.location && (
-                                        <p className="text-sm text-green-600 flex items-center mt-1">
+                                        <p className={`text-sm ${onBreak ? 'text-orange-600' : 'text-green-600'} flex items-center mt-1`}>
                                             <MapPin className="h-3 w-3 mr-1" />
                                             {currentEntry.location.address}
                                         </p>
                                     )}
+                                    {totalBreakTime > 0 && (
+                                        <p className={`text-sm ${onBreak ? 'text-orange-600' : 'text-green-600'} flex items-center mt-1`}>
+                                            <Coffee className="h-3 w-3 mr-1" />
+                                            Total break time: {totalBreakTime} minutes
+                                        </p>
+                                    )}
+                                    {onBreak && breakStartTime && (
+                                        <p className="text-sm text-orange-600 flex items-center mt-2 font-semibold">
+                                            <Timer className="h-3 w-3 mr-1" />
+                                            On break for {Math.floor((Date.now() - breakStartTime.getTime()) / (1000 * 60))} minutes
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    <Button variant="outline" size="sm" onClick={handleBreakStart}>
-                                        <Coffee className="h-4 w-4 mr-2" />
-                                        Break
-                                    </Button>
-                                    <Button onClick={handleClockOut} disabled={loading}>
-                                        {loading ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Clocking Out...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Square className="h-4 w-4 mr-2" />
-                                                Clock Out
-                                            </>
-                                        )}
-                                    </Button>
+                                    {!onBreak ? (
+                                        <>
+                                            <Button variant="outline" size="sm" onClick={handleBreakStart}>
+                                                <Coffee className="h-4 w-4 mr-2" />
+                                                Start Break
+                                            </Button>
+                                            <Button onClick={handleClockOut} disabled={loading}>
+                                                {loading ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                        Clocking Out...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Square className="h-4 w-4 mr-2" />
+                                                        Clock Out
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Button onClick={handleBreakEnd} className="bg-orange-600 hover:bg-orange-700">
+                                            <Coffee className="h-4 w-4 mr-2" />
+                                            End Break
+                                        </Button>
+                                    )}
                                 </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Already Clocked In Today Message */}
+                {todayEntry && !currentEntry && (
+                    <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="py-6">
+                            <div className="text-center">
+                                <CheckCircle className="h-12 w-12 text-blue-600 mx-auto mb-3" />
+                                <h3 className="text-lg font-semibold text-blue-800 mb-2">Already Clocked In Today</h3>
+                                <p className="text-sm text-blue-600">
+                                    You clocked in at {formatTime(new Date(todayEntry.clockIn))}
+                                    {todayEntry.clockOut && ` and clocked out at ${formatTime(new Date(todayEntry.clockOut))}`}
+                                </p>
+                                <p className="text-xs text-blue-600 mt-2">
+                                    You can only clock in once per day. See your entry in the timesheet below.
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -437,7 +692,7 @@ export default function TimeManagement() {
 
                     <TabsContent value="timesheet" className="space-y-4">
                         {/* Clock In/Out Controls */}
-                        {!currentEntry && (
+                        {!currentEntry && !todayEntry && (
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
@@ -445,7 +700,7 @@ export default function TimeManagement() {
                                         <span>Clock In/Out</span>
                                     </CardTitle>
                                     <CardDescription>
-                                        Start or end your work day
+                                        Start your work day (You can only clock in once per day)
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
@@ -453,7 +708,7 @@ export default function TimeManagement() {
                                         <Button
                                             size="lg"
                                             onClick={handleClockIn}
-                                            disabled={loading}
+                                            disabled={loading || !!todayEntry}
                                             className="bg-green-600 hover:bg-green-700"
                                         >
                                             {loading ? (
@@ -472,6 +727,9 @@ export default function TimeManagement() {
                                     <div className="mt-4 text-center">
                                         <p className="text-sm text-muted-foreground">
                                             Location services will be used to verify your work location
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            💡 Tip: You can take multiple breaks during the day
                                         </p>
                                     </div>
                                 </CardContent>
@@ -546,7 +804,12 @@ export default function TimeManagement() {
                                                     <Download className="h-4 w-4" />
                                                 </Button>
                                                 {entry.status === 'completed' && (
-                                                    <Button size="sm" variant="outline">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleRequestAdjustment(entry)}
+                                                    >
+                                                        <Edit className="h-4 w-4 mr-1" />
                                                         Adjust
                                                     </Button>
                                                 )}
@@ -563,52 +826,131 @@ export default function TimeManagement() {
                             <CardHeader>
                                 <CardTitle className="flex items-center space-x-2">
                                     <Calendar className="h-5 w-5" />
-                                    <span>Work Schedule</span>
+                                    <span>My Work Schedule</span>
                                 </CardTitle>
                                 <CardDescription>
-                                    Your current work schedule and availability
+                                    Your assigned work schedule and shift details
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-4">
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Shift Type</Label>
-                                                <p className="text-lg font-semibold capitalize">{schedule.shiftType}</p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Work Days</Label>
-                                                <p className="text-lg font-semibold">
-                                                    {schedule.workDays.map(day => {
-                                                        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                                                        return days[day];
-                                                    }).join(', ')}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Work Hours</Label>
-                                                <p className="text-lg font-semibold">{schedule.workHours} hours per day</p>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-4">
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Break Duration</Label>
-                                                <p className="text-lg font-semibold">{schedule.breakDuration} minutes</p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Location</Label>
-                                                <p className="text-lg font-semibold">{schedule.location}</p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                                {schedule ? (
+                                    <div className="space-y-6">
+                                        {/* Shift Info Card */}
+                                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-blue-100 rounded-lg">
+                                                        <Clock className="h-5 w-5 text-blue-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-semibold text-lg capitalize">{schedule.shiftType} Shift</h3>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {schedule.shiftStartTime} - {schedule.shiftEndTime}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                                 <Badge className={schedule.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                                                     {schedule.isActive ? 'Active' : 'Inactive'}
                                                 </Badge>
                                             </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1">Work Hours</p>
+                                                    <p className="text-xl font-bold text-blue-600">{schedule.workHours}h</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1">Break Time</p>
+                                                    <p className="text-xl font-bold text-blue-600">{schedule.breakDuration} min</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1">Location</p>
+                                                    <p className="text-lg font-semibold text-blue-800">{schedule.location || 'Office'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1">Net Work</p>
+                                                    <p className="text-xl font-bold text-blue-600">
+                                                        {(schedule.workHours - (schedule.breakDuration / 60)).toFixed(1)}h
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Weekly Schedule */}
+                                        <div>
+                                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                                <Calendar className="h-4 w-4" />
+                                                Weekly Schedule
+                                            </h4>
+                                            <div className="grid grid-cols-7 gap-2">
+                                                {[0, 1, 2, 3, 4, 5, 6].map(day => {
+                                                    const isWorkDay = schedule.workDays.includes(day);
+                                                    const dayName = getShortDayName(day);
+                                                    return (
+                                                        <div
+                                                            key={day}
+                                                            className={`p-3 rounded-lg text-center ${
+                                                                isWorkDay
+                                                                    ? 'bg-green-100 border-2 border-green-300'
+                                                                    : 'bg-gray-100 border border-gray-200'
+                                                            }`}
+                                                        >
+                                                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                                                                {dayName}
+                                                            </p>
+                                                            {isWorkDay ? (
+                                                                <>
+                                                                    <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                                                                    <p className="text-xs text-green-700 font-semibold">
+                                                                        {schedule.workHours}h
+                                                                    </p>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <XCircle className="h-5 w-5 text-gray-400 mx-auto mb-1" />
+                                                                    <p className="text-xs text-gray-500">Off</p>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Additional Details */}
+                                        {schedule.notes && (
+                                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <p className="text-sm font-medium text-yellow-800 mb-1">Schedule Notes:</p>
+                                                <p className="text-sm text-yellow-700">{schedule.notes}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Period */}
+                                        <div className="text-sm text-muted-foreground">
+                                            <p>
+                                                <strong>Effective Period:</strong>{' '}
+                                                {new Date(schedule.startDate).toLocaleDateString()}
+                                                {schedule.endDate && ` - ${new Date(schedule.endDate).toLocaleDateString()}`}
+                                            </p>
+                                            {schedule.createdBy && (
+                                                <p className="mt-1">
+                                                    <strong>Assigned by:</strong> {schedule.createdBy}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <Calendar className="h-16 w-16 mx-auto text-muted-foreground mb-4 opacity-50" />
+                                        <h3 className="text-lg font-semibold mb-2">No Schedule Assigned</h3>
+                                        <p className="text-sm text-muted-foreground mb-1">
+                                            Your work schedule hasn't been set up yet.
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Please contact HR to get your schedule assigned.
+                                        </p>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -633,6 +975,109 @@ export default function TimeManagement() {
                         </Card>
                     </TabsContent>
                 </Tabs>
+
+                {/* Time Adjustment Request Dialog */}
+                <Dialog open={showAdjustDialog} onOpenChange={setShowAdjustDialog}>
+                    <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Request Time Adjustment</DialogTitle>
+                            <DialogDescription>
+                                Request a correction to your clock in/out times. HR will review your request.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {selectedEntry && (
+                            <div className="space-y-4 py-4">
+                                {/* Current Times */}
+                                <div className="p-4 bg-blue-50 rounded-lg">
+                                    <h4 className="font-semibold mb-2">Current Times</h4>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <Label className="text-muted-foreground">Clock In</Label>
+                                            <p className="font-mono">{formatTime(new Date(selectedEntry.clockIn))}</p>
+                                        </div>
+                                        <div>
+                                            <Label className="text-muted-foreground">Clock Out</Label>
+                                            <p className="font-mono">
+                                                {selectedEntry.clockOut ? formatTime(new Date(selectedEntry.clockOut)) : 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Requested Times */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label>Requested Clock In</Label>
+                                        <Input
+                                            type="time"
+                                            value={adjustForm.requestedClockIn}
+                                            onChange={(e) => setAdjustForm({ ...adjustForm, requestedClockIn: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Requested Clock Out</Label>
+                                        <Input
+                                            type="time"
+                                            value={adjustForm.requestedClockOut}
+                                            onChange={(e) => setAdjustForm({ ...adjustForm, requestedClockOut: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Reason */}
+                                <div>
+                                    <Label>Reason</Label>
+                                    <Select
+                                        value={adjustForm.reason}
+                                        onValueChange={(value: any) => setAdjustForm({ ...adjustForm, reason: value })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="forgot_clock_in">Forgot to Clock In</SelectItem>
+                                            <SelectItem value="forgot_clock_out">Forgot to Clock Out</SelectItem>
+                                            <SelectItem value="system_error">System Error</SelectItem>
+                                            <SelectItem value="wrong_time">Wrong Time Entry</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Reason Text */}
+                                <div>
+                                    <Label>Explanation</Label>
+                                    <Input
+                                        placeholder="Brief explanation of why adjustment is needed"
+                                        value={adjustForm.reasonText}
+                                        onChange={(e) => setAdjustForm({ ...adjustForm, reasonText: e.target.value })}
+                                    />
+                                </div>
+
+                                {/* Additional Notes */}
+                                <div>
+                                    <Label>Additional Notes (Optional)</Label>
+                                    <Textarea
+                                        placeholder="Any additional details..."
+                                        value={adjustForm.notes}
+                                        onChange={(e) => setAdjustForm({ ...adjustForm, notes: e.target.value })}
+                                        rows={3}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSubmitAdjustment} disabled={!adjustForm.reasonText}>
+                                Submit Request
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );

@@ -70,7 +70,7 @@ export default function EmployeeProfilePage() {
 
                     // Convert the Firebase profile to our interface
                     try {
-                const comprehensiveProfile: ComprehensiveProfile = {
+                        const comprehensiveProfile: ComprehensiveProfile = {
                             id: employeeProfile.employeeId || employeeProfile.id || 'emp-001',
                             employeeId: employeeProfile.employeeId || employeeProfile.id || 'emp-001',
                             createdAt: employeeProfile.createdAt || new Date(),
@@ -193,53 +193,53 @@ export default function EmployeeProfilePage() {
                         console.error('Problematic profile data:', employeeProfile);
                         // Set a default profile instead of throwing
                         const defaultProfile: ComprehensiveProfile = {
-                    id: 'emp-001',
+                            id: 'emp-001',
                             employeeId: 'emp-001',
                             createdAt: new Date(),
                             updatedAt: new Date(),
-                    personalInfo: {
-                        firstName: 'John',
-                        lastName: 'Doe',
-                        middleName: 'Michael',
+                            personalInfo: {
+                                firstName: 'John',
+                                lastName: 'Doe',
+                                middleName: 'Michael',
                                 dateOfBirth: new Date('1990-05-15'),
-                        gender: 'Male',
-                        maritalStatus: 'Married',
-                        nationality: 'American',
+                                gender: 'Male',
+                                maritalStatus: 'Married',
+                                nationality: 'American',
                                 otherNationality: '',
                                 identificationNumber: '***-**-1234'
-                    },
-                    contactInfo: {
-                        personalEmail: 'john.doe@email.com',
-                        workEmail: 'john.doe@company.com',
-                        personalPhone: '+1 (555) 123-4567',
-                        workPhone: '+1 (555) 987-6543',
-                        address: {
-                            street: '123 Main Street',
-                            city: 'New York',
-                            state: 'NY',
-                            zipCode: '10001',
-                            country: 'USA'
-                        },
+                            },
+                            contactInfo: {
+                                personalEmail: 'john.doe@email.com',
+                                workEmail: 'john.doe@company.com',
+                                personalPhone: '+1 (555) 123-4567',
+                                workPhone: '+1 (555) 987-6543',
+                                address: {
+                                    street: '123 Main Street',
+                                    city: 'New York',
+                                    state: 'NY',
+                                    zipCode: '10001',
+                                    country: 'USA'
+                                },
                                 emergencyContacts: []
-                    },
-                    workInfo: {
-                        position: 'Senior Software Developer',
-                        department: 'Engineering',
+                            },
+                            workInfo: {
+                                position: 'Senior Software Developer',
+                                department: 'Engineering',
                                 hireDate: new Date('2022-01-15'),
-                        employmentType: 'Full-time',
-                        workLocation: 'New York Office',
-                        workSchedule: 'Monday-Friday, 9 AM - 5 PM',
-                        salary: {
-                            baseSalary: 95000,
-                            currency: 'USD',
+                                employmentType: 'Full-time',
+                                workLocation: 'New York Office',
+                                workSchedule: 'Monday-Friday, 9 AM - 5 PM',
+                                salary: {
+                                    baseSalary: 95000,
+                                    currency: 'USD',
                                     payFrequency: 'Monthly'
-                        }
-                    },
-                    bankingInfo: {
-                        bankName: 'First National Bank',
-                        accountNumber: '****1234',
-                        routingNumber: '021000021',
-                        accountType: 'Checking',
+                                }
+                            },
+                            bankingInfo: {
+                                bankName: 'First National Bank',
+                                accountNumber: '****1234',
+                                routingNumber: '021000021',
+                                accountType: 'Checking',
                                 salaryPaymentMethod: 'Direct Deposit'
                             },
                             skills: [],
@@ -314,14 +314,14 @@ export default function EmployeeProfilePage() {
                             spouse: undefined,
                             dependents: [],
                             beneficiaries: []
-                    },
-                    profileStatus: {
+                        },
+                        profileStatus: {
                             completeness: 0,
                             lastUpdated: new Date(),
-                        updatedBy: 'emp-001',
+                            updatedBy: 'emp-001',
                             status: 'draft'
-                    }
-                };
+                        }
+                    };
                     setProfile(defaultProfile);
                 }
                 setLoading(false);
@@ -361,10 +361,10 @@ export default function EmployeeProfilePage() {
                         firstName: editData.personalInfo?.firstName || profile.personalInfo.firstName,
                         lastName: editData.personalInfo?.lastName || profile.personalInfo.lastName,
                         middleName: editData.personalInfo?.middleName || profile.personalInfo.middleName,
-                        dateOfBirth: editData.personalInfo?.dateOfBirth ? 
+                        dateOfBirth: editData.personalInfo?.dateOfBirth ?
                             (editData.personalInfo.dateOfBirth instanceof Date ? editData.personalInfo.dateOfBirth : new Date(editData.personalInfo.dateOfBirth)) :
-                            (profile.personalInfo.dateOfBirth ? 
-                                (profile.personalInfo.dateOfBirth instanceof Date ? profile.personalInfo.dateOfBirth : new Date(profile.personalInfo.dateOfBirth)) : 
+                            (profile.personalInfo.dateOfBirth ?
+                                (profile.personalInfo.dateOfBirth instanceof Date ? profile.personalInfo.dateOfBirth : new Date(profile.personalInfo.dateOfBirth)) :
                                 new Date()),
                         gender: editData.personalInfo?.gender || profile.personalInfo.gender,
                         maritalStatus: editData.personalInfo?.maritalStatus || profile.personalInfo.maritalStatus,
@@ -411,19 +411,19 @@ export default function EmployeeProfilePage() {
                     },
                     skills: (editData.skills || profile.skills || []).map((skill: any) => ({
                         ...skill,
-                        certificationDate: skill.certificationDate ? 
-                            (skill.certificationDate instanceof Date ? skill.certificationDate : new Date(skill.certificationDate)) : 
+                        certificationDate: skill.certificationDate ?
+                            (skill.certificationDate instanceof Date ? skill.certificationDate : new Date(skill.certificationDate)) :
                             undefined,
-                        expiryDate: skill.expiryDate ? 
-                            (skill.expiryDate instanceof Date ? skill.expiryDate : new Date(skill.expiryDate)) : 
+                        expiryDate: skill.expiryDate ?
+                            (skill.expiryDate instanceof Date ? skill.expiryDate : new Date(skill.expiryDate)) :
                             undefined
                     })),
                     familyInfo: {
                         spouse: editData.familyInfo?.spouse || profile.familyInfo.spouse || undefined,
                         dependents: (editData.familyInfo?.dependents || profile.familyInfo.dependents || []).map((dependent: any) => ({
                             ...dependent,
-                            dateOfBirth: dependent.dateOfBirth ? 
-                                (dependent.dateOfBirth instanceof Date ? dependent.dateOfBirth : new Date(dependent.dateOfBirth)) : 
+                            dateOfBirth: dependent.dateOfBirth ?
+                                (dependent.dateOfBirth instanceof Date ? dependent.dateOfBirth : new Date(dependent.dateOfBirth)) :
                                 new Date()
                         })),
                         beneficiaries: editData.familyInfo?.beneficiaries || profile.familyInfo.beneficiaries || []
@@ -448,7 +448,7 @@ export default function EmployeeProfilePage() {
 
                 console.log('Profile updated successfully');
                 console.log('All employees after save:', await dataFlowService.getAllEmployees());
-                
+
                 // Reload the profile to see if it persisted
                 const reloadedProfile = await dataFlowService.getEmployeeProfile(profile.id);
                 console.log('Reloaded profile after save:', reloadedProfile);
@@ -526,7 +526,7 @@ export default function EmployeeProfilePage() {
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
                         <h2 className="text-xl font-semibold">Loading Profile...</h2>
                         <p className="text-muted-foreground">Please wait while we load your profile information.</p>
-                            </div>
+                    </div>
                 </div>
             </div>
         );
@@ -615,10 +615,10 @@ export default function EmployeeProfilePage() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                 <div>
                                     <span className="text-muted-foreground">Last Updated:</span>
-                                    <p className="font-medium">{currentData?.profileStatus?.lastUpdated ? 
+                                    <p className="font-medium">{currentData?.profileStatus?.lastUpdated ?
                                         (currentData.profileStatus.lastUpdated instanceof Date && !isNaN(currentData.profileStatus.lastUpdated.getTime()) ?
                                             currentData.profileStatus.lastUpdated.toLocaleDateString() :
-                                            (typeof currentData.profileStatus.lastUpdated === 'string' ? 
+                                            (typeof currentData.profileStatus.lastUpdated === 'string' ?
                                                 (() => {
                                                     const date = new Date(currentData.profileStatus.lastUpdated);
                                                     return !isNaN(date.getTime()) ? date.toLocaleDateString() : 'Never';
@@ -690,7 +690,7 @@ export default function EmployeeProfilePage() {
                                                 placeholder="Enter first name"
                                             />
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.personalInfo?.firstName || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.personalInfo?.firstName || 'N/A'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-2">
@@ -702,7 +702,7 @@ export default function EmployeeProfilePage() {
                                                 placeholder="Enter last name"
                                             />
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.personalInfo?.lastName || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.personalInfo?.lastName || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -716,7 +716,7 @@ export default function EmployeeProfilePage() {
                                                 placeholder="Enter middle name"
                                             />
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.personalInfo?.middleName || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.personalInfo?.middleName || 'N/A'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-2">
@@ -760,7 +760,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.personalInfo?.gender || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.personalInfo?.gender || 'N/A'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-2">
@@ -782,7 +782,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.personalInfo?.maritalStatus || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.personalInfo?.maritalStatus || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -790,7 +790,7 @@ export default function EmployeeProfilePage() {
                                     <div className="space-y-2">
                                         <Label>Nationality</Label>
                                         {editing ? (
-                                    <div className="space-y-2">
+                                            <div className="space-y-2">
                                                 <Select
                                                     value={editData.personalInfo?.nationality || currentData.personalInfo?.nationality || ''}
                                                     onValueChange={(value) => handleInputChange('personalInfo', { ...editData.personalInfo, nationality: value })}
@@ -823,7 +823,7 @@ export default function EmployeeProfilePage() {
                                                         placeholder="Please specify nationality"
                                                     />
                                                 )}
-                                    </div>
+                                            </div>
                                         ) : (
                                             <p className="text-sm py-2">
                                                 {currentData.personalInfo?.nationality === 'Other' && currentData.personalInfo?.otherNationality
@@ -831,8 +831,8 @@ export default function EmployeeProfilePage() {
                                                     : currentData.personalInfo?.nationality || 'N/A'}
                                             </p>
                                         )}
-                                </div>
-                                <div className="space-y-2">
+                                    </div>
+                                    <div className="space-y-2">
                                         <Label>Identification Number</Label>
                                         {editing ? (
                                             <Input
@@ -869,12 +869,12 @@ export default function EmployeeProfilePage() {
                                                 placeholder="Enter position"
                                             />
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.workInfo?.position || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.workInfo?.position || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
-                                    <div className="space-y-2">
-                                        <Label>Department</Label>
+                                <div className="space-y-2">
+                                    <Label>Department</Label>
                                     {editing ? (
                                         <Select
                                             value={editData.workInfo?.department || currentData.workInfo?.department || ''}
@@ -947,7 +947,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.workInfo?.employmentType || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.workInfo?.employmentType || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -972,7 +972,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.workInfo?.workLocation || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.workInfo?.workLocation || 'N/A'}</p>
                                         )}
                                     </div>
                                     <div className="space-y-2">
@@ -997,7 +997,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.workInfo?.workSchedule || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.workInfo?.workSchedule || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -1017,7 +1017,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter base salary"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2">{currentData.workInfo?.salary?.baseSalary ? `$${currentData.workInfo.salary.baseSalary.toLocaleString()}` : 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.workInfo?.salary?.baseSalary ? `$${currentData.workInfo.salary.baseSalary.toLocaleString()}` : 'N/A'}</p>
                                             )}
                                         </div>
                                         <div>
@@ -1106,10 +1106,10 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter personal email"
                                                 />
                                             ) : (
-                                            <div className="flex items-center space-x-2 text-sm py-2">
-                                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                                <span>{currentData.contactInfo?.personalEmail || 'N/A'}</span>
-                                            </div>
+                                                <div className="flex items-center space-x-2 text-sm py-2">
+                                                    <Mail className="h-4 w-4 text-muted-foreground" />
+                                                    <span>{currentData.contactInfo?.personalEmail || 'N/A'}</span>
+                                                </div>
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -1121,10 +1121,10 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter work email"
                                                 />
                                             ) : (
-                                            <div className="flex items-center space-x-2 text-sm py-2">
-                                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                                <span>{currentData.contactInfo?.workEmail || 'N/A'}</span>
-                                            </div>
+                                                <div className="flex items-center space-x-2 text-sm py-2">
+                                                    <Mail className="h-4 w-4 text-muted-foreground" />
+                                                    <span>{currentData.contactInfo?.workEmail || 'N/A'}</span>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -1138,10 +1138,10 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter personal phone"
                                                 />
                                             ) : (
-                                            <div className="flex items-center space-x-2 text-sm py-2">
-                                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                                <span>{currentData.contactInfo?.personalPhone || 'N/A'}</span>
-                                            </div>
+                                                <div className="flex items-center space-x-2 text-sm py-2">
+                                                    <Phone className="h-4 w-4 text-muted-foreground" />
+                                                    <span>{currentData.contactInfo?.personalPhone || 'N/A'}</span>
+                                                </div>
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -1153,10 +1153,10 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter work phone"
                                                 />
                                             ) : (
-                                            <div className="flex items-center space-x-2 text-sm py-2">
-                                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                                <span>{currentData.contactInfo?.workPhone || 'N/A'}</span>
-                                            </div>
+                                                <div className="flex items-center space-x-2 text-sm py-2">
+                                                    <Phone className="h-4 w-4 text-muted-foreground" />
+                                                    <span>{currentData.contactInfo?.workPhone || 'N/A'}</span>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -1177,10 +1177,10 @@ export default function EmployeeProfilePage() {
                                                 placeholder="Enter street address"
                                             />
                                         ) : (
-                                        <div className="flex items-center space-x-2 text-sm py-2">
-                                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                                            <span>{currentData.contactInfo?.address?.street || 'N/A'}</span>
-                                        </div>
+                                            <div className="flex items-center space-x-2 text-sm py-2">
+                                                <MapPin className="h-4 w-4 text-muted-foreground" />
+                                                <span>{currentData.contactInfo?.address?.street || 'N/A'}</span>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1196,7 +1196,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter city"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2">{currentData.contactInfo?.address?.city || 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.contactInfo?.address?.city || 'N/A'}</p>
                                             )}
                                         </div>
                                         <div>
@@ -1211,7 +1211,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter state"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2">{currentData.contactInfo?.address?.state || 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.contactInfo?.address?.state || 'N/A'}</p>
                                             )}
                                         </div>
                                         <div>
@@ -1226,7 +1226,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter ZIP code"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2">{currentData.contactInfo?.address?.zipCode || 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.contactInfo?.address?.zipCode || 'N/A'}</p>
                                             )}
                                         </div>
                                     </div>
@@ -1308,7 +1308,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter bank name"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2">{currentData.bankingInfo?.bankName || 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.bankingInfo?.bankName || 'N/A'}</p>
                                             )}
                                         </div>
                                     </div>
@@ -1322,7 +1322,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter account number"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2 font-mono">{currentData.bankingInfo?.accountNumber || 'N/A'}</p>
+                                                <p className="text-sm py-2 font-mono">{currentData.bankingInfo?.accountNumber || 'N/A'}</p>
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -1334,7 +1334,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter routing number"
                                                 />
                                             ) : (
-                                            <p className="text-sm py-2 font-mono">{currentData.bankingInfo?.routingNumber || 'N/A'}</p>
+                                                <p className="text-sm py-2 font-mono">{currentData.bankingInfo?.routingNumber || 'N/A'}</p>
                                             )}
                                         </div>
                                     </div>
@@ -1356,7 +1356,7 @@ export default function EmployeeProfilePage() {
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                        <p className="text-sm py-2">{currentData.bankingInfo?.salaryPaymentMethod || 'N/A'}</p>
+                                            <p className="text-sm py-2">{currentData.bankingInfo?.salaryPaymentMethod || 'N/A'}</p>
                                         )}
                                     </div>
                                 </div>
@@ -1376,11 +1376,11 @@ export default function EmployeeProfilePage() {
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {/* Spouse Information */}
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium">Spouse Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <Label>Name</Label>
+                                <div className="space-y-4">
+                                    <h4 className="font-medium">Spouse Information</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <Label>Name</Label>
                                             {editing ? (
                                                 <Input
                                                     value={editData.familyInfo?.spouse?.name || currentData.familyInfo?.spouse?.name || ''}
@@ -1393,9 +1393,9 @@ export default function EmployeeProfilePage() {
                                             ) : (
                                                 <p className="text-sm py-2">{currentData.familyInfo?.spouse?.name || 'N/A'}</p>
                                             )}
-                                            </div>
-                                            <div>
-                                                <Label>Occupation</Label>
+                                        </div>
+                                        <div>
+                                            <Label>Occupation</Label>
                                             {editing ? (
                                                 <Input
                                                     value={editData.familyInfo?.spouse?.occupation || currentData.familyInfo?.spouse?.occupation || ''}
@@ -1408,9 +1408,9 @@ export default function EmployeeProfilePage() {
                                             ) : (
                                                 <p className="text-sm py-2">{currentData.familyInfo?.spouse?.occupation || 'N/A'}</p>
                                             )}
-                                            </div>
-                                            <div>
-                                                <Label>Phone</Label>
+                                        </div>
+                                        <div>
+                                            <Label>Phone</Label>
                                             {editing ? (
                                                 <Input
                                                     value={editData.familyInfo?.spouse?.phone || currentData.familyInfo?.spouse?.phone || ''}
@@ -1423,14 +1423,14 @@ export default function EmployeeProfilePage() {
                                             ) : (
                                                 <p className="text-sm py-2">{currentData.familyInfo?.spouse?.phone || 'N/A'}</p>
                                             )}
-                                            </div>
                                         </div>
                                     </div>
+                                </div>
 
                                 {/* Dependents */}
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                    <h4 className="font-medium">Dependents</h4>
+                                        <h4 className="font-medium">Dependents</h4>
                                         {editing && (
                                             <Button
                                                 type="button"
@@ -1471,7 +1471,7 @@ export default function EmployeeProfilePage() {
                                                             placeholder="Enter name"
                                                         />
                                                     ) : (
-                                                    <p className="text-sm py-2">{dependent.name}</p>
+                                                        <p className="text-sm py-2">{dependent.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -1490,7 +1490,7 @@ export default function EmployeeProfilePage() {
                                                             placeholder="Enter relationship"
                                                         />
                                                     ) : (
-                                                    <p className="text-sm py-2">{dependent.relationship}</p>
+                                                        <p className="text-sm py-2">{dependent.relationship}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -1600,7 +1600,7 @@ export default function EmployeeProfilePage() {
                                                             className="font-medium"
                                                         />
                                                     ) : (
-                                                <h4 className="font-medium">{skill.name}</h4>
+                                                        <h4 className="font-medium">{skill.name}</h4>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center space-x-2">
@@ -1625,8 +1625,8 @@ export default function EmployeeProfilePage() {
                                                         </Select>
                                                     ) : (
                                                         <Badge variant={skill.level === 'Expert' ? 'default' : skill.level === 'Advanced' ? 'secondary' : 'secondary'}>
-                                                        {skill.level}
-                                                    </Badge>
+                                                            {skill.level}
+                                                        </Badge>
                                                     )}
                                                     {editing ? (
                                                         <div className="flex items-center space-x-2">
@@ -1644,9 +1644,9 @@ export default function EmployeeProfilePage() {
                                                         </div>
                                                     ) : (
                                                         skill.certified && (
-                                                        <Badge variant="default" className="bg-green-600">
-                                                            Certified
-                                                        </Badge>
+                                                            <Badge variant="default" className="bg-green-600">
+                                                                Certified
+                                                            </Badge>
                                                         )
                                                     )}
                                                 </div>

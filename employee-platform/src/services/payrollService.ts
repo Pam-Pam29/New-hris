@@ -139,15 +139,20 @@ export class FirebasePayrollService implements IPayrollService {
 
     async getMyPayrollRecords(employeeId: string): Promise<PayrollRecord[]> {
         try {
-            const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
             const q = query(
                 payrollRef,
-                where('employeeId', '==', employeeId),
-                orderBy('payPeriod.payDate', 'desc')
+                where('employeeId', '==', employeeId)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            // Sort in memory instead of using Firestore orderBy to avoid index requirement
+            const records = snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            return records.sort((a, b) => {
+                const dateA = new Date(a.payPeriod.payDate).getTime();
+                const dateB = new Date(b.payPeriod.payDate).getTime();
+                return dateB - dateA; // Descending order
+            });
         } catch (error) {
             console.error('Error fetching my payroll records:', error);
             throw error;
@@ -173,15 +178,20 @@ export class FirebasePayrollService implements IPayrollService {
 
     async getMyFinancialRequests(employeeId: string): Promise<FinancialRequest[]> {
         try {
-            const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const requestsRef = collection(this.db, 'financial_requests');
             const q = query(
                 requestsRef,
-                where('employeeId', '==', employeeId),
-                orderBy('createdAt', 'desc')
+                where('employeeId', '==', employeeId)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            // Sort in memory instead of using Firestore orderBy to avoid index requirement
+            const requests = snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            return requests.sort((a, b) => {
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                return dateB - dateA; // Descending order (newest first)
+            });
         } catch (error) {
             console.error('Error fetching my financial requests:', error);
             throw error;

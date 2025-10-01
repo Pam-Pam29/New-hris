@@ -73,7 +73,7 @@ export interface FinancialRequest {
     requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
     amount: number;
     reason: string;
-    status: 'pending' | 'approved' | 'rejected' | 'paid';
+    status: 'pending' | 'approved' | 'rejected' | 'paid' | 'recovering' | 'completed';
     attachments?: string[];
 
     // Approval Info
@@ -83,6 +83,17 @@ export interface FinancialRequest {
 
     // Payment Info
     paidAt?: Date;
+
+    // Repayment Info (for loans and advances)
+    repaymentType?: 'full' | 'installments'; // Pay back in full next month or over time
+    repaymentMethod?: 'salary_deduction' | 'bank_transfer' | 'cash' | 'mobile_money'; // How to repay
+    installmentMonths?: number; // Number of months to repay (for loans)
+    installmentAmount?: number; // Amount per month
+    amountRecovered?: number; // How much has been deducted so far
+    remainingBalance?: number; // How much is left to recover
+    recoveryStartDate?: Date; // When deductions started
+    recoveryCompleteDate?: Date; // When fully recovered
+    linkedPayrollIds?: string[]; // IDs of payroll records where deductions were made
 
     // Metadata
     createdAt: Date;

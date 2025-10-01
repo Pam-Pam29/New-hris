@@ -32,9 +32,9 @@ const navStructure = [
     ],
   },
   {
-    heading: 'Payroll',
+    heading: 'Payroll & Compensation',
     links: [
-      { label: 'Payroll', href: '/hr/payroll', icon: DollarSign },
+      { label: 'Payroll Management', href: '/hr/payroll', icon: DollarSign },
       // { label: 'Wallet', href: '/hr/payroll/wallet', icon: Wallet },
       // { label: 'Salaries', href: '/hr/payroll/salaries', icon: DollarSign },
       // { label: 'Benefit', href: '/hr/payroll/benefit', icon: Gift },
@@ -195,8 +195,8 @@ function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; 
         title={collapsed ? link.label : undefined}
       >
         <link.icon className={`w-5 h-5 transition-all duration-200 ${isActive
-            ? 'text-primary scale-110'
-            : 'text-muted-foreground group-hover:text-primary group-hover:scale-105'
+          ? 'text-primary scale-110'
+          : 'text-muted-foreground group-hover:text-primary group-hover:scale-105'
           }`} />
         {!collapsed && (
           <span className="transition-all duration-200 group-hover:translate-x-1">

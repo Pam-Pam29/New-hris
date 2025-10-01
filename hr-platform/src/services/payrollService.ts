@@ -72,12 +72,29 @@ export interface FinancialRequest {
     requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
     amount: number;
     reason: string;
-    status: 'pending' | 'approved' | 'rejected' | 'paid';
+    status: 'pending' | 'approved' | 'rejected' | 'paid' | 'recovering' | 'completed';
     attachments?: string[];
+
+    // Approval Info
     approvedBy?: string;
     approvedAt?: Date;
     rejectionReason?: string;
+
+    // Payment Info
     paidAt?: Date;
+
+    // Repayment Info (for loans and advances)
+    repaymentType?: 'full' | 'installments';
+    repaymentMethod?: 'salary_deduction' | 'bank_transfer' | 'cash' | 'mobile_money';
+    installmentMonths?: number;
+    installmentAmount?: number;
+    amountRecovered?: number;
+    remainingBalance?: number;
+    recoveryStartDate?: Date;
+    recoveryCompleteDate?: Date;
+    linkedPayrollIds?: string[];
+
+    // Metadata
     createdAt: Date;
     updatedAt: Date;
 }
@@ -280,15 +297,20 @@ export class FirebasePayrollService implements IPayrollService {
 
     async getFinancialRequestsByEmployee(employeeId: string): Promise<FinancialRequest[]> {
         try {
-            const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const requestsRef = collection(this.db, 'financial_requests');
             const q = query(
                 requestsRef,
-                where('employeeId', '==', employeeId),
-                orderBy('createdAt', 'desc')
+                where('employeeId', '==', employeeId)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            // Sort in memory instead of using Firestore orderBy to avoid index requirement
+            const requests = snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            return requests.sort((a, b) => {
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                return dateB - dateA; // Descending order (newest first)
+            });
         } catch (error) {
             console.error('Error fetching employee financial requests:', error);
             throw error;

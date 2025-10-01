@@ -377,6 +377,9 @@ export interface AssetRequest {
 export interface PayrollRecord {
     id: string;
     employeeId: string;
+    employeeName: string;
+    department: string;
+    position: string;
     payPeriod: PayPeriod;
     baseSalary: number;
     overtime: number;
@@ -384,22 +387,21 @@ export interface PayrollRecord {
     allowances: Allowance[];
     deductions: Deduction[];
     grossPay: number;
+    totalDeductions: number;
     netPay: number;
     paymentStatus: 'pending' | 'processed' | 'paid';
-    paymentDate: Date;
-    paymentMethod: 'bank_transfer' | 'check' | 'cash';
+    paymentDate?: string | Date;
+    paymentMethod?: 'bank_transfer' | 'check' | 'cash' | 'mobile_money';
     currency: string;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: string | Date;
+    updatedAt: string | Date;
 }
 
 export interface PayPeriod {
-    id: string;
-    startDate: Date;
-    endDate: Date;
-    payDate: Date;
-    type: 'weekly' | 'biweekly' | 'monthly';
-    status: 'open' | 'closed' | 'paid';
+    startDate: string | Date;
+    endDate: string | Date;
+    payDate: string | Date;
+    type: 'weekly' | 'biweekly' | 'monthly' | 'semimonthly';
 }
 
 export interface Allowance {
@@ -415,7 +417,7 @@ export interface Deduction {
     id: string;
     name: string;
     amount: number;
-    type: 'tax' | 'insurance' | 'loan' | 'other';
+    type: 'tax' | 'insurance' | 'loan' | 'other' | 'retirement';
     description?: string;
 }
 
@@ -448,11 +450,11 @@ export interface BenefitsEnrollment {
     employeeId: string;
     benefitType: string;
     provider: string;
-    enrollmentStatus: 'active' | 'pending' | 'declined' | 'terminated';
+    enrollmentStatus: 'active' | 'pending' | 'inactive';
     contribution: number;
     employerContribution: number;
-    effectiveDate: Date;
-    terminationDate?: Date;
+    effectiveDate: string | Date;
+    terminationDate?: string | Date;
     coverage: string;
     beneficiaries?: Beneficiary[];
 }

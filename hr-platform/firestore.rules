@@ -243,13 +243,68 @@ service cloud.firestore {
     }
     
     // Time Entries - Allow read/write for development
-    match /timeEntries/{document=**} {
+    match /timeEntries/{entryId} {
       allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create: if request.auth != null && 
+      //   request.resource.data.employeeId == request.auth.uid;
+      // allow update: if request.auth != null && 
+      //   (resource.data.employeeId == request.auth.uid || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Time Adjustment Requests - Allow read/write for development
+    match /timeAdjustmentRequests/{requestId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create: if request.auth != null && 
+      //   request.resource.data.employeeId == request.auth.uid &&
+      //   request.resource.data.status == 'pending';
+      // allow update: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Time Notifications - Allow read/write for development
+    match /timeNotifications/{notifId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null &&
+      //   (resource.data.employeeId == request.auth.uid ||
+      //    resource.data.sentToHr == true);
+      // allow create: if request.auth != null;
+      // allow update: if request.auth != null;
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Schedules - Allow read/write for development
+    match /schedules/{scheduleId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create, update, delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
     }
     
     // Work Schedules - Allow read/write for development
     match /workSchedules/{document=**} {
       allow read, write: if true; // Allow access for development
+    }
+    
+    // Shift Templates - Allow read/write for development
+    match /shiftTemplates/{templateId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow create, update, delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
     }
   }
 }
