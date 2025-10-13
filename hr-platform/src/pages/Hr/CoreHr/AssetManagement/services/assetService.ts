@@ -46,7 +46,7 @@ export interface IAssetService {
   updateStarterKit(id: string, kit: Partial<StarterKit>): Promise<StarterKit>;
   deleteStarterKit(id: string): Promise<void>;
   getStarterKitByJobTitle(jobTitle: string): Promise<StarterKit | null>;
-  autoAssignStarterKit(employeeId: string, employeeName: string, jobTitle: string): Promise<{ success: boolean; assignedCount: number; missingAssets: string[] }>;
+  autoAssignStarterKit(employeeId: string, employeeName: string, jobTitle: string): Promise<{ success: boolean; assignedCount: number; missingAssets: string[]; maintenanceWarning?: string }>;
 }
 
 export class FirebaseAssetService implements IAssetService {
@@ -343,7 +343,7 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   // Auto-assign starter kit to employee
-  async autoAssignStarterKit(employeeId: string, employeeName: string, jobTitle: string): Promise<{ success: boolean; assignedCount: number; missingAssets: string[] }> {
+  async autoAssignStarterKit(employeeId: string, employeeName: string, jobTitle: string): Promise<{ success: boolean; assignedCount: number; missingAssets: string[]; maintenanceWarning?: string }> {
     try {
       // Find starter kit for this job title
       const kit = await this.getStarterKitByJobTitle(jobTitle);
@@ -354,29 +354,100 @@ export class FirebaseAssetService implements IAssetService {
       }
 
       console.log('📦 Found starter kit:', kit.name, 'with', kit.assets.length, 'asset types');
+      console.log('📋 Starter kit requires:', kit.assets.map(a => `${a.assetType} (qty: ${a.quantity})`).join(', '));
 
       let assignedCount = 0;
       const missingAssets: string[] = [];
+      let maintenanceWarning: string | undefined;
 
-      // Get all available assets
-      const allAssets = await this.getAssets();
+      // Get all assets directly from Firebase (bypass any caching)
+      console.log('📥 Fetching FRESH asset data directly from Firebase...');
+      const assetsRef = collection(this.db, 'assets');
+      const assetsSnapshot = await getDocs(assetsRef);
+      const allAssets = assetsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Asset));
+
+      console.log(`📦 Total assets in database: ${allAssets.length}`);
+      console.log(`📦 Available assets: ${allAssets.filter(a => a.status === 'Available').length}`);
+      console.log(`📦 Assigned assets: ${allAssets.filter(a => a.status === 'Assigned').length}`);
+
+      // Debug: Show all assets with their assignment status
+      console.log('🔍 ALL ASSETS IN DATABASE:');
+      allAssets.forEach(asset => {
+        const statusMismatch = asset.status === 'Available' && asset.assignedTo && asset.assignedTo.trim() !== '' && asset.assignedTo !== 'none';
+        console.log(`   - ${asset.name}: status="${asset.status}", assignedTo="${asset.assignedTo || 'none'}"${statusMismatch ? ' ⚠️ STALE DATA!' : ''}`);
+      });
+
+      // Check if employee already has assets assigned (filter out empty/null assignedTo)
+      const alreadyAssignedAssets = allAssets.filter(a => {
+        const hasAssignedTo = a.assignedTo && a.assignedTo.trim() !== '';
+        // Case-insensitive match for employee ID
+        const matchesEmployee = a.assignedTo && a.assignedTo.toLowerCase() === employeeId.toLowerCase();
+        return hasAssignedTo && matchesEmployee;
+      });
+      console.log(`🔎 Assets assigned to ${employeeId} (case-insensitive):`, alreadyAssignedAssets.length);
+      if (alreadyAssignedAssets.length > 0) {
+        console.warn(`⚠️ Employee ${employeeName} already has ${alreadyAssignedAssets.length} assets assigned:`,
+          alreadyAssignedAssets.map(a => `${a.name} (${a.type})`).join(', '));
+        console.warn('🛑 Skipping auto-assignment to prevent duplicates.');
+        console.warn('💡 Tip: Wait 2-3 seconds after unassigning assets before re-assigning, to allow Firebase to update.');
+        return { success: false, assignedCount: 0, missingAssets: [] };
+      }
+
+      console.log(`✅ Employee ${employeeName} has no assets assigned. Proceeding with kit assignment...`);
 
       // For each asset type in the kit
       for (const kitAsset of kit.assets) {
         const requiredQuantity = kitAsset.quantity;
+        console.log(`\n🔍 Looking for: ${requiredQuantity}x ${kitAsset.assetType} (category: ${kitAsset.category})`);
 
-        // Find available assets of this type/category
-        const matchingAssets = allAssets.filter(asset =>
-          asset.status === 'Available' &&
-          asset.category === kitAsset.category
-        ).slice(0, requiredQuantity);
+        // Find available assets matching BOTH type AND category
+        const matchingAssets = allAssets.filter(asset => {
+          const statusMatch = asset.status === 'Available';
+          const notAssigned = !asset.assignedTo || asset.assignedTo.trim() === ''; // Must not be assigned to anyone
+          const typeMatch = asset.type === kitAsset.assetType;
+          const categoryMatch = asset.category === kitAsset.category;
+
+          // Match by type first (preferred), fallback to category if type not set
+          const isMatch = statusMatch && notAssigned && (typeMatch || (!asset.type && categoryMatch));
+
+          if (statusMatch && !notAssigned) {
+            console.log(`   ⏭️ Skipped: ${asset.name} (still has assignedTo="${asset.assignedTo}")`);
+          } else if (statusMatch && notAssigned && !isMatch) {
+            console.log(`   ⏭️ Skipped: ${asset.name} (type: ${asset.type || 'none'}, category: ${asset.category}) - doesn't match requirement`);
+          }
+
+          if (isMatch) {
+            console.log(`   ✅ Matched: ${asset.name} (type: ${asset.type}, category: ${asset.category})`);
+          }
+
+          return isMatch;
+        }).slice(0, requiredQuantity);
+
+        // Check if required items are under maintenance
+        const underMaintenanceCount = allAssets.filter(a =>
+          (a.status === 'Under Repair') &&
+          (a.type === kitAsset.assetType || a.category === kitAsset.category)
+        ).length;
+
+        if (underMaintenanceCount > 0 && kitAsset.isRequired) {
+          const warning = `${underMaintenanceCount} ${kitAsset.assetType}(s) are currently under maintenance/repair and cannot be assigned to starter kits`;
+          console.warn(`   ⚠️ ${warning}`);
+          if (!maintenanceWarning) {
+            maintenanceWarning = warning;
+          } else {
+            maintenanceWarning += `. ${warning}`;
+          }
+        }
 
         if (matchingAssets.length < requiredQuantity) {
           const missing = `${kitAsset.assetType} (need ${requiredQuantity}, found ${matchingAssets.length})`;
           missingAssets.push(missing);
 
           if (kitAsset.isRequired) {
-            console.warn('⚠️ Missing required asset:', missing);
+            console.warn(`⚠️ Missing required asset: ${missing}`);
           }
         }
 
@@ -386,11 +457,13 @@ export class FirebaseAssetService implements IAssetService {
             ...asset,
             status: 'Assigned',
             assignedTo: employeeId,
-            assignedDate: new Date().toISOString()
+            assignedDate: new Date().toISOString(),
+            isEssential: kitAsset.isRequired, // Mark as essential if required in the kit
+            priority: kitAsset.isRequired ? 'High' : (asset.priority || 'Medium') // Set priority based on requirement
           });
 
           assignedCount++;
-          console.log('✅ Assigned:', asset.name, 'to', employeeName);
+          console.log(`✅ Assigned: ${asset.name} (${asset.type}) to ${employeeName} [Essential: ${kitAsset.isRequired}]`);
         }
       }
 
@@ -399,11 +472,12 @@ export class FirebaseAssetService implements IAssetService {
       return {
         success: assignedCount > 0,
         assignedCount,
-        missingAssets
+        missingAssets,
+        maintenanceWarning
       };
     } catch (error) {
       console.error('❌ Failed to auto-assign starter kit:', error);
-      return { success: false, assignedCount: 0, missingAssets: [] };
+      return { success: false, assignedCount: 0, missingAssets: [], maintenanceWarning: undefined };
     }
   }
 }

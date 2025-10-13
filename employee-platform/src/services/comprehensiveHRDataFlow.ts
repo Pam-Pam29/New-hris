@@ -1369,7 +1369,7 @@ export class MockComprehensiveHRDataFlowService implements IComprehensiveHRDataF
                 workSchedule: 'Monday-Friday 9AM-5PM',
                 salary: {
                     baseSalary: 95000,
-                    currency: 'USD',
+                    currency: 'NGN',
                     payFrequency: 'bi-weekly'
                 }
             },

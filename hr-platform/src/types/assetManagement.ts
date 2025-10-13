@@ -5,6 +5,7 @@ export type AssetCategory = 'Electronics' | 'Furniture' | 'Vehicle' | 'Software'
 
 export interface Asset {
   id: string;
+  companyId: string; // Multi-tenancy: Company ID
   assetTag: string; // Unique identifier like "LAPTOP-001"
   name: string;
   category: AssetCategory;
@@ -20,12 +21,12 @@ export interface Asset {
   location?: string;
   warrantyExpiry?: Date | any;
   notes?: string;
-  
+
   // Assignment details
   assignedTo?: string; // Employee ID
   assignedToName?: string;
   assignmentDate?: Date | any;
-  
+
   // Metadata
   createdAt: Date | any;
   updatedAt: Date | any;
@@ -34,6 +35,7 @@ export interface Asset {
 
 export interface AssetAssignment {
   id: string;
+  companyId: string; // Multi-tenancy: Company ID
   assetId: string;
   assetTag: string;
   assetName: string;
@@ -48,6 +50,7 @@ export interface AssetAssignment {
 
 export interface AssetMaintenance {
   id: string;
+  companyId: string; // Multi-tenancy: Company ID
   assetId: string;
   assetTag: string;
   maintenanceType: 'repair' | 'upgrade' | 'inspection' | 'cleaning';

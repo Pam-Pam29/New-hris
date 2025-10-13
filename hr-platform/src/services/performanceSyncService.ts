@@ -1,5 +1,5 @@
 // Performance management synchronization service
-import { doc, updateDoc, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { getFirebaseDb } from '../config/firebase';
 import { PerformanceMeeting, PerformanceGoal, PerformanceReview } from '../types/performanceManagement';
 import { hrAvailabilityService } from './hrAvailabilityService';
@@ -11,7 +11,7 @@ export class PerformanceSyncService {
     async scheduleMeeting(meeting: Omit<PerformanceMeeting, 'id' | 'createdAt' | 'updatedAt' | 'status'>): Promise<string> {
         try {
             console.log('📅 Scheduling performance meeting:', meeting);
-            
+
             const meetingData = {
                 ...meeting,
                 status: 'pending' as const,
@@ -20,7 +20,7 @@ export class PerformanceSyncService {
             };
 
             const docRef = await addDoc(collection(this.db, 'performanceMeetings'), meetingData);
-            
+
             console.log('✅ Meeting scheduled with ID:', docRef.id);
 
             // Create notification for employee
@@ -37,11 +37,11 @@ export class PerformanceSyncService {
     async approveMeeting(meetingId: string, reviewedBy: string): Promise<void> {
         try {
             console.log('✅ Approving meeting:', meetingId);
-            
+
             // Get meeting details
             const meetingDoc = await getDoc(doc(this.db, 'performanceMeetings', meetingId));
             const meetingData = meetingDoc.data() as any;
-            
+
             const meetingRef = doc(this.db, 'performanceMeetings', meetingId);
             await updateDoc(meetingRef, {
                 status: 'approved',
@@ -56,12 +56,12 @@ export class PerformanceSyncService {
                     const meetingDate = meetingData.scheduledDate.toDate ? meetingData.scheduledDate.toDate() : new Date(meetingData.scheduledDate);
                     const [hours, minutes] = meetingData.scheduledTime.split(':');
                     const startTime = meetingData.scheduledTime;
-                    
+
                     // Calculate end time based on duration
                     const endMinutes = parseInt(minutes) + meetingData.duration;
                     const endHours = parseInt(hours) + Math.floor(endMinutes / 60);
                     const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-                    
+
                     await hrAvailabilityService.markUnavailable({
                         date: meetingDate,
                         startTime,
@@ -99,11 +99,11 @@ export class PerformanceSyncService {
     async rejectMeeting(meetingId: string, reviewedBy: string, rejectionReason?: string): Promise<void> {
         try {
             console.log('❌ Rejecting meeting:', meetingId);
-            
+
             // Get meeting details
             const meetingDoc = await getDoc(doc(this.db, 'performanceMeetings', meetingId));
             const meetingData = meetingDoc.data() as any;
-            
+
             const meetingRef = doc(this.db, 'performanceMeetings', meetingId);
             await updateDoc(meetingRef, {
                 status: 'rejected',
@@ -134,11 +134,11 @@ export class PerformanceSyncService {
     async cancelMeeting(meetingId: string): Promise<void> {
         try {
             console.log('🚫 Cancelling meeting:', meetingId);
-            
+
             // Get meeting details
             const meetingDoc = await getDoc(doc(this.db, 'performanceMeetings', meetingId));
             const meetingData = meetingDoc.data() as any;
-            
+
             const meetingRef = doc(this.db, 'performanceMeetings', meetingId);
             await updateDoc(meetingRef, {
                 status: 'cancelled',
@@ -166,7 +166,7 @@ export class PerformanceSyncService {
     async completeMeeting(meetingId: string, notes?: string): Promise<void> {
         try {
             console.log('✅ Marking meeting as completed:', meetingId);
-            
+
             const meetingRef = doc(this.db, 'performanceMeetings', meetingId);
             await updateDoc(meetingRef, {
                 status: 'completed',
@@ -188,7 +188,7 @@ export class PerformanceSyncService {
                 id: `meeting-${meetingId}-${Date.now()}`,
                 employeeId: meeting.createdBy === 'employee' ? 'hr-team' : meeting.employeeId,
                 title: 'New Performance Meeting Request',
-                message: meeting.createdBy === 'employee' 
+                message: meeting.createdBy === 'employee'
                     ? `${meeting.employeeName} has requested a performance meeting`
                     : `HR has scheduled a performance meeting for you`,
                 type: 'info',
@@ -220,7 +220,7 @@ export class PerformanceSyncService {
     async createGoal(goal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
             console.log('🎯 Creating performance goal:', goal);
-            
+
             const goalData = {
                 ...goal,
                 createdAt: serverTimestamp(),
@@ -240,7 +240,7 @@ export class PerformanceSyncService {
     async updateGoal(goalId: string, updates: Partial<PerformanceGoal>): Promise<void> {
         try {
             console.log('📝 Updating performance goal:', goalId);
-            
+
             const goalRef = doc(this.db, 'performanceGoals', goalId);
             await updateDoc(goalRef, {
                 ...updates,
@@ -258,7 +258,7 @@ export class PerformanceSyncService {
     async deleteGoal(goalId: string): Promise<void> {
         try {
             console.log('🗑️ Deleting performance goal:', goalId);
-            
+
             const goalRef = doc(this.db, 'performanceGoals', goalId);
             await updateDoc(goalRef, {
                 status: 'cancelled',
@@ -276,7 +276,7 @@ export class PerformanceSyncService {
     async createReview(review: Omit<PerformanceReview, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
             console.log('📋 Creating performance review:', review);
-            
+
             const reviewData = {
                 ...review,
                 createdAt: serverTimestamp(),
@@ -332,7 +332,7 @@ export class PerformanceSyncService {
     async createGoalForEmployee(goal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
             console.log('🎯 Creating goal for employee:', goal);
-            
+
             const goalData = {
                 ...goal,
                 createdAt: serverTimestamp(),

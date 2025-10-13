@@ -7,6 +7,7 @@ interface AssetFormProps {
   form: {
     name: string;
     serialNumber: string;
+    type: string;
     category: string;
     status: string;
     assignedTo: string;
@@ -19,6 +20,7 @@ interface AssetFormProps {
   setForm: React.Dispatch<React.SetStateAction<{
     name: string;
     serialNumber: string;
+    type: string;
     category: string;
     status: string;
     assignedTo: string;
@@ -32,6 +34,25 @@ interface AssetFormProps {
   sending: boolean;
   employees: { value: string; label: string }[];
 }
+
+const assetTypeOptions = [
+  { value: 'Laptop', label: 'Laptop' },
+  { value: 'Desktop', label: 'Desktop' },
+  { value: 'Monitor', label: 'Monitor' },
+  { value: 'Phone', label: 'Phone' },
+  { value: 'Tablet', label: 'Tablet' },
+  { value: 'Keyboard', label: 'Keyboard' },
+  { value: 'Mouse', label: 'Mouse' },
+  { value: 'Headset', label: 'Headset' },
+  { value: 'Desk', label: 'Desk' },
+  { value: 'Chair', label: 'Chair' },
+  { value: 'Printer', label: 'Printer' },
+  { value: 'Scanner', label: 'Scanner' },
+  { value: 'Projector', label: 'Projector' },
+  { value: 'Server', label: 'Server' },
+  { value: 'Router', label: 'Router' },
+  { value: 'Other', label: 'Other' }
+];
 
 const categoryOptions = [
   { value: 'IT Equipment', label: 'IT Equipment' },
@@ -105,6 +126,21 @@ export const AssetForm: React.FC<AssetFormProps> = ({
             setForm(f => ({ ...f, serialNumber: e.target.value }));
           }}
           required
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="type" className="text-sm font-medium text-foreground">Asset Type *</label>
+        <Select
+          id="type"
+          value={form.type}
+          onValueChange={val => {
+            console.log('Type changed:', val);
+            setForm(f => ({ ...f, type: val }));
+          }}
+          placeholder="Select Asset Type"
+          options={assetTypeOptions}
+          className="w-full"
         />
       </div>
 
@@ -185,7 +221,7 @@ export const AssetForm: React.FC<AssetFormProps> = ({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="purchasePrice" className="text-sm font-medium text-foreground">Purchase Price ($) *</label>
+        <label htmlFor="purchasePrice" className="text-sm font-medium text-foreground">Purchase Price (₦) *</label>
         <Input
           id="purchasePrice"
           type="number"

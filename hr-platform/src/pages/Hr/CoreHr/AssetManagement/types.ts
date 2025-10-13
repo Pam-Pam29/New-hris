@@ -3,6 +3,7 @@
 export interface Asset {
   id: string;
   name: string;
+  type: string; // Asset type: Laptop, Desktop, Monitor, Phone, etc.
   category: string;
   serialNumber: string;
   status: 'Available' | 'Assigned' | 'Under Repair' | 'Retired';
@@ -51,6 +52,7 @@ export interface AssetRequest {
   id: string;
   employeeId: string;
   employeeName: string;
+  assetName?: string; // Specific asset name if requesting a particular asset
   assetType: string; // e.g., "Laptop", "Monitor", "Phone"
   category: string;
   justification: string;

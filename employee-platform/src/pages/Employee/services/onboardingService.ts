@@ -22,11 +22,19 @@ export interface OnboardingProgress {
     emergencyContacts?: any;
     bankingInfo?: any;
     documents?: any[];
-    policiesAcknowledged?: string[];
     trainingCompleted?: boolean;
-    isComplete: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    isComplete?: boolean;
+    contractReviewed?: boolean;
+    contractUploaded?: boolean;
+    personalInfoCompleted?: boolean;
+    emergencyContactsCompleted?: boolean;
+    bankingInfoCompleted?: boolean;
+    documentsUploaded?: boolean;
+    workEmailSetup?: boolean;
+    policiesAcknowledged?: boolean;
+    systemTrainingCompleted?: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 export interface PersonalInfo {
@@ -74,18 +82,7 @@ class OnboardingService {
             const onboardingDoc = await getDoc(onboardingRef);
 
             if (!onboardingDoc.exists()) {
-                // Create initial onboarding progress
-                const initialProgress: OnboardingProgress = {
-                    employeeId,
-                    currentStep: 'contract_review',
-                    completedSteps: [],
-                    isComplete: false,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                };
-
-                await setDoc(onboardingRef, initialProgress);
-                return initialProgress;
+                return null; // Return null instead of creating automatically
             }
 
             const data = onboardingDoc.data();
@@ -97,6 +94,22 @@ class OnboardingService {
         } catch (error) {
             console.error('Error getting onboarding progress:', error);
             return null;
+        }
+    }
+
+    // Save onboarding progress
+    async saveOnboardingProgress(progress: OnboardingProgress): Promise<boolean> {
+        try {
+            const onboardingRef = doc(db, 'onboarding', progress.employeeId);
+            await setDoc(onboardingRef, {
+                ...progress,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            return true;
+        } catch (error) {
+            console.error('Error saving onboarding progress:', error);
+            return false;
         }
     }
 
@@ -147,14 +160,15 @@ class OnboardingService {
     }
 
     // Generate work email
-    async generateWorkEmail(personalInfo: PersonalInfo): Promise<string> {
+    async generateWorkEmail(personalInfo: PersonalInfo, companyDomain?: string): Promise<string> {
         const { firstName, lastName } = personalInfo;
+        const domain = companyDomain || 'company.com';
 
         // Company email naming conventions
         const emailFormats = [
-            `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
-            `${firstName.toLowerCase()}${lastName.toLowerCase()}@company.com`,
-            `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 100)}@company.com`
+            `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${domain}`,
+            `${firstName.toLowerCase()}${lastName.toLowerCase()}@${domain}`,
+            `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 100)}@${domain}`
         ];
 
         // Check availability against existing employees
@@ -169,7 +183,7 @@ class OnboardingService {
         }
 
         // Fallback with random number
-        return `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 1000)}@company.com`;
+        return `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 1000)}@${domain}`;
     }
 
     // Complete onboarding
@@ -215,7 +229,7 @@ class OnboardingService {
             // Send welcome email
             await this.sendEmail({
                 to: workEmail,
-                subject: 'Welcome to [Company] - Your Onboarding is Complete!',
+                subject: 'Welcome to Our Company - Your Onboarding is Complete!',
                 template: 'welcome',
                 data: {
                     firstName: employeeData.firstName,

@@ -393,7 +393,7 @@ export class FirebasePayrollService implements IPayrollService {
             paymentStatus: data.paymentStatus,
             paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
             paymentMethod: data.paymentMethod,
-            currency: data.currency,
+            currency: data.currency || 'NGN', // Default to NGN if not set
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate(),
             createdBy: data.createdBy,
@@ -416,6 +416,16 @@ export class FirebasePayrollService implements IPayrollService {
             approvedAt: data.approvedAt ? data.approvedAt.toDate() : undefined,
             rejectionReason: data.rejectionReason,
             paidAt: data.paidAt ? data.paidAt.toDate() : undefined,
+            // Repayment fields (for loans/advances)
+            repaymentType: data.repaymentType,
+            repaymentMethod: data.repaymentMethod,
+            installmentMonths: data.installmentMonths,
+            installmentAmount: data.installmentAmount,
+            amountRecovered: data.amountRecovered,
+            remainingBalance: data.remainingBalance,
+            recoveryStartDate: data.recoveryStartDate ? data.recoveryStartDate.toDate() : undefined,
+            recoveryCompleteDate: data.recoveryCompleteDate ? data.recoveryCompleteDate.toDate() : undefined,
+            linkedPayrollIds: data.linkedPayrollIds,
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate()
         };

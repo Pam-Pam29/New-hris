@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
+import { useCompany } from '../../../context/CompanyContext';
+import { useAuth } from '../../../context/AuthContext';
 import {
     FileText,
     CheckCircle,
@@ -16,7 +18,9 @@ import {
     Search,
     Eye,
     Loader,
-    AlertCircle
+    AlertCircle,
+    Download,
+    ExternalLink
 } from 'lucide-react';
 import { collection, query, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
@@ -44,11 +48,13 @@ interface PolicyAcknowledgment {
 }
 
 export default function EmployeePolicyManagement() {
+    const { companyId } = useCompany();
+    const { currentEmployee } = useAuth();
+
     const [employeeId] = useState(() => {
-        const savedEmployeeId = localStorage.getItem('currentEmployeeId');
-        return savedEmployeeId || 'EMP001';
+        return currentEmployee?.employeeId || localStorage.getItem('currentEmployeeId') || 'EMP001';
     });
-    const [employeeName, setEmployeeName] = useState('Employee User');
+    const [employeeName, setEmployeeName] = useState(currentEmployee?.firstName + ' ' + currentEmployee?.lastName || 'Employee User');
 
     // Load employee name
     useEffect(() => {
@@ -68,7 +74,7 @@ export default function EmployeePolicyManagement() {
         };
         loadEmployeeName();
     }, [employeeId]);
-    
+
     const [policies, setPolicies] = useState<Policy[]>([]);
     const [acknowledgments, setAcknowledgments] = useState<PolicyAcknowledgment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -128,10 +134,10 @@ export default function EmployeePolicyManagement() {
             };
 
             await addDoc(collection(db, 'policyAcknowledgments'), acknowledgment);
-            
+
             // Reload data to reflect new acknowledgment
             await loadData();
-            
+
             console.log('✅ Policy acknowledged');
         } catch (error) {
             console.error('Failed to acknowledge policy:', error);
@@ -148,7 +154,7 @@ export default function EmployeePolicyManagement() {
     const formatDate = (date: any) => {
         try {
             if (!date) return 'N/A';
-            
+
             let parsedDate: Date;
             if (date instanceof Date) {
                 parsedDate = date;
@@ -161,11 +167,11 @@ export default function EmployeePolicyManagement() {
             } else {
                 parsedDate = new Date(date);
             }
-            
+
             if (isNaN(parsedDate.getTime())) {
                 return 'N/A';
             }
-            
+
             return parsedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         } catch (error) {
             console.warn('Failed to format date:', date, error);
@@ -331,6 +337,30 @@ export default function EmployeePolicyManagement() {
                                             <Calendar className="h-4 w-4 mr-2" />
                                             Effective: {formatDate(policy.effectiveDate)}
                                         </div>
+
+                                        {/* Content Preview or Document Indicator */}
+                                        {policy.content.startsWith('[Document uploaded:') ? (
+                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <FileText className="h-4 w-4 text-blue-600" />
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-blue-900">
+                                                            📄 Uploaded Document
+                                                        </p>
+                                                        <p className="text-xs text-blue-700 mt-0.5">
+                                                            {policy.content.match(/\[Document uploaded: ([^\]]+)\]/)?.[1] || 'Policy document'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-gray-100 border border-gray-200 rounded-lg">
+                                                <p className="text-xs text-gray-700 line-clamp-3">
+                                                    {policy.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="flex space-x-2">
                                             <Button
                                                 size="sm"
@@ -342,7 +372,7 @@ export default function EmployeePolicyManagement() {
                                                 className="flex-1"
                                             >
                                                 <Eye className="h-4 w-4 mr-1" />
-                                                View
+                                                {policy.content.startsWith('[Document uploaded:') ? 'View Document' : 'View'}
                                             </Button>
                                             {policy.requiresAcknowledgment && !isPolicyAcknowledged(policy.id) && (
                                                 <Button
@@ -455,6 +485,30 @@ export default function EmployeePolicyManagement() {
                                             <Calendar className="h-4 w-4 mr-2" />
                                             Effective: {formatDate(policy.effectiveDate)}
                                         </div>
+
+                                        {/* Content Preview or Document Indicator */}
+                                        {policy.content.startsWith('[Document uploaded:') ? (
+                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <FileText className="h-4 w-4 text-blue-600" />
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-blue-900">
+                                                            📄 Uploaded Document
+                                                        </p>
+                                                        <p className="text-xs text-blue-700 mt-0.5">
+                                                            {policy.content.match(/\[Document uploaded: ([^\]]+)\]/)?.[1] || 'Policy document'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-gray-100 border border-gray-200 rounded-lg">
+                                                <p className="text-xs text-gray-700 line-clamp-3">
+                                                    {policy.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                                                </p>
+                                            </div>
+                                        )}
+
                                         {acknowledgment && (
                                             <div className="flex items-center text-sm text-green-600">
                                                 <CheckCircle className="h-4 w-4 mr-2" />
@@ -471,7 +525,7 @@ export default function EmployeePolicyManagement() {
                                             className="w-full"
                                         >
                                             <Eye className="h-4 w-4 mr-1" />
-                                            View Policy
+                                            {policy.content.startsWith('[Document uploaded:') ? 'View Document' : 'View Policy'}
                                         </Button>
                                     </CardContent>
                                 </Card>
@@ -517,6 +571,30 @@ export default function EmployeePolicyManagement() {
                                             <Calendar className="h-4 w-4 mr-2" />
                                             Effective: {formatDate(policy.effectiveDate)}
                                         </div>
+
+                                        {/* Content Preview or Document Indicator */}
+                                        {policy.content.startsWith('[Document uploaded:') ? (
+                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <FileText className="h-4 w-4 text-blue-600" />
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-blue-900">
+                                                            📄 Uploaded Document
+                                                        </p>
+                                                        <p className="text-xs text-blue-700 mt-0.5">
+                                                            {policy.content.match(/\[Document uploaded: ([^\]]+)\]/)?.[1] || 'Policy document'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-gray-100 border border-gray-200 rounded-lg">
+                                                <p className="text-xs text-gray-700 line-clamp-3">
+                                                    {policy.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="p-3 bg-orange-100 border border-orange-300 rounded-lg">
                                             <p className="text-sm font-semibold text-orange-900">
                                                 ⚠️ Acknowledgment Required
@@ -534,7 +612,9 @@ export default function EmployeePolicyManagement() {
                                             className="w-full bg-green-600 hover:bg-green-700"
                                         >
                                             <Eye className="h-4 w-4 mr-1" />
-                                            Read & Acknowledge
+                                            {policy.content.startsWith('[Document uploaded:')
+                                                ? 'View Document & Acknowledge'
+                                                : 'Read & Acknowledge'}
                                         </Button>
                                     </CardContent>
                                 </Card>
@@ -550,31 +630,99 @@ export default function EmployeePolicyManagement() {
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col">
                         <CardHeader className="flex-shrink-0">
                             <div className="flex items-center justify-between">
-                                <div>
+                                <div className="flex-1">
                                     <CardTitle className="text-xl">{selectedPolicy.title}</CardTitle>
                                     <CardDescription>
-                                        {selectedPolicy.category} • Version {selectedPolicy.version} • 
+                                        {selectedPolicy.category} • Version {selectedPolicy.version} •
                                         Effective: {formatDate(selectedPolicy.effectiveDate)}
                                     </CardDescription>
                                 </div>
-                                {isPolicyAcknowledged(selectedPolicy.id) ? (
-                                    <Badge className="bg-green-100 text-green-600">
-                                        <CheckCircle className="h-3 w-3 mr-1" />
-                                        Acknowledged
-                                    </Badge>
-                                ) : selectedPolicy.requiresAcknowledgment && (
-                                    <Badge className="bg-orange-100 text-orange-600">
-                                        <Clock className="h-3 w-3 mr-1" />
-                                        Pending
-                                    </Badge>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {isPolicyAcknowledged(selectedPolicy.id) ? (
+                                        <Badge className="bg-green-100 text-green-600">
+                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                            Acknowledged
+                                        </Badge>
+                                    ) : selectedPolicy.requiresAcknowledgment && (
+                                        <Badge className="bg-orange-100 text-orange-600">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            Pending
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
+
+                            {/* Document Upload Indicator */}
+                            {selectedPolicy.content.startsWith('[Document uploaded:') && (
+                                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                        <FileText className="h-6 w-6 text-blue-600 mt-1" />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-semibold text-blue-900 mb-1">
+                                                📄 Policy Document Available
+                                            </p>
+                                            <p className="text-xs text-blue-700">
+                                                This policy was uploaded as a document. The full formatted document is available below.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                // Extract filename from content
+                                                const match = selectedPolicy.content.match(/\[Document uploaded: ([^\]]+)\]/);
+                                                if (match) {
+                                                    alert(`📥 Download feature coming soon!\n\nDocument: ${match[1]}\n\nNote: In production, this would download the actual ${match[1]} file from cloud storage.`);
+                                                }
+                                            }}
+                                            className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                        >
+                                            <Download className="h-4 w-4 mr-1" />
+                                            Download
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent className="flex-1 overflow-y-auto">
-                            <div
-                                className="prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: selectedPolicy.content }}
-                            />
+                            {/* Full Policy Content Display */}
+                            <div className="space-y-4">
+                                {/* Section Header */}
+                                <div className="pb-3 border-b border-gray-200">
+                                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-blue-600" />
+                                        Policy Content
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        Please read the entire policy carefully before acknowledging
+                                    </p>
+                                </div>
+
+                                {/* Policy Content */}
+                                <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div
+                                        className="prose prose-sm max-w-none text-gray-900 leading-relaxed"
+                                        dangerouslySetInnerHTML={{ __html: selectedPolicy.content }}
+                                    />
+                                </div>
+
+                                {/* Reading Confirmation */}
+                                {selectedPolicy.requiresAcknowledgment && !isPolicyAcknowledged(selectedPolicy.id) && (
+                                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                        <div className="flex items-start gap-3">
+                                            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
+                                            <div>
+                                                <p className="text-sm font-semibold text-orange-900">
+                                                    Acknowledgment Required
+                                                </p>
+                                                <p className="text-xs text-orange-700 mt-1">
+                                                    By clicking "I Acknowledge This Policy" below, you confirm that you have read and understood this policy and agree to comply with all its terms.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                         <div className="flex-shrink-0 p-6 border-t bg-gray-50">
                             <div className="flex space-x-3">

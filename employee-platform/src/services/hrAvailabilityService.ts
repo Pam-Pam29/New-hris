@@ -1,5 +1,5 @@
-// HR Availability Service - View HR availability for meetings
-import { collection, query, where, getDocs } from 'firebase/firestore';
+// HR Availability Service - View HR availability and book meetings
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export interface AvailabilitySlot {
@@ -7,10 +7,12 @@ export interface AvailabilitySlot {
     dayOfWeek: number; // 0 = Sunday, 1 = Monday, etc.
     startTime: string; // "09:00"
     endTime: string; // "10:00"
-    isRecurring: boolean;
-    specificDate?: Date;
+    isRecurring: boolean; // If true, applies every week
+    specificDate?: Date; // For one-time availability
     hrName: string;
     hrId: string;
+    createdAt?: any;
+    updatedAt?: any;
 }
 
 export interface UnavailableSlot {
@@ -18,15 +20,17 @@ export interface UnavailableSlot {
     date: Date;
     startTime: string;
     endTime: string;
-    reason?: string;
+    reason?: string; // "Meeting scheduled", "Out of office", etc.
     hrName: string;
     hrId: string;
+    createdAt?: any;
+    updatedAt?: any;
 }
 
 export class HRAvailabilityService {
     private db = db;
 
-    // Get all availability slots
+    // Get all availability slots (read-only for employees)
     async getAllAvailability(): Promise<AvailabilitySlot[]> {
         try {
             const querySnapshot = await getDocs(collection(this.db, 'hrAvailability'));
@@ -40,63 +44,114 @@ export class HRAvailabilityService {
         }
     }
 
-    // Get unavailable slots for a specific date range
-    async getUnavailableSlots(startDate: Date, endDate: Date): Promise<UnavailableSlot[]> {
+    // Get availability for a specific day
+    async getAvailabilityForDay(dayOfWeek: number): Promise<AvailabilitySlot[]> {
         try {
             const q = query(
-                collection(this.db, 'hrUnavailability'),
-                where('date', '>=', startDate),
-                where('date', '<=', endDate)
+                collection(this.db, 'hrAvailability'),
+                where('dayOfWeek', '==', dayOfWeek),
+                where('isRecurring', '==', true)
             );
-            
+
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            } as UnavailableSlot));
+            } as AvailabilitySlot));
         } catch (error) {
-            console.error('❌ Failed to get unavailable slots:', error);
+            console.error('❌ Failed to get availability for day:', error);
             return [];
         }
+    }
+
+    // Get availability for a specific HR person
+    async getAvailabilityForHR(hrId: string): Promise<AvailabilitySlot[]> {
+        try {
+            const q = query(
+                collection(this.db, 'hrAvailability'),
+                where('hrId', '==', hrId)
+            );
+
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as AvailabilitySlot));
+        } catch (error) {
+            console.error('❌ Failed to get availability for HR:', error);
+            return [];
+        }
+    }
+
+    // Check if a specific time slot is available
+    async isTimeSlotAvailable(date: Date, startTime: string, endTime: string): Promise<boolean> {
+        try {
+            // Check if there are any unavailable slots for this time
+            const q = query(
+                collection(this.db, 'hrUnavailability'),
+                where('date', '==', date)
+            );
+
+            const querySnapshot = await getDocs(q);
+            const unavailableSlots = querySnapshot.docs.map(doc => doc.data() as UnavailableSlot);
+
+            // Check for conflicts
+            for (const slot of unavailableSlots) {
+                if (this.timeSlotsOverlap(startTime, endTime, slot.startTime, slot.endTime)) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to check availability:', error);
+            return false;
+        }
+    }
+
+    // Helper: Check if time slots overlap
+    private timeSlotsOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+        const s1 = this.timeToMinutes(start1);
+        const e1 = this.timeToMinutes(end1);
+        const s2 = this.timeToMinutes(start2);
+        const e2 = this.timeToMinutes(end2);
+
+        return (s1 < e2) && (s2 < e1);
+    }
+
+    // Helper: Convert time string to minutes since midnight
+    private timeToMinutes(time: string): number {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
     }
 
     // Get available time slots for a specific date
     async getAvailableTimeSlotsForDate(date: Date): Promise<{ startTime: string; endTime: string; }[]> {
         try {
             const dayOfWeek = date.getDay();
-            
-            // Get recurring availability for this day
-            const allAvailability = await this.getAllAvailability();
-            const dayAvailability = allAvailability.filter(slot => 
-                slot.isRecurring && slot.dayOfWeek === dayOfWeek
-            );
 
-            if (dayAvailability.length === 0) {
+            // Get availability for this day of week
+            const availabilityBlocks = await this.getAvailabilityForDay(dayOfWeek);
+
+            if (availabilityBlocks.length === 0) {
                 return [];
             }
 
-            // Get unavailable slots for this date
-            const unavailableSlots = await this.getUnavailableSlots(date, date);
-            
-            // Generate available time slots (30-minute intervals)
-            const availableSlots: { startTime: string; endTime: string; }[] = [];
-            
-            for (const availability of dayAvailability) {
-                const slots = this.generateTimeSlots(availability.startTime, availability.endTime);
-                
-                // Filter out unavailable times
-                for (const slot of slots) {
-                    const isAvailable = !unavailableSlots.some(unavailable => {
-                        const unavailableDate = unavailable.date instanceof Date ? unavailable.date : (unavailable.date as any).toDate();
-                        return unavailableDate.toDateString() === date.toDateString() &&
-                               this.timeSlotsOverlap(slot.startTime, slot.endTime, unavailable.startTime, unavailable.endTime);
-                    });
-                    
-                    if (isAvailable) {
-                        availableSlots.push(slot);
-                    }
-                }
+            // Break down each availability block into 30-minute slots
+            const allSlots: { startTime: string; endTime: string; }[] = [];
+
+            for (const block of availabilityBlocks) {
+                const blockSlots = this.generateThirtyMinuteSlots(block.startTime, block.endTime);
+                allSlots.push(...blockSlots);
             }
+
+            // Get booked meetings for this date to filter out unavailable slots
+            const bookedSlots = await this.getBookedSlotsForDate(date);
+
+            // Filter out booked slots
+            const availableSlots = allSlots.filter(slot => {
+                return !this.isSlotBooked(slot, bookedSlots);
+            });
 
             return availableSlots;
         } catch (error) {
@@ -105,42 +160,87 @@ export class HRAvailabilityService {
         }
     }
 
-    // Generate 30-minute time slots
-    private generateTimeSlots(startTime: string, endTime: string): { startTime: string; endTime: string; }[] {
+    // Helper: Generate 30-minute time slots from a time range
+    private generateThirtyMinuteSlots(startTime: string, endTime: string): { startTime: string; endTime: string; }[] {
         const slots: { startTime: string; endTime: string; }[] = [];
-        const [startHour, startMinute] = startTime.split(':').map(Number);
-        const [endHour, endMinute] = endTime.split(':').map(Number);
-        
-        let currentHour = startHour;
-        let currentMinute = startMinute;
-        
-        while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-            const slotStart = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-            
-            // Add 30 minutes
-            currentMinute += 30;
-            if (currentMinute >= 60) {
-                currentHour++;
-                currentMinute -= 60;
-            }
-            
-            const slotEnd = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-            
-            // Only add if slot end is within availability range
-            if (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
-                slots.push({ startTime: slotStart, endTime: slotEnd });
+        const startMinutes = this.timeToMinutes(startTime);
+        const endMinutes = this.timeToMinutes(endTime);
+
+        // Generate 30-minute slots
+        for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+            const slotStart = this.minutesToTime(minutes);
+            const slotEnd = this.minutesToTime(minutes + 30);
+
+            // Only add if the slot end doesn't exceed the block end
+            if (minutes + 30 <= endMinutes) {
+                slots.push({
+                    startTime: slotStart,
+                    endTime: slotEnd
+                });
             }
         }
-        
+
         return slots;
     }
 
-    // Check if two time slots overlap
-    private timeSlotsOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
-        return (start1 < end2 && end1 > start2);
+    // Helper: Convert minutes to time string (HH:MM)
+    private minutesToTime(minutes: number): string {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    }
+
+    // Helper: Get booked slots for a specific date
+    private async getBookedSlotsForDate(date: Date): Promise<{ startTime: string; endTime: string; duration: number; }[]> {
+        try {
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+
+            // Get the date range for the query (start and end of day)
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0, 0, 0, 0);
+
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            // Query meetings for this date
+            const meetingsQuery = query(
+                collection(this.db, 'performanceMeetings'),
+                where('scheduledDate', '>=', startOfDay),
+                where('scheduledDate', '<=', endOfDay),
+                where('status', 'in', ['pending', 'approved'])
+            );
+
+            const snapshot = await getDocs(meetingsQuery);
+
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                const scheduledDate = data.scheduledDate.toDate();
+                const hours = scheduledDate.getHours();
+                const minutes = scheduledDate.getMinutes();
+                const startTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+
+                const duration = data.duration || 30;
+                const endMinutes = hours * 60 + minutes + duration;
+                const endTime = this.minutesToTime(endMinutes);
+
+                return { startTime, endTime, duration };
+            });
+        } catch (error) {
+            console.log('Could not fetch booked slots:', error);
+            return [];
+        }
+    }
+
+    // Helper: Check if a slot is booked
+    private isSlotBooked(
+        slot: { startTime: string; endTime: string; },
+        bookedSlots: { startTime: string; endTime: string; }[]
+    ): boolean {
+        return bookedSlots.some(booked => {
+            return this.timeSlotsOverlap(slot.startTime, slot.endTime, booked.startTime, booked.endTime);
+        });
     }
 }
 
+// Singleton instance
 export const hrAvailabilityService = new HRAvailabilityService();
-
-

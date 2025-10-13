@@ -25,6 +25,7 @@ export class RealTimeSyncService {
         callback: (data: any[], changes: any) => void,
         options: {
             employeeId?: string;
+            companyId?: string; // ← Add companyId for multi-tenancy
             limit?: number;
             orderByField?: string;
             orderDirection?: 'asc' | 'desc';
@@ -36,6 +37,11 @@ export class RealTimeSyncService {
             let q = query(collection(getFirebaseDb(), collectionName));
 
             // Add filters if specified
+            if (options.companyId) {
+                q = query(q, where('companyId', '==', options.companyId));
+                console.log(`🏢 Filtering ${collectionName} by companyId: ${options.companyId}`);
+            }
+
             if (options.employeeId) {
                 q = query(q, where('employeeId', '==', options.employeeId));
             }

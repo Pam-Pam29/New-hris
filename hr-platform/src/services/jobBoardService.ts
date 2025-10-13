@@ -3,6 +3,7 @@ import { Firestore } from 'firebase/firestore';
 
 export interface JobPosting {
     id: string;
+    companyId: string; // Multi-tenancy: Company that owns this job
     title: string;
     department: string;
     location: string;
@@ -17,6 +18,7 @@ export interface JobPosting {
 
 export interface JobApplication {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     jobId: string;
     candidateId: string;
     applicationDate: Date;
@@ -26,6 +28,7 @@ export interface JobApplication {
 
 export interface Candidate {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     name: string;
     email: string;
     phone: string;
@@ -113,9 +116,65 @@ export class FirebaseJobBoardService implements IJobBoardService {
     }
 
     async submitApplication(application: Omit<JobApplication, 'id'>): Promise<string> {
-        const { collection, addDoc } = await import('firebase/firestore');
+        const { collection, addDoc, query, where, getDocs, Timestamp } = await import('firebase/firestore');
+
+        // 1. Create job application
         const applicationsRef = collection(this.db, 'job_applications');
-        const docRef = await addDoc(applicationsRef, application);
+        const docRef = await addDoc(applicationsRef, {
+            ...application,
+            applicationDate: new Date()
+        });
+
+        // 2. Auto-create recruitment candidate (NEW!)
+        try {
+            // Get candidate details
+            const candidate = await this.getCandidate(application.candidateId);
+            if (!candidate) {
+                console.warn('Candidate not found:', application.candidateId);
+                return docRef.id;
+            }
+
+            // Check if candidate already exists in recruitment (by email to avoid duplicates)
+            const recruitmentRef = collection(this.db, 'recruitment_candidates');
+            const existingQuery = query(recruitmentRef, where('email', '==', candidate.email));
+            const existingSnap = await getDocs(existingQuery);
+
+            if (!existingSnap.empty) {
+                console.log('Candidate already in recruitment system:', candidate.email);
+                return docRef.id;
+            }
+
+            // Get job title and companyId for better tracking
+            const job = await this.getJobPosting(application.jobId);
+
+            if (!job) {
+                console.warn('Job not found for application:', application.jobId);
+                return docRef.id;
+            }
+
+            // Create recruitment candidate automatically!
+            await addDoc(recruitmentRef, {
+                companyId: job.companyId, // ← Inherit company ID from job!
+                name: candidate.name,
+                email: candidate.email,
+                phone: candidate.phone,
+                position: job.title || 'Unknown Position',
+                jobId: application.jobId,
+                status: 'new',
+                resumeUrl: candidate.resumeUrl,
+                skills: candidate.skills || [],
+                experience: candidate.experience || '',
+                notes: `Auto-imported from job board on ${new Date().toLocaleDateString()}\nApplication ID: ${docRef.id}`,
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now()
+            });
+
+            console.log('✅ Auto-created recruitment candidate for:', candidate.email);
+        } catch (error) {
+            console.error('Error auto-creating recruitment candidate:', error);
+            // Don't fail the application if recruitment sync fails
+        }
+
         return docRef.id;
     }
 

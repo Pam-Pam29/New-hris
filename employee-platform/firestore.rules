@@ -71,54 +71,19 @@ service cloud.firestore {
       //    request.auth.token.role == 'admin');
     }
     
-    // Performance Goals - Employees can read/write their own, HR can read/write all
+    // Performance Goals - Allow read/write for development
     match /performanceGoals/{goalId} {
-      allow create: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow read, update: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow delete: if request.auth != null && 
-        (request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
+      allow read, write: if true; // Allow access for development
     }
     
-    // Performance Reviews - Employees can read their own, HR can read/write all
+    // Performance Reviews - Allow read/write for development
     match /performanceReviews/{reviewId} {
-      allow create: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.uid == resource.data.reviewerId ||
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow read: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.uid == resource.data.reviewerId ||
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.reviewerId ||
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
+      allow read, write: if true; // Allow access for development
     }
     
-    // Meeting Schedules - Employees can read/write their own, HR can read/write all
+    // Meeting Schedules - Allow read/write for development
     match /meetingSchedules/{meetingId} {
-      allow create: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.uid == resource.data.managerId ||
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow read, update: if request.auth != null && 
-        (request.auth.uid == resource.data.employeeId || 
-         request.auth.uid == resource.data.managerId ||
-         request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
-      allow delete: if request.auth != null && 
-        (request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
+      allow read, write: if true; // Allow access for development
     }
     
     // Notifications - Allow read for development, write for HR/admin
@@ -134,12 +99,15 @@ service cloud.firestore {
          request.auth.token.role == 'admin');
     }
     
-    // Employees collection - Allow read access for development, write for HR/admin
+    // Employees collection - Allow read/write for development
     match /employees/{employeeId} {
-      allow read: if true; // Allow read access for development
-      allow write: if request.auth != null && 
-        (request.auth.token.role == 'hr' || 
-         request.auth.token.role == 'admin');
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.uid == employeeId ||
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Assets collection - Allow read access for development, write for HR/admin
@@ -283,6 +251,29 @@ service cloud.firestore {
       // allow read: if true;
       // allow create, update, delete: if request.auth.token.role == 'hr' || 
       //   request.auth.token.role == 'admin';
+    }
+    
+    // Performance Meetings - Allow read/write for development
+    match /performanceMeetings/{meetingId} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // HR Availability - Allow read for employees, write for HR only
+    match /hrAvailability/{slotId} {
+      allow read: if true; // Employees can see HR availability
+      allow write: if false; // Only HR can modify availability (via HR platform)
+    }
+    
+    // HR Unavailability - Allow read for employees
+    match /hrUnavailability/{slotId} {
+      allow read: if true; // Employees can see blocked times
+      allow write: if false; // Only HR can modify
+    }
+    
+    // HR Settings - Allow read for booking page URL
+    match /hrSettings/{settingId} {
+      allow read: if true; // Employees can see booking page URL
+      allow write: if false; // Only admin/HR can modify via console/script
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getRealTimeSyncService } from '../services/realTimeSyncService';
 
 // Custom hook for real-time synchronization
@@ -6,6 +6,7 @@ export function useRealTimeSync<T>(
     collectionName: string,
     options: {
         employeeId?: string;
+        companyId?: string; // ← Add companyId for multi-tenancy
         limit?: number;
         orderByField?: string;
         orderDirection?: 'asc' | 'desc';
@@ -19,7 +20,18 @@ export function useRealTimeSync<T>(
 
     const syncService = getRealTimeSyncService();
 
+    // Memoize options to prevent unnecessary re-renders
+    const memoizedOptions = useMemo(() => options, [
+        options.employeeId,
+        options.companyId,
+        options.limit,
+        options.orderByField,
+        options.orderDirection
+    ]);
+
+    // Remove subscriptionId from dependencies to avoid unnecessary recreations
     const startSync = useCallback(() => {
+        // Check current subscription state before subscribing
         if (subscriptionId) {
             // Already subscribed
             return;
@@ -37,7 +49,7 @@ export function useRealTimeSync<T>(
                     setLoading(false);
                     setError(null);
                 },
-                options
+                memoizedOptions
             );
 
             setSubscriptionId(id);
@@ -47,15 +59,18 @@ export function useRealTimeSync<T>(
             setLoading(false);
             console.error(`❌ Failed to start sync for ${collectionName}:`, err);
         }
-    }, [collectionName, subscriptionId, syncService, options.employeeId, options.limit, options.orderByField, options.orderDirection]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [collectionName, syncService, memoizedOptions]);
 
     const stopSync = useCallback(() => {
+        // Use ref to check current subscription state
         if (subscriptionId) {
             syncService.unsubscribe(subscriptionId);
             setSubscriptionId(null);
             console.log(`📡 Stopped real-time sync for ${collectionName}`);
         }
-    }, [subscriptionId, syncService, collectionName]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [syncService, collectionName]);
 
     // Auto-start sync on mount
     useEffect(() => {
@@ -73,12 +88,7 @@ export function useRealTimeSync<T>(
             stopSync();
             startSync();
         }
-    }, [
-        options.employeeId,
-        options.limit,
-        options.orderByField,
-        options.orderDirection
-    ]);
+    }, [memoizedOptions]);
 
     return {
         data,
@@ -96,9 +106,10 @@ export function useRealTimeSync<T>(
 }
 
 // Specialized hooks for common collections
-export function useLeaveRequests(employeeId?: string) {
+export function useLeaveRequests(employeeId?: string, companyId?: string) {
     return useRealTimeSync('leaveRequests', {
         employeeId,
+        companyId, // ← Add company filter for multi-tenancy
         limit: 50
         // Removed orderBy to avoid index requirements
     });
@@ -118,8 +129,9 @@ export function useEmployees() {
     });
 }
 
-export function useLeaveTypes() {
+export function useLeaveTypes(companyId?: string) {
     return useRealTimeSync('leaveTypes', {
+        companyId, // ← Add company filter for multi-tenancy
         limit: 50
     });
 }

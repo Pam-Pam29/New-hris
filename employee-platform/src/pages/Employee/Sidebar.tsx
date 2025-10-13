@@ -14,7 +14,6 @@ import {
     Shield,
     Settings,
     LogOut,
-    Bell,
     HelpCircle
 } from 'lucide-react';
 
@@ -78,6 +77,14 @@ const navigation = [
 export default function EmployeeSidebar() {
     const location = useLocation();
 
+    // Preserve URL parameters (employee ID, company) when navigating
+    const currentParams = location.search;
+
+    // Debug: Log the current URL and parameters
+    console.log('🔗 Sidebar - Current location:', location.pathname);
+    console.log('🔗 Sidebar - URL parameters:', currentParams);
+    console.log('🔗 Sidebar - Full location:', location);
+
     return (
         <div className="flex h-full w-64 flex-col bg-card border-r">
             {/* Logo */}
@@ -100,7 +107,7 @@ export default function EmployeeSidebar() {
                     return (
                         <Link
                             key={item.name}
-                            to={item.href}
+                            to={item.href + currentParams}
                             className={cn(
                                 'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                                 isActive
@@ -123,10 +130,6 @@ export default function EmployeeSidebar() {
 
             {/* Bottom Actions */}
             <div className="border-t p-3 space-y-2">
-                <Button variant="ghost" className="w-full justify-start">
-                    <Bell className="mr-3 h-4 w-4" />
-                    Notifications
-                </Button>
                 <Button variant="ghost" className="w-full justify-start">
                     <HelpCircle className="mr-3 h-4 w-4" />
                     Help & Support

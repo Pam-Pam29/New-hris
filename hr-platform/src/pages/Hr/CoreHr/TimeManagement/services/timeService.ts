@@ -11,6 +11,7 @@ export interface ITimeService {
   createAttendanceRecord(record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord>;
   updateAttendanceRecord(id: string, record: Partial<AttendanceRecord>): Promise<AttendanceRecord>;
   deleteAttendanceRecord(id: string): Promise<void>;
+  cleanupMockData?(): Promise<void>;
 
   // Time Adjustments
   getTimeAdjustments(): Promise<TimeAdjustment[]>;
@@ -33,12 +34,122 @@ export class FirebaseTimeService implements ITimeService {
   constructor(db: Firestore) {
     this.db = db;
   }
-  // Attendance Records
+  // Attendance Records - Load from real timeEntries collection
   async getAttendanceRecords(): Promise<AttendanceRecord[]> {
-    const attendanceRef = collection(this.db, 'attendance');
-    const q = query(attendanceRef, orderBy('date', 'desc'));
+    console.log('🔄 Loading real time entries from Firebase...');
+    const timeEntriesRef = collection(this.db, 'timeEntries');
+    const q = query(timeEntriesRef, orderBy('clockIn', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+
+    console.log(`📊 Found ${snapshot.docs.length} time entries in Firebase`);
+
+    // Transform timeEntries to AttendanceRecord format
+    const records = snapshot.docs.map((doc, index) => {
+      const data = doc.data();
+
+      // Debug: Log first entry to see structure
+      if (index === 0) {
+        console.log('📋 Sample time entry data:', {
+          employeeId: data.employeeId,
+          employeeName: data.employeeName,
+          hasLocation: !!data.location,
+          hasClockInLocation: !!data.clockInLocation,
+          locationData: data.location || data.clockInLocation,
+          clockInLocationFields: data.clockInLocation ? Object.keys(data.clockInLocation) : [],
+          locationFields: data.location ? Object.keys(data.location) : [],
+          rawLocationData: {
+            location: data.location,
+            clockInLocation: data.clockInLocation
+          }
+        });
+      }
+
+      const clockIn = data.clockIn?.toDate?.() || new Date(data.clockIn);
+      const clockOut = data.clockOut?.toDate?.() || (data.clockOut ? new Date(data.clockOut) : null);
+
+      // Calculate status based on clock in time (if after 9 AM, mark as Late)
+      let status: 'Present' | 'Late' | 'Absent' = 'Present';
+      if (clockIn) {
+        const hours = clockIn.getHours();
+        const minutes = clockIn.getMinutes();
+        if (hours > 9 || (hours === 9 && minutes > 0)) {
+          status = 'Late';
+        }
+      }
+      if (!clockIn) {
+        status = 'Absent';
+      }
+
+      // Format date and times
+      const dateStr = clockIn ? clockIn.toISOString().split('T')[0] : 'Unknown';
+      const clockInStr = clockIn ? clockIn.toTimeString().slice(0, 5) : '';
+      const clockOutStr = clockOut ? clockOut.toTimeString().slice(0, 5) : '';
+
+      // Get location - prefer clockInLocation, fallback to location field
+      const locationData = data.clockInLocation || data.location;
+
+      // Build location object if data exists
+      let locationObj: any = undefined;
+      if (locationData) {
+        locationObj = {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          address: locationData.address,
+          timestamp: locationData.timestamp,
+          // Include distance fields if they exist
+          distanceFromOffice: locationData.distanceFromOffice,
+          distanceFormatted: locationData.distanceFormatted,
+          isAtOffice: locationData.isAtOffice,
+          officeName: locationData.officeName
+        };
+
+        // Debug: Log location transformation
+        if (index === 0) {
+          console.log('📍 Transformed location:', locationObj);
+        }
+      } else if (index === 0) {
+        console.log('⚠️ No location data found in time entry');
+      }
+
+      const record = {
+        id: doc.id,
+        employeeId: data.employeeId || '',
+        employeeName: data.employeeName || 'Unknown',
+        employee: data.employeeName || 'Unknown', // For backward compatibility
+        date: dateStr,
+        clockIn: clockInStr,
+        clockOut: clockOutStr,
+        status,
+        notes: data.notes || '',
+        location: locationObj,
+        reason: ''
+      } as AttendanceRecord;
+
+      // Debug: Check if location is in the record
+      if (index === 0) {
+        console.log('📋 Created record with location?:', {
+          hasLocation: !!record.location,
+          locationInRecord: record.location,
+          recordKeys: Object.keys(record)
+        });
+      }
+
+      // Debug: Log if employee name is "John Doe" (mock data)
+      if (data.employeeName === 'John Doe') {
+        console.warn('⚠️ Found mock data entry:', {
+          id: doc.id,
+          employeeName: data.employeeName,
+          employeeId: data.employeeId,
+          date: dateStr
+        });
+      }
+
+      return record;
+    });
+
+    console.log('✅ Transformed time entries:', records.length);
+    console.log('📊 Employee names found:', records.map(r => r.employeeName));
+    return records;
   }
 
   async getAttendanceRecordById(id: string): Promise<AttendanceRecord | null> {
@@ -69,6 +180,27 @@ export class FirebaseTimeService implements ITimeService {
 
   async deleteAttendanceRecord(id: string): Promise<void> {
     await deleteDoc(doc(this.db, 'attendance', id));
+  }
+
+  // Cleanup function to remove mock data
+  async cleanupMockData(): Promise<void> {
+    console.log('🧹 Cleaning up mock data from timeEntries...');
+    const timeEntriesRef = collection(this.db, 'timeEntries');
+    const snapshot = await getDocs(timeEntriesRef);
+
+    const mockNames = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Unknown'];
+    let deletedCount = 0;
+
+    for (const docSnapshot of snapshot.docs) {
+      const data = docSnapshot.data();
+      if (mockNames.includes(data.employeeName)) {
+        console.log(`  🗑️ Deleting mock entry: ${data.employeeName} (${docSnapshot.id})`);
+        await deleteDoc(docSnapshot.ref);
+        deletedCount++;
+      }
+    }
+
+    console.log(`✅ Deleted ${deletedCount} mock entries from timeEntries`);
   }
 
   // Time Adjustments

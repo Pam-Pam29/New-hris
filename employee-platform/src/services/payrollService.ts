@@ -72,12 +72,29 @@ export interface FinancialRequest {
     requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
     amount: number;
     reason: string;
-    status: 'pending' | 'approved' | 'rejected' | 'paid';
+    status: 'pending' | 'approved' | 'rejected' | 'paid' | 'recovering' | 'completed';
     attachments?: string[];
+    
+    // Approval Info
     approvedBy?: string;
     approvedAt?: Date;
     rejectionReason?: string;
+    
+    // Payment Info
     paidAt?: Date;
+    
+    // Repayment Info (for loans and advances)
+    repaymentType?: 'full' | 'installments';
+    repaymentMethod?: 'salary_deduction' | 'bank_transfer' | 'cash' | 'mobile_money';
+    installmentMonths?: number;
+    installmentAmount?: number;
+    amountRecovered?: number;
+    remainingBalance?: number;
+    recoveryStartDate?: Date;
+    recoveryCompleteDate?: Date;
+    linkedPayrollIds?: string[];
+    
+    // Metadata
     createdAt: Date;
     updatedAt: Date;
 }
@@ -264,7 +281,7 @@ export class FirebasePayrollService implements IPayrollService {
             paymentStatus: data.paymentStatus,
             paymentDate: data.paymentDate ? data.paymentDate.toDate() : null,
             paymentMethod: data.paymentMethod,
-            currency: data.currency,
+            currency: data.currency || 'NGN', // Default to NGN if not set
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate(),
             createdBy: data.createdBy,
@@ -287,6 +304,16 @@ export class FirebasePayrollService implements IPayrollService {
             approvedAt: data.approvedAt ? data.approvedAt.toDate() : undefined,
             rejectionReason: data.rejectionReason,
             paidAt: data.paidAt ? data.paidAt.toDate() : undefined,
+            // Repayment fields (for loans/advances)
+            repaymentType: data.repaymentType,
+            repaymentMethod: data.repaymentMethod,
+            installmentMonths: data.installmentMonths,
+            installmentAmount: data.installmentAmount,
+            amountRecovered: data.amountRecovered,
+            remainingBalance: data.remainingBalance,
+            recoveryStartDate: data.recoveryStartDate ? data.recoveryStartDate.toDate() : undefined,
+            recoveryCompleteDate: data.recoveryCompleteDate ? data.recoveryCompleteDate.toDate() : undefined,
+            linkedPayrollIds: data.linkedPayrollIds,
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate()
         };

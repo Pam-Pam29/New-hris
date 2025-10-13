@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Loader, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { authService } from './services/authService';
+import { db } from '../../config/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 
 const PasswordSetupPage: React.FC = () => {
-    const { employeeId, token } = useParams<{ employeeId: string; token: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const { setCurrentEmployee } = useAuth();
+    const { company } = useCompany();
+
+    // Get ID and token from URL query parameters
+    const urlParams = new URLSearchParams(location.search);
+    const employeeId = urlParams.get('id');
+    const token = urlParams.get('token');
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -69,23 +79,89 @@ const PasswordSetupPage: React.FC = () => {
         setError('');
 
         try {
-            const result = await authService.setupInitialPassword(employeeId, token, password);
+            console.log('🔑 [PasswordSetup] Setting password for employee:', employeeId);
 
-            if (result.success) {
-                setSuccess(true);
+            // Get employee from Firebase
+            const employeeRef = doc(db, 'employees', employeeId);
+            const employeeDoc = await getDoc(employeeRef);
 
-                // Auto-login and redirect to onboarding after 2 seconds
-                setTimeout(async () => {
-                    const loginResult = await authService.loginWithEmployeeId(employeeId, password);
-                    if (loginResult.success) {
-                        navigate('/employee/onboarding');
-                    }
-                }, 2000);
-            } else {
-                setError(result.error || 'Setup failed');
+            if (!employeeDoc.exists()) {
+                setError('Employee not found. Please contact HR.');
+                setIsLoading(false);
+                return;
             }
+
+            const employeeData = employeeDoc.data();
+
+            // Verify token
+            if (employeeData.auth?.setupToken !== token) {
+                setError('Invalid setup link. Please check your email or contact HR.');
+                setIsLoading(false);
+                return;
+            }
+
+            // Check expiry
+            if (employeeData.auth?.setupExpiry) {
+                const expiryDate = employeeData.auth.setupExpiry.toDate ?
+                    employeeData.auth.setupExpiry.toDate() :
+                    new Date(employeeData.auth.setupExpiry);
+
+                if (expiryDate < new Date()) {
+                    setError('Setup link has expired. Please contact HR for a new link.');
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            console.log('✅ [PasswordSetup] Token validated, saving password...');
+
+            // Save password (FOR MVP: storing directly, NOT hashed - NOT PRODUCTION READY!)
+            // TODO: In production, use bcrypt to hash the password
+            await updateDoc(employeeRef, {
+                'auth.password': password,
+                'auth.passwordHash': password, // Same for now (NOT SECURE!)
+                'auth.passwordSetAt': new Date(),
+                'auth.isActive': true,
+                'auth.setupToken': null, // Clear token after use
+                'auth.setupExpiry': null
+            });
+
+            console.log('✅ [PasswordSetup] Password saved successfully!');
+
+            setSuccess(true);
+
+            // Auto-login and redirect to onboarding
+            setTimeout(() => {
+                console.log('🔄 [PasswordSetup] Auto-logging in and redirecting to onboarding...');
+
+                // Set employee in auth context
+                setCurrentEmployee({
+                    id: employeeDoc.id,
+                    employeeId: employeeData.employeeId,
+                    email: employeeData.contactInfo?.workEmail || '',
+                    companyId: employeeData.companyId,
+                    firstName: employeeData.personalInfo?.firstName || '',
+                    lastName: employeeData.personalInfo?.lastName || '',
+                    role: employeeData.workInfo?.position || '',
+                    department: employeeData.workInfo?.department || '',
+                    onboardingStatus: employeeData.onboarding?.status || 'not_started',
+                    profileCompleteness: 0
+                });
+
+                // Save session
+                localStorage.setItem('employeeSession', JSON.stringify({
+                    employeeId: employeeData.employeeId,
+                    email: employeeData.contactInfo?.workEmail,
+                    companyId: employeeData.companyId,
+                    loginTime: new Date().toISOString(),
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                }));
+
+                navigate('/onboarding');
+            }, 2000);
         } catch (error: any) {
-            setError(error.message || 'An unexpected error occurred');
+            console.error('❌ [PasswordSetup] Error:', error);
+            setError('Failed to set up password. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -119,7 +195,7 @@ const PasswordSetupPage: React.FC = () => {
                     <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                         <CheckCircle className="w-8 h-8 text-blue-600" />
                     </div>
-                    <CardTitle className="text-2xl">Welcome to [Company]!</CardTitle>
+                    <CardTitle className="text-2xl">Welcome to {company?.displayName || 'Our Company'}!</CardTitle>
                     <CardDescription>
                         Set up your password to complete your account setup
                     </CardDescription>

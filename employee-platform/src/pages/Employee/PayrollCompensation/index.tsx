@@ -8,6 +8,8 @@ import { Textarea } from '../../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { useCompany } from '../../../context/CompanyContext';
+import { useAuth } from '../../../context/AuthContext';
 import {
     DollarSign,
     CreditCard,
@@ -109,7 +111,7 @@ const mockPayrollRecords: any[] = [
         paymentStatus: 'paid',
         paymentDate: new Date('2024-12-20'),
         paymentMethod: 'bank_transfer',
-        currency: 'USD',
+        currency: 'NGN',
         createdAt: new Date('2024-12-20'),
         updatedAt: new Date('2024-12-20')
     },
@@ -176,7 +178,7 @@ const mockPayrollRecords: any[] = [
         paymentStatus: 'paid',
         paymentDate: new Date('2024-12-05'),
         paymentMethod: 'bank_transfer',
-        currency: 'USD',
+        currency: 'NGN',
         createdAt: new Date('2024-12-05'),
         updatedAt: new Date('2024-12-05')
     }
@@ -253,6 +255,9 @@ const mockBenefitsEnrollments: BenefitsEnrollment[] = [
 ];
 
 export default function PayrollCompensation() {
+    const { companyId } = useCompany();
+    const { currentEmployee } = useAuth();
+
     const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
     const [financialRequests, setFinancialRequests] = useState<FinancialRequest[]>([]);
     const [benefitsEnrollments, setBenefitsEnrollments] = useState<BenefitsEnrollment[]>([]);
@@ -265,8 +270,8 @@ export default function PayrollCompensation() {
     const [selectedRequest, setSelectedRequest] = useState<FinancialRequest | null>(null);
     const [showRequestDetails, setShowRequestDetails] = useState(false);
 
-    // Get current employee ID from auth/context (hardcoded for now)
-    const currentEmployeeId = 'emp-001'; // TODO: Get from auth context
+    // Get current employee ID from auth context
+    const currentEmployeeId = currentEmployee?.employeeId || 'emp-001';
 
     // Load payroll data from Firebase
     useEffect(() => {
@@ -339,9 +344,9 @@ export default function PayrollCompensation() {
 
     const formatCurrency = (amount: number, currency: string = 'NGN') => {
         if (currency === 'NGN') {
-            return `₦${amount.toLocaleString()}`;
+            return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         } else if (currency === 'USD') {
-            return `$${amount.toLocaleString()}`;
+            return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         } else {
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
@@ -399,15 +404,15 @@ export default function PayrollCompensation() {
 <div class="info-row"><span class="label">Pay Date:</span><span class="value">${formatDate(record.payPeriod.payDate)}</span></div>
 <div class="info-row"><span class="label">Status:</span><span class="value">${record.paymentStatus.toUpperCase()}</span></div></div>
 <div class="section"><div class="section-title">Earnings</div>
-<div class="info-row"><span class="label">Base Salary:</span><span class="value">${formatCurrency(record.baseSalary, record.currency)}</span></div>
-${record.overtime > 0 ? `<div class="info-row"><span class="label">Overtime:</span><span class="value">${formatCurrency(record.overtime, record.currency)}</span></div>` : ''}
-${record.bonuses > 0 ? `<div class="info-row"><span class="label">Bonuses:</span><span class="value">${formatCurrency(record.bonuses, record.currency)}</span></div>` : ''}
-${record.allowances.map(a => `<div class="info-row"><span class="label">${a.name}:</span><span class="value">${formatCurrency(a.amount, record.currency)}</span></div>`).join('')}
-<div class="total-row">Gross Pay: ${formatCurrency(record.grossPay, record.currency)}</div></div>
+<div class="info-row"><span class="label">Base Salary:</span><span class="value">${formatCurrency(record.baseSalary, 'NGN')}</span></div>
+${record.overtime > 0 ? `<div class="info-row"><span class="label">Overtime:</span><span class="value">${formatCurrency(record.overtime, 'NGN')}</span></div>` : ''}
+${record.bonuses > 0 ? `<div class="info-row"><span class="label">Bonuses:</span><span class="value">${formatCurrency(record.bonuses, 'NGN')}</span></div>` : ''}
+${record.allowances.map(a => `<div class="info-row"><span class="label">${a.name}:</span><span class="value">${formatCurrency(a.amount, 'NGN')}</span></div>`).join('')}
+<div class="total-row">Gross Pay: ${formatCurrency(record.grossPay, 'NGN')}</div></div>
 <div class="section"><div class="section-title">Deductions</div>
-${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name}${d.description ? ` (${d.description})` : ''}:</span><span class="value">-${formatCurrency(d.amount, record.currency)}</span></div>`).join('')}
-<div class="total-row">Total Deductions: -${formatCurrency((record as any).totalDeductions || record.deductions.reduce((sum, d) => sum + d.amount, 0), record.currency)}</div></div>
-<div class="net-pay">NET PAY: ${formatCurrency(record.netPay, record.currency)}</div>
+${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name}${d.description ? ` (${d.description})` : ''}:</span><span class="value">-${formatCurrency(d.amount, 'NGN')}</span></div>`).join('')}
+<div class="total-row">Total Deductions: -${formatCurrency((record as any).totalDeductions || record.deductions.reduce((sum, d) => sum + d.amount, 0), 'NGN')}</div></div>
+<div class="net-pay">NET PAY: ${formatCurrency(record.netPay, 'NGN')}</div>
 <div class="footer"><p>This is a system-generated payslip. No signature required.</p><p>Generated on ${new Date().toLocaleDateString()}</p></div>
 </body></html>`;
 
@@ -560,7 +565,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Base Salary</p>
                                         <h3 className="text-2xl font-bold text-green-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.baseSalary, currentPayroll.currency) : '₦0'}
+                                            {currentPayroll ? formatCurrency(currentPayroll.baseSalary, 'NGN') : '₦0.00'}
                                         </h3>
                                     </div>
                                 </div>
@@ -576,7 +581,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Gross Pay</p>
                                         <h3 className="text-2xl font-bold text-blue-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.grossPay, currentPayroll.currency) : '₦0'}
+                                            {currentPayroll ? formatCurrency(currentPayroll.grossPay, 'NGN') : '₦0.00'}
                                         </h3>
                                     </div>
                                 </div>
@@ -592,7 +597,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Net Pay</p>
                                         <h3 className="text-2xl font-bold text-purple-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.netPay, currentPayroll.currency) : '₦0'}
+                                            {currentPayroll ? formatCurrency(currentPayroll.netPay, 'NGN') : '₦0.00'}
                                         </h3>
                                         <p className="text-xs text-muted-foreground">Last payment</p>
                                     </div>
@@ -732,7 +737,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                         </div>
                                                         <div className="text-right">
                                                             <div className="text-3xl font-bold text-green-700">
-                                                                {formatCurrency(currentPayroll.netPay, currentPayroll.currency)}
+                                                                {formatCurrency(currentPayroll.netPay, 'NGN')}
                                                             </div>
                                                             <Badge className={getStatusColor(currentPayroll.paymentStatus)}>
                                                                 {getStatusIcon(currentPayroll.paymentStatus)}
@@ -773,18 +778,18 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                             <div className="space-y-2 pl-6">
                                                                 <div className="flex justify-between text-sm">
                                                                     <span className="text-muted-foreground">Base Salary:</span>
-                                                                    <span className="font-medium">{formatCurrency(currentPayroll.baseSalary, currentPayroll.currency)}</span>
+                                                                    <span className="font-medium">{formatCurrency(currentPayroll.baseSalary, 'NGN')}</span>
                                                                 </div>
                                                                 {currentPayroll.overtime > 0 && (
                                                                     <div className="flex justify-between text-sm">
                                                                         <span className="text-muted-foreground">Overtime:</span>
-                                                                        <span className="font-medium text-green-600">+{formatCurrency(currentPayroll.overtime, currentPayroll.currency)}</span>
+                                                                        <span className="font-medium text-green-600">+{formatCurrency(currentPayroll.overtime, 'NGN')}</span>
                                                                     </div>
                                                                 )}
                                                                 {currentPayroll.bonuses > 0 && (
                                                                     <div className="flex justify-between text-sm">
                                                                         <span className="text-muted-foreground">Bonuses:</span>
-                                                                        <span className="font-medium text-green-600">+{formatCurrency(currentPayroll.bonuses, currentPayroll.currency)}</span>
+                                                                        <span className="font-medium text-green-600">+{formatCurrency(currentPayroll.bonuses, 'NGN')}</span>
                                                                     </div>
                                                                 )}
                                                                 {currentPayroll.allowances.map((allowance) => (
@@ -793,12 +798,12 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                             {getAllowanceIcon(allowance.name)}
                                                                             {allowance.name} {allowance.taxable && <span className="text-xs text-orange-600">(Taxable)</span>}
                                                                         </span>
-                                                                        <span className="font-medium text-green-600">+{formatCurrency(allowance.amount, currentPayroll.currency)}</span>
+                                                                        <span className="font-medium text-green-600">+{formatCurrency(allowance.amount, 'NGN')}</span>
                                                                     </div>
                                                                 ))}
                                                                 <div className="flex justify-between text-sm pt-2 border-t font-bold">
                                                                     <span>Gross Pay:</span>
-                                                                    <span className="text-green-700">{formatCurrency(currentPayroll.grossPay, currentPayroll.currency)}</span>
+                                                                    <span className="text-green-700">{formatCurrency(currentPayroll.grossPay, 'NGN')}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -819,13 +824,13 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                                     <p className="text-xs text-muted-foreground/70 mt-0.5">{deduction.description}</p>
                                                                                 )}
                                                                             </div>
-                                                                            <span className="font-medium text-red-600">-{formatCurrency(deduction.amount, currentPayroll.currency)}</span>
+                                                                            <span className="font-medium text-red-600">-{formatCurrency(deduction.amount, 'NGN')}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
                                                                 <div className="flex justify-between text-sm pt-2 border-t font-bold">
                                                                     <span>Total Deductions:</span>
-                                                                    <span className="text-red-700">-{formatCurrency((currentPayroll as any).totalDeductions || currentPayroll.deductions.reduce((sum, d) => sum + d.amount, 0), currentPayroll.currency)}</span>
+                                                                    <span className="text-red-700">-{formatCurrency((currentPayroll as any).totalDeductions || currentPayroll.deductions.reduce((sum, d) => sum + d.amount, 0), 'NGN')}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -834,7 +839,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                         <div className="p-3 bg-green-100 rounded-lg border border-green-300">
                                                             <div className="flex justify-between items-center">
                                                                 <span className="font-bold text-green-900">Final Net Pay:</span>
-                                                                <span className="text-2xl font-bold text-green-700">{formatCurrency(currentPayroll.netPay, currentPayroll.currency)}</span>
+                                                                <span className="text-2xl font-bold text-green-700">{formatCurrency(currentPayroll.netPay, 'NGN')}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -877,14 +882,14 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                             {record.paymentDate ? `Paid on ${formatDate(record.paymentDate)}` : 'Payment pending'}{record.paymentMethod ? ` • ${record.paymentMethod.replace('_', ' ')}` : ''}
                                                                         </p>
                                                                         <div className="flex items-center gap-4 mt-2 text-sm">
-                                                                            <span className="text-muted-foreground">Gross: {formatCurrency(record.grossPay, record.currency)}</span>
-                                                                            <span className="text-red-600">Deductions: -{formatCurrency((record as any).totalDeductions || record.deductions.reduce((sum, d) => sum + d.amount, 0), record.currency)}</span>
+                                                                            <span className="text-muted-foreground">Gross: {formatCurrency(record.grossPay, 'NGN')}</span>
+                                                                            <span className="text-red-600">Deductions: -{formatCurrency((record as any).totalDeductions || record.deductions.reduce((sum, d) => sum + d.amount, 0), 'NGN')}</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-right">
                                                                     <div className="text-xl font-bold text-green-600">
-                                                                        {formatCurrency(record.netPay, record.currency)}
+                                                                        {formatCurrency(record.netPay, 'NGN')}
                                                                     </div>
                                                                     <div className="flex items-center gap-2 mt-2">
                                                                         <Button
@@ -912,12 +917,12 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                         <div className="grid grid-cols-2 gap-4 text-sm">
                                                                             <div>
                                                                                 <span className="text-muted-foreground">Base Salary:</span>
-                                                                                <p className="font-medium">{formatCurrency(record.baseSalary, record.currency)}</p>
+                                                                                <p className="font-medium">{formatCurrency(record.baseSalary, 'NGN')}</p>
                                                                             </div>
                                                                             {record.overtime > 0 && (
                                                                                 <div>
                                                                                     <span className="text-muted-foreground">Overtime:</span>
-                                                                                    <p className="font-medium text-green-600">+{formatCurrency(record.overtime, record.currency)}</p>
+                                                                                    <p className="font-medium text-green-600">+{formatCurrency(record.overtime, 'NGN')}</p>
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -928,7 +933,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                                 {record.allowances.map(a => (
                                                                                     <div key={a.id} className="flex justify-between text-xs mb-1 pl-3">
                                                                                         <span className="text-muted-foreground">{a.name}</span>
-                                                                                        <span className="text-green-600">+{formatCurrency(a.amount, record.currency)}</span>
+                                                                                        <span className="text-green-600">+{formatCurrency(a.amount, 'NGN')}</span>
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -941,7 +946,7 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                                                                     <div key={d.id} className="mb-1 pl-3">
                                                                                         <div className="flex justify-between text-xs">
                                                                                             <span className="text-muted-foreground">{d.name}</span>
-                                                                                            <span className="text-red-600">-{formatCurrency(d.amount, record.currency)}</span>
+                                                                                            <span className="text-red-600">-{formatCurrency(d.amount, 'NGN')}</span>
                                                                                         </div>
                                                                                         {d.description && (
                                                                                             <p className="text-xs text-muted-foreground/60 italic">{d.description}</p>

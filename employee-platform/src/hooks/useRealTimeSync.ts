@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getRealTimeSyncService } from '../services/realTimeSyncService';
 
 // Custom hook for real-time synchronization
@@ -19,6 +19,14 @@ export function useRealTimeSync<T>(
 
     const syncService = getRealTimeSyncService();
 
+    // Memoize options to prevent unnecessary re-renders
+    const memoizedOptions = useMemo(() => options, [
+        options.employeeId,
+        options.limit,
+        options.orderByField,
+        options.orderDirection
+    ]);
+
     const startSync = useCallback(() => {
         if (subscriptionId) {
             // Already subscribed
@@ -37,7 +45,7 @@ export function useRealTimeSync<T>(
                     setLoading(false);
                     setError(null);
                 },
-                options
+                memoizedOptions
             );
 
             setSubscriptionId(id);
@@ -47,7 +55,7 @@ export function useRealTimeSync<T>(
             setLoading(false);
             console.error(`❌ Failed to start sync for ${collectionName}:`, err);
         }
-    }, [collectionName, subscriptionId, syncService, options.employeeId, options.limit, options.orderByField, options.orderDirection]);
+    }, [collectionName, subscriptionId, syncService, memoizedOptions]);
 
     const stopSync = useCallback(() => {
         if (subscriptionId) {
@@ -73,12 +81,7 @@ export function useRealTimeSync<T>(
             stopSync();
             startSync();
         }
-    }, [
-        options.employeeId,
-        options.limit,
-        options.orderByField,
-        options.orderDirection
-    ]);
+    }, [memoizedOptions]);
 
     return {
         data,

@@ -19,6 +19,7 @@ import { getFirebaseDb } from '../config/firebase';
 // Comprehensive interfaces for all HRIS systems
 export interface EmployeeProfile {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     personalInfo: {
         firstName: string;
@@ -117,6 +118,7 @@ export interface EmployeeProfile {
 
 export interface LeaveType {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     name: string;
     maxDays: number;
     carryOver: boolean;
@@ -131,6 +133,7 @@ export interface LeaveType {
 
 export interface LeaveRequest {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     leaveTypeId: string;
@@ -149,6 +152,7 @@ export interface LeaveRequest {
 
 export interface LeaveBalance {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     leaveTypeId: string;
     leaveTypeName: string;
@@ -163,6 +167,7 @@ export interface LeaveBalance {
 
 export interface Policy {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     title: string;
     description: string;
     content: string;
@@ -181,6 +186,7 @@ export interface Policy {
 
 export interface PolicyAcknowledgment {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     policyId: string;
     employeeId: string;
     employeeName: string;
@@ -192,6 +198,7 @@ export interface PolicyAcknowledgment {
 
 export interface PerformanceGoal {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     title: string;
     description: string;
@@ -210,6 +217,7 @@ export interface PerformanceGoal {
 
 export interface PerformanceReview {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     reviewerId: string;
@@ -229,6 +237,7 @@ export interface PerformanceReview {
 
 export interface MeetingSchedule {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     managerId: string;
@@ -249,6 +258,7 @@ export interface MeetingSchedule {
 
 export interface NotificationData {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     title: string;
     message: string;
@@ -268,7 +278,7 @@ export interface IComprehensiveDataFlowService {
     getAllEmployees(): Promise<EmployeeProfile[]>;
     updateEmployeeProfile(employeeId: string, profileData: Partial<EmployeeProfile>): Promise<EmployeeProfile>;
     subscribeToEmployeeUpdates(employeeId: string, callback: (profile: EmployeeProfile) => void): () => void;
-    subscribeToAllEmployees(callback: (employees: EmployeeProfile[]) => void): () => void;
+    subscribeToAllEmployees(callback: (employees: EmployeeProfile[]) => void, companyId?: string | null): () => void;
 
     // Leave Management
     getLeaveTypes(): Promise<LeaveType[]>;
@@ -403,14 +413,24 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         });
     }
 
-    subscribeToAllEmployees(callback: (employees: EmployeeProfile[]) => void): () => void {
+    subscribeToAllEmployees(callback: (employees: EmployeeProfile[]) => void, companyId?: string | null): () => void {
         const employeesRef = collection(getFirebaseDb(), 'employees');
 
-        return onSnapshot(employeesRef, (querySnapshot) => {
+        // Build query with optional company filter for multi-tenancy
+        let q = query(employeesRef);
+        if (companyId) {
+            q = query(employeesRef, where('companyId', '==', companyId));
+            console.log(`🏢 Filtering employees by companyId: ${companyId}`);
+        } else {
+            console.log('⚠️ No companyId filter - showing all employees');
+        }
+
+        return onSnapshot(q, (querySnapshot) => {
             const employees = querySnapshot.docs.map(doc => {
                 const data = doc.data();
                 return this.convertFirestoreToEmployeeProfile(data, doc.id);
             });
+            console.log(`✅ Loaded ${employees.length} employees${companyId ? ' for company' : ' (all companies)'}`);
             callback(employees);
         });
     }

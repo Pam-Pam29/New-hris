@@ -19,7 +19,10 @@ import {
     Loader,
     Target,
     TrendingUp,
-    Edit
+    Edit,
+    AlertTriangle,
+    ThumbsUp,
+    ThumbsDown
 } from 'lucide-react';
 import { usePerformanceMeetings, usePerformanceGoals, usePerformanceReviews } from '../../../../hooks/useRealTimeSync';
 import { PerformanceMeeting, PerformanceGoal, PerformanceReview, normalizeMeetingStatus, getMeetingStatusInfo, formatMeetingDate } from '../../../../types/performanceManagement';
@@ -28,8 +31,12 @@ import { googleMeetService } from '../../../../services/googleMeetService';
 import { meetingNotificationService } from '../../../../services/meetingNotificationService';
 import { Progress } from '../../../../components/ui/progress';
 import { useEffect } from 'react';
+import { goalOverdueService } from '../../../../services/goalOverdueService';
+import { GoalStatusBadge } from '../../../../components/GoalStatusBadge';
+import { useCompany } from '../../../../context/CompanyContext';
 
 export default function MeetingManagement() {
+    const { companyId, company } = useCompany();
     // Helper function to display unit correctly
     const formatUnit = (unit: string) => {
         if (unit === 'percentage') return '%';
@@ -48,7 +55,13 @@ export default function MeetingManagement() {
     const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
     const [rejectionReason, setRejectionReason] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    
+
+    // Extension request states
+    const [showExtensionApproval, setShowExtensionApproval] = useState(false);
+    const [selectedExtensionGoal, setSelectedExtensionGoal] = useState<PerformanceGoal | null>(null);
+    const [extensionAction, setExtensionAction] = useState<'approve' | 'reject'>('approve');
+    const [extensionRejectionReason, setExtensionRejectionReason] = useState('');
+
     // Form state for HR to schedule meetings
     const [formData, setFormData] = useState({
         employeeId: '',
@@ -90,15 +103,45 @@ export default function MeetingManagement() {
         priority: 'medium' as const
     });
 
+    // Employee list for selection
+    const [employees, setEmployees] = useState<Array<{ id: string; name: string; employeeId: string }>>([]);
+    const [loadingEmployees, setLoadingEmployees] = useState(false);
+
     // Real-time sync for meetings, goals, and reviews
     const { data: allMeetings, loading: meetingsLoading } = usePerformanceMeetings();
     const { data: allGoals, loading: goalsLoading } = usePerformanceGoals();
     const { data: allReviews, loading: reviewsLoading } = usePerformanceReviews();
     const loading = meetingsLoading || goalsLoading || reviewsLoading;
-    
+
     const meetings = (allMeetings as PerformanceMeeting[]) || [];
     const goals = (allGoals as PerformanceGoal[]) || [];
     const reviews = (allReviews as PerformanceReview[]) || [];
+
+    // Load employees for selection
+    useEffect(() => {
+        const loadEmployees = async () => {
+            setLoadingEmployees(true);
+            try {
+                const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
+                const dataFlowService = await getComprehensiveDataFlowService();
+                const allEmployees = await dataFlowService.getAllEmployees();
+
+                const employeeList = allEmployees.map(emp => ({
+                    id: emp.id || emp.employeeId,
+                    employeeId: emp.employeeId || emp.id,
+                    name: `${emp.personalInfo?.firstName || ''} ${emp.personalInfo?.lastName || ''}`.trim() || emp.employeeId
+                })).filter(emp => emp.id); // Filter out any invalid entries
+
+                setEmployees(employeeList);
+                console.log('✅ Loaded employees for selection:', employeeList.length);
+            } catch (error) {
+                console.error('Failed to load employees:', error);
+            } finally {
+                setLoadingEmployees(false);
+            }
+        };
+        loadEmployees();
+    }, []);
 
     // Start meeting notification checker for HR
     useEffect(() => {
@@ -131,8 +174,9 @@ export default function MeetingManagement() {
         setSubmitting(true);
         try {
             const scheduledDateTime = new Date(`${formData.scheduledDate}T${formData.scheduledTime}`);
-            
+
             await performanceSyncService.scheduleMeeting({
+                companyId: companyId!, // Multi-tenancy
                 employeeId: formData.employeeId,
                 employeeName: formData.employeeName,
                 title: formData.title,
@@ -207,6 +251,7 @@ export default function MeetingManagement() {
         setSubmitting(true);
         try {
             await performanceSyncService.createReview({
+                companyId: companyId!, // Multi-tenancy
                 employeeId: reviewForm.employeeId,
                 employeeName: reviewForm.employeeName,
                 reviewerId: 'hr-001',
@@ -239,6 +284,44 @@ export default function MeetingManagement() {
         }
     };
 
+    const handleApproveExtension = async () => {
+        if (!selectedExtensionGoal) return;
+
+        setSubmitting(true);
+        try {
+            await goalOverdueService.approveExtension(selectedExtensionGoal.id, 'HR Manager');
+            alert(`✅ Extension approved! New deadline: ${selectedExtensionGoal.requestedNewDeadline instanceof Date ? selectedExtensionGoal.requestedNewDeadline.toLocaleDateString() : 'Updated'}`);
+            setShowExtensionApproval(false);
+            setSelectedExtensionGoal(null);
+        } catch (error) {
+            console.error('Failed to approve extension:', error);
+            alert('❌ Failed to approve extension');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleRejectExtension = async () => {
+        if (!selectedExtensionGoal || !extensionRejectionReason) {
+            alert('Please provide a reason for rejection');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await goalOverdueService.rejectExtension(selectedExtensionGoal.id, extensionRejectionReason);
+            alert('✅ Extension request rejected. Employee has been notified.');
+            setShowExtensionApproval(false);
+            setSelectedExtensionGoal(null);
+            setExtensionRejectionReason('');
+        } catch (error) {
+            console.error('Failed to reject extension:', error);
+            alert('❌ Failed to reject extension');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const handleCreateGoalForEmployee = async () => {
         if (!goalForm.employeeId || !goalForm.employeeName || !goalForm.title || !goalForm.startDate || !goalForm.endDate) {
             alert('Please fill in all required fields');
@@ -248,6 +331,7 @@ export default function MeetingManagement() {
         setSubmitting(true);
         try {
             await performanceSyncService.createGoalForEmployee({
+                companyId: companyId!, // Multi-tenancy
                 employeeId: goalForm.employeeId,
                 employeeName: goalForm.employeeName,
                 title: goalForm.title,
@@ -318,6 +402,34 @@ export default function MeetingManagement() {
     const approvedMeetings = meetings.filter(m => normalizeMeetingStatus(m.status) === 'approved');
     const rejectedMeetings = meetings.filter(m => normalizeMeetingStatus(m.status) === 'rejected');
 
+    // Filter extension requests and overdue goals
+    // Debug: Log all goals with extension requests
+    const goalsWithExtension = goals.filter(g => g.extensionRequested === true);
+    console.log('🔍 Goals with extensionRequested:', goalsWithExtension.map(g => ({
+        id: g.id,
+        title: g.title,
+        extensionRequested: g.extensionRequested,
+        extensionApproved: g.extensionApproved,
+        extensionApprovedType: typeof g.extensionApproved
+    })));
+
+    const extensionRequests = goals.filter(g => {
+        const hasRequest = g.extensionRequested === true;
+        const notApproved = g.extensionApproved !== true; // Simplified: just check it's not explicitly true
+
+        console.log(`🔍 Goal ${g.id}: hasRequest=${hasRequest}, notApproved=${notApproved}, extensionApproved=${g.extensionApproved}`);
+
+        return hasRequest && notApproved;
+    });
+
+    const overdueGoals = goals.filter(g => g.status === 'overdue');
+    const activeGoals = goals.filter(g => g.status === 'in_progress');
+    const completedGoals = goals.filter(g => g.status === 'completed');
+
+    console.log('📊 Extension Requests Count:', extensionRequests.length);
+    console.log('📊 All Goals:', goals.length);
+    console.log('📊 Overdue Goals:', overdueGoals.length);
+
     return (
         <div className="p-6">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -355,121 +467,214 @@ export default function MeetingManagement() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <Card className={pendingMeetings.length > 0 ? 'border-l-4 border-l-yellow-500' : ''}>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <Clock className="h-4 w-4 text-yellow-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                                    <p className="text-2xl font-bold">{pendingMeetings.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Clock className="h-5 w-5 text-yellow-600 mr-2" />
+                                    <p className="text-2xl font-bold text-yellow-600">{pendingMeetings.length}</p>
                                 </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Pending Meeting{pendingMeetings.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {pendingMeetings.length > 0 ? 'Awaiting review' : 'None pending'}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className={approvedMeetings.length > 0 ? 'border-l-4 border-l-green-500' : ''}>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                                    <p className="text-2xl font-bold text-green-600">{approvedMeetings.length}</p>
+                                </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Approved Meeting{approvedMeetings.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">Scheduled</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className={overdueGoals.length > 0 ? 'border-2 border-red-200 bg-red-50' : ''}>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <AlertTriangle className={`h-5 w-5 ${overdueGoals.length > 0 ? 'text-red-600 animate-pulse' : 'text-gray-400'} mr-2`} />
+                                    <p className={`text-2xl font-bold ${overdueGoals.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                        {overdueGoals.length}
+                                    </p>
+                                </div>
+                                <p className={`text-sm font-medium ${overdueGoals.length > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                    Overdue Goal{overdueGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className={`text-xs mt-1 ${overdueGoals.length > 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                                    {overdueGoals.length > 0 ? 'Team needs help' : 'None'}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className={extensionRequests.length > 0 ? 'border-2 border-orange-200 bg-orange-50' : ''}>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <TrendingUp className={`h-5 w-5 ${extensionRequests.length > 0 ? 'text-orange-600 animate-pulse' : 'text-gray-400'} mr-2`} />
+                                    <p className={`text-2xl font-bold ${extensionRequests.length > 0 ? 'text-orange-600' : 'text-gray-600'}`}>
+                                        {extensionRequests.length}
+                                    </p>
+                                </div>
+                                <p className={`text-sm font-medium ${extensionRequests.length > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+                                    Extension Request{extensionRequests.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className={`text-xs mt-1 ${extensionRequests.length > 0 ? 'text-orange-600 font-medium' : 'text-muted-foreground'}`}>
+                                    {extensionRequests.length > 0 ? 'Needs approval' : 'None pending'}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Approved</p>
-                                    <p className="text-2xl font-bold">{approvedMeetings.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Target className="h-5 w-5 text-blue-600 mr-2" />
+                                    <p className="text-2xl font-bold text-blue-600">{activeGoals.length}</p>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <XCircle className="h-4 w-4 text-red-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Rejected</p>
-                                    <p className="text-2xl font-bold">{rejectedMeetings.length}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <User className="h-4 w-4 text-purple-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Total</p>
-                                    <p className="text-2xl font-bold">{meetings.length}</p>
-                                </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Active Goal{activeGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">Team progress</p>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
-                {/* Main Tabs: Goals, Meetings, and Reviews */}
+                {/* Extension Requests Alert */}
+                {extensionRequests.length > 0 && (
+                    <Card className="border-2 border-orange-300 bg-orange-50">
+                        <CardContent className="pt-6">
+                            <div className="flex items-start gap-4">
+                                <AlertTriangle className="h-6 w-6 text-orange-600 animate-pulse flex-shrink-0 mt-1" />
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-orange-900 text-lg">
+                                        🔔 {extensionRequests.length} Extension Request{extensionRequests.length !== 1 ? 's' : ''} Pending Your Review
+                                    </h3>
+                                    <p className="text-sm text-orange-700 mt-1">
+                                        Employees are requesting deadline extensions. Please review and approve/reject:
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Main Tabs: Goals, Meetings, Reviews, and Extension Requests */}
                 <Tabs defaultValue="goals" className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="goals">Goals ({goals.length})</TabsTrigger>
                         <TabsTrigger value="meetings">Meetings ({meetings.length})</TabsTrigger>
                         <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
+                        <TabsTrigger value="extensions" className={extensionRequests.length > 0 ? 'bg-orange-100 text-orange-700' : ''}>
+                            Extension Requests ({extensionRequests.length})
+                        </TabsTrigger>
                     </TabsList>
 
                     {/* Goals Tab */}
                     <TabsContent value="goals" className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {goals.map(goal => (
-                                <Card key={goal.id}>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-lg">{goal.title}</CardTitle>
-                                            <Badge className={
-                                                goal.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                                goal.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                                'bg-gray-100 text-gray-600'
-                                            }>
-                                                {goal.status.replace('_', ' ').toUpperCase()}
-                                            </Badge>
-                                        </div>
-                                        <CardDescription className="line-clamp-2">{goal.description}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div className="flex items-center space-x-2">
-                                            <User className="h-4 w-4 text-blue-600" />
-                                            <p className="text-sm font-medium">{goal.employeeName || goal.employeeId}</p>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-sm mb-2">
-                                                <span>Progress</span>
-                                                <span className="font-medium">{goal.progress}%</span>
+                            {goals.map(goal => {
+                                const isCompleted = goal.status === 'completed';
+                                const isOverdue = goal.status === 'overdue';
+
+                                return (
+                                    <Card key={goal.id} className={
+                                        isCompleted ? 'border-2 border-green-200 bg-green-50/30' :
+                                            isOverdue ? 'border-2 border-red-200 bg-red-50/30' : ''
+                                    }>
+                                        <CardHeader>
+                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                                <CardTitle className="text-lg">{goal.title}</CardTitle>
+                                                <GoalStatusBadge goal={goal} showDetails={false} />
                                             </div>
-                                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                                <div 
-                                                    className="bg-blue-600 h-2 rounded-full" 
-                                                    style={{ width: `${goal.progress}%` }}
-                                                />
+                                            <CardDescription className="line-clamp-2">{goal.description}</CardDescription>
+
+                                            {/* Completion Celebration */}
+                                            {isCompleted && (
+                                                <div className="mt-2 p-3 bg-green-100 border border-green-200 rounded-lg">
+                                                    <p className="text-sm text-green-800 font-medium flex items-center gap-2">
+                                                        🎉 Goal Achieved!
+                                                        {goal.completedEarly && goal.daysEarlyOrLate && goal.daysEarlyOrLate > 0 && (
+                                                            <span className="text-xs">
+                                                                ✨ {goal.daysEarlyOrLate} day{goal.daysEarlyOrLate !== 1 ? 's' : ''} early!
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                    {goal.completedDate && (
+                                                        <p className="text-xs text-green-700 mt-1">
+                                                            Completed: {goal.completedDate instanceof Date
+                                                                ? goal.completedDate.toLocaleDateString()
+                                                                : (goal.completedDate as any).toDate?.().toLocaleDateString() || 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Overdue Warning */}
+                                            {isOverdue && (
+                                                <div className="mt-2 p-3 bg-red-100 border border-red-200 rounded-lg">
+                                                    <p className="text-sm text-red-800 font-medium">
+                                                        ⚠️ {goal.daysOverdue} day{goal.daysOverdue !== 1 ? 's' : ''} overdue
+                                                    </p>
+                                                    <p className="text-xs text-red-700 mt-1">
+                                                        Employee: {goal.employeeName || goal.employeeId}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="flex items-center space-x-2">
+                                                <User className="h-4 w-4 text-blue-600" />
+                                                <p className="text-sm font-medium">{goal.employeeName || goal.employeeId}</p>
                                             </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 text-sm">
                                             <div>
-                                                <p className="text-muted-foreground">Current</p>
-                                                <p className="font-medium">{goal.currentValue}{formatUnit(goal.unit)}</p>
+                                                <div className="flex justify-between text-sm mb-2">
+                                                    <span>Progress</span>
+                                                    <span className="font-medium">{goal.progress}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div
+                                                        className={`h-2 rounded-full ${isCompleted ? 'bg-green-600' : 'bg-blue-600'}`}
+                                                        style={{ width: `${goal.progress}%` }}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-muted-foreground">Target</p>
-                                                <p className="font-medium">{goal.targetValue}{formatUnit(goal.unit)}</p>
+                                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                                <div>
+                                                    <p className="text-muted-foreground">Current</p>
+                                                    <p className="font-medium">{goal.currentValue}{formatUnit(goal.unit)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground">Target</p>
+                                                    <p className="font-medium">{goal.targetValue}{formatUnit(goal.unit)}</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setViewingGoal(goal);
-                                                setShowGoalView(true);
-                                            }}
-                                            className="w-full mt-3"
-                                        >
-                                            <Calendar className="h-4 w-4 mr-2" />
-                                            View Details
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setViewingGoal(goal);
+                                                    setShowGoalView(true);
+                                                }}
+                                                className={`w-full mt-3 ${isCompleted ? 'bg-green-50 border-green-300 hover:bg-green-100 text-green-700' : ''}`}
+                                            >
+                                                <Calendar className="h-4 w-4 mr-2" />
+                                                View Details
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
                         </div>
                     </TabsContent>
 
@@ -482,168 +687,179 @@ export default function MeetingManagement() {
                                 <TabsTrigger value="rejected">Rejected ({rejectedMeetings.length})</TabsTrigger>
                             </TabsList>
 
-                    {/* Pending Meetings */}
-                    <TabsContent value="pending" className="space-y-4">
-                        {pendingMeetings.length === 0 ? (
-                            <Card>
-                                <CardContent className="pt-12 pb-12">
-                                    <div className="text-center">
-                                        <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-                                        <h3 className="text-lg font-semibold mb-2">No Pending Meetings</h3>
-                                        <p className="text-muted-foreground">All meeting requests have been reviewed</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="space-y-4">
-                                {pendingMeetings.map(meeting => (
-                                    <Card key={meeting.id}>
-                                        <CardContent className="pt-6">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-2 flex-1">
-                                                    <div className="flex items-center space-x-2">
-                                                        <h3 className="font-semibold text-lg">{meeting.title}</h3>
-                                                        {getStatusBadge(meeting.status)}
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <User className="h-4 w-4 text-blue-600" />
-                                                        <p className="text-sm font-medium">{meeting.employeeName}</p>
-                                                        <span className="text-xs text-muted-foreground">({meeting.employeeId})</span>
-                                                    </div>
-                                                    <p className="text-sm text-muted-foreground">{meeting.description}</p>
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Calendar className="h-4 w-4 mr-2" />
-                                                        {formatMeetingDate(meeting.scheduledDate)}
-                                                    </div>
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Clock className="h-4 w-4 mr-2" />
-                                                        {meeting.duration} minutes
-                                                    </div>
-                                                    {meeting.location && (
-                                                        <div className="flex items-center text-sm text-muted-foreground">
-                                                            <MapPin className="h-4 w-4 mr-2" />
-                                                            {meeting.location}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-col space-y-2">
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => openApprovalModal(meeting, 'approve')}
-                                                        className="bg-green-600 hover:bg-green-700"
-                                                    >
-                                                        <CheckCircle className="h-4 w-4 mr-1" />
-                                                        Approve
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
-                                                        onClick={() => openApprovalModal(meeting, 'reject')}
-                                                    >
-                                                        <XCircle className="h-4 w-4 mr-1" />
-                                                        Reject
-                                                    </Button>
-                                                </div>
+                            {/* Pending Meetings */}
+                            <TabsContent value="pending" className="space-y-4">
+                                {pendingMeetings.length === 0 ? (
+                                    <Card>
+                                        <CardContent className="pt-12 pb-12">
+                                            <div className="text-center">
+                                                <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                                                <h3 className="text-lg font-semibold mb-2">No Pending Meetings</h3>
+                                                <p className="text-muted-foreground">All meeting requests have been reviewed</p>
                                             </div>
                                         </CardContent>
                                     </Card>
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
-
-                    {/* Approved Meetings */}
-                    <TabsContent value="approved" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {approvedMeetings.map(meeting => (
-                                <Card key={meeting.id}>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-lg">{meeting.title}</CardTitle>
-                                            {getStatusBadge(meeting.status)}
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-2">
-                                        <div className="flex items-center space-x-2">
-                                            <User className="h-4 w-4 text-green-600" />
-                                            <p className="text-sm font-medium">{meeting.employeeName}</p>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">ID: {meeting.employeeId}</p>
-                                        <div className="flex items-center text-sm text-muted-foreground">
-                                            <Calendar className="h-4 w-4 mr-2" />
-                                            {formatMeetingDate(meeting.scheduledDate)}
-                                        </div>
-                                        <div className="flex items-center text-sm text-muted-foreground">
-                                            <Clock className="h-4 w-4 mr-2" />
-                                            {meeting.duration} minutes
-                                        </div>
-                                        {meeting.meetingLink && (() => {
-                                            const meetingDate = meeting.scheduledDate instanceof Date 
-                                                ? meeting.scheduledDate 
-                                                : (meeting.scheduledDate as any).toDate 
-                                                    ? (meeting.scheduledDate as any).toDate() 
-                                                    : new Date(meeting.scheduledDate);
-                                            const now = new Date();
-                                            const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
-                                            const canJoin = now >= fifteenMinutesBefore;
-
-                                            if (canJoin) {
-                                                return (
-                                                    <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block mt-3">
-                                                        <Button size="sm" variant="outline" className="w-full">
-                                                            <Video className="h-4 w-4 mr-2" />
-                                                            Join Meeting
-                                                        </Button>
-                                                    </a>
-                                                );
-                                            } else {
-                                                const timeUntil = Math.ceil((fifteenMinutesBefore.getTime() - now.getTime()) / 60000);
-                                                return (
-                                                    <div className="mt-3 p-3 bg-gray-100 rounded-lg text-center">
-                                                        <p className="text-xs text-gray-600">
-                                                            🔒 Meeting link available {timeUntil} minutes before meeting
-                                                        </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {pendingMeetings.map(meeting => (
+                                            <Card key={meeting.id}>
+                                                <CardContent className="pt-6">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-2 flex-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <h3 className="font-semibold text-lg">{meeting.title}</h3>
+                                                                {getStatusBadge(meeting.status)}
+                                                            </div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <User className="h-4 w-4 text-blue-600" />
+                                                                <p className="text-sm font-medium">{meeting.employeeName}</p>
+                                                                <span className="text-xs text-muted-foreground">({meeting.employeeId})</span>
+                                                            </div>
+                                                            <p className="text-sm text-muted-foreground">{meeting.description}</p>
+                                                            <div className="flex items-center text-sm text-muted-foreground">
+                                                                <Calendar className="h-4 w-4 mr-2" />
+                                                                {formatMeetingDate(meeting.scheduledDate)}
+                                                            </div>
+                                                            <div className="flex items-center text-sm text-muted-foreground">
+                                                                <Clock className="h-4 w-4 mr-2" />
+                                                                {meeting.duration} minutes
+                                                            </div>
+                                                            {meeting.location && (
+                                                                <div className="flex items-center text-sm text-muted-foreground">
+                                                                    <MapPin className="h-4 w-4 mr-2" />
+                                                                    {meeting.location}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col space-y-2">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openApprovalModal(meeting, 'approve')}
+                                                                className="bg-green-600 hover:bg-green-700"
+                                                            >
+                                                                <CheckCircle className="h-4 w-4 mr-1" />
+                                                                Approve
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => openApprovalModal(meeting, 'reject')}
+                                                            >
+                                                                <XCircle className="h-4 w-4 mr-1" />
+                                                                Reject
+                                                            </Button>
+                                                        </div>
                                                     </div>
-                                                );
-                                            }
-                                        })()}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </TabsContent>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                )}
+                            </TabsContent>
 
-                    {/* Rejected Meetings */}
-                    <TabsContent value="rejected" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {rejectedMeetings.map(meeting => (
-                                <Card key={meeting.id}>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-lg">{meeting.title}</CardTitle>
-                                            {getStatusBadge(meeting.status)}
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-2">
-                                        <div className="flex items-center space-x-2">
-                                            <User className="h-4 w-4 text-red-600" />
-                                            <p className="text-sm font-medium">{meeting.employeeName}</p>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">ID: {meeting.employeeId}</p>
-                                        <div className="flex items-center text-sm text-muted-foreground">
-                                            <Calendar className="h-4 w-4 mr-2" />
-                                            {formatMeetingDate(meeting.scheduledDate)}
-                                        </div>
-                                        {meeting.rejectionReason && (
-                                            <p className="text-sm text-red-600 mt-2">
-                                                Reason: {meeting.rejectionReason}
-                                            </p>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </TabsContent>
+                            {/* Approved Meetings */}
+                            <TabsContent value="approved" className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {approvedMeetings.map(meeting => (
+                                        <Card key={meeting.id}>
+                                            <CardHeader>
+                                                <div className="flex items-center justify-between">
+                                                    <CardTitle className="text-lg">{meeting.title}</CardTitle>
+                                                    {getStatusBadge(meeting.status)}
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="space-y-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <User className="h-4 w-4 text-green-600" />
+                                                    <p className="text-sm font-medium">{meeting.employeeName}</p>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">ID: {meeting.employeeId}</p>
+                                                <div className="flex items-center text-sm text-muted-foreground">
+                                                    <Calendar className="h-4 w-4 mr-2" />
+                                                    {formatMeetingDate(meeting.scheduledDate)}
+                                                </div>
+                                                <div className="flex items-center text-sm text-muted-foreground">
+                                                    <Clock className="h-4 w-4 mr-2" />
+                                                    {meeting.duration} minutes
+                                                </div>
+                                                {meeting.meetingLink && (() => {
+                                                    const meetingDate = meeting.scheduledDate instanceof Date
+                                                        ? meeting.scheduledDate
+                                                        : (meeting.scheduledDate as any).toDate
+                                                            ? (meeting.scheduledDate as any).toDate()
+                                                            : new Date(meeting.scheduledDate);
+                                                    const now = new Date();
+                                                    const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
+                                                    const meetingEndTime = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
+
+                                                    const canJoin = now >= fifteenMinutesBefore && now <= meetingEndTime;
+                                                    const meetingEnded = now > meetingEndTime;
+
+                                                    if (meetingEnded) {
+                                                        return (
+                                                            <div className="mt-3 p-3 bg-red-50 rounded-lg text-center border border-red-200">
+                                                                <p className="text-xs text-red-600 font-medium">
+                                                                    ⏰ Meeting ended
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    } else if (canJoin) {
+                                                        return (
+                                                            <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block mt-3">
+                                                                <Button size="sm" variant="outline" className="w-full">
+                                                                    <Video className="h-4 w-4 mr-2" />
+                                                                    Join Meeting
+                                                                </Button>
+                                                            </a>
+                                                        );
+                                                    } else {
+                                                        const timeUntil = Math.ceil((fifteenMinutesBefore.getTime() - now.getTime()) / 60000);
+                                                        return (
+                                                            <div className="mt-3 p-3 bg-gray-100 rounded-lg text-center">
+                                                                <p className="text-xs text-gray-600">
+                                                                    🔒 Meeting link available {timeUntil} minutes before meeting
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                })()}
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </TabsContent>
+
+                            {/* Rejected Meetings */}
+                            <TabsContent value="rejected" className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {rejectedMeetings.map(meeting => (
+                                        <Card key={meeting.id}>
+                                            <CardHeader>
+                                                <div className="flex items-center justify-between">
+                                                    <CardTitle className="text-lg">{meeting.title}</CardTitle>
+                                                    {getStatusBadge(meeting.status)}
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="space-y-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <User className="h-4 w-4 text-red-600" />
+                                                    <p className="text-sm font-medium">{meeting.employeeName}</p>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">ID: {meeting.employeeId}</p>
+                                                <div className="flex items-center text-sm text-muted-foreground">
+                                                    <Calendar className="h-4 w-4 mr-2" />
+                                                    {formatMeetingDate(meeting.scheduledDate)}
+                                                </div>
+                                                {meeting.rejectionReason && (
+                                                    <p className="text-sm text-red-600 mt-2">
+                                                        Reason: {meeting.rejectionReason}
+                                                    </p>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </TabsContent>
                         </Tabs>
                     </TabsContent>
 
@@ -672,8 +888,8 @@ export default function MeetingManagement() {
                                                 <CardTitle className="text-lg">{review.employeeName}</CardTitle>
                                                 <Badge className={
                                                     review.status === 'acknowledged' ? 'bg-green-100 text-green-600' :
-                                                    review.status === 'submitted' ? 'bg-blue-100 text-blue-600' :
-                                                    'bg-gray-100 text-gray-600'
+                                                        review.status === 'submitted' ? 'bg-blue-100 text-blue-600' :
+                                                            'bg-gray-100 text-gray-600'
                                                 }>
                                                     {review.status.toUpperCase()}
                                                 </Badge>
@@ -708,6 +924,134 @@ export default function MeetingManagement() {
                                         </CardContent>
                                     </Card>
                                 ))}
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {/* Extension Requests Tab */}
+                    <TabsContent value="extensions" className="space-y-4">
+                        {extensionRequests.length === 0 ? (
+                            <Card>
+                                <CardContent className="pt-12 pb-12">
+                                    <div className="text-center">
+                                        <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-4" />
+                                        <h3 className="text-lg font-semibold mb-2">No Pending Extension Requests</h3>
+                                        <p className="text-muted-foreground">All extension requests have been reviewed</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {extensionRequests.map(goal => {
+                                    const currentDeadline = goal.endDate instanceof Date
+                                        ? goal.endDate
+                                        : (goal.endDate as any).toDate();
+                                    const requestedDeadline = goal.requestedNewDeadline instanceof Date
+                                        ? goal.requestedNewDeadline
+                                        : (goal.requestedNewDeadline as any)?.toDate?.() || currentDeadline;
+
+                                    return (
+                                        <Card key={goal.id} className="border-2 border-orange-200 bg-orange-50/30">
+                                            <CardHeader>
+                                                <div className="flex items-center justify-between">
+                                                    <CardTitle className="text-lg">{goal.title}</CardTitle>
+                                                    <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                                                        ⏳ EXTENSION REQUESTED
+                                                    </Badge>
+                                                </div>
+                                                <CardDescription className="text-gray-700">
+                                                    <strong>Employee:</strong> {goal.employeeName || goal.employeeId}
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                {/* Current Status */}
+                                                <div className="grid grid-cols-2 gap-3 p-3 bg-white rounded-lg border border-orange-200">
+                                                    <div>
+                                                        <p className="text-xs text-gray-600">Current Deadline</p>
+                                                        <p className="font-semibold text-red-700">
+                                                            {currentDeadline.toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-600">Days Overdue</p>
+                                                        <p className="font-semibold text-red-700">
+                                                            {goal.daysOverdue || 0} days
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-600">Progress</p>
+                                                        <p className="font-semibold">{goal.progress}%</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-600">Target</p>
+                                                        <p className="font-semibold">{goal.targetValue}{formatUnit(goal.unit)}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Extension Request Details */}
+                                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                    <p className="text-sm font-semibold text-blue-900 mb-2">📋 Extension Request:</p>
+                                                    <div className="space-y-2">
+                                                        <div>
+                                                            <p className="text-xs text-blue-700">Requested New Deadline:</p>
+                                                            <p className="font-semibold text-blue-900">
+                                                                {requestedDeadline.toLocaleDateString()}
+                                                                <span className="text-xs text-blue-600 ml-2">
+                                                                    (+{Math.ceil((requestedDeadline.getTime() - currentDeadline.getTime()) / (1000 * 60 * 60 * 24))} days)
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-blue-700">Reason:</p>
+                                                            <p className="text-sm text-gray-700 italic bg-white p-2 rounded border border-blue-100">
+                                                                "{goal.extensionRequestReason || 'No reason provided'}"
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-blue-700">Requested On:</p>
+                                                            <p className="text-sm text-gray-700">
+                                                                {goal.extensionRequestDate ?
+                                                                    (goal.extensionRequestDate instanceof Date
+                                                                        ? goal.extensionRequestDate.toLocaleDateString()
+                                                                        : (goal.extensionRequestDate as any).toDate().toLocaleDateString())
+                                                                    : 'Recently'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex space-x-2">
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedExtensionGoal(goal);
+                                                            setExtensionAction('approve');
+                                                            setShowExtensionApproval(true);
+                                                        }}
+                                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        <ThumbsUp className="h-4 w-4 mr-1" />
+                                                        Approve Extension
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => {
+                                                            setSelectedExtensionGoal(goal);
+                                                            setExtensionAction('reject');
+                                                            setShowExtensionApproval(true);
+                                                        }}
+                                                        className="flex-1"
+                                                    >
+                                                        <ThumbsDown className="h-4 w-4 mr-1" />
+                                                        Reject Request
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         )}
                     </TabsContent>
@@ -766,8 +1110,8 @@ export default function MeetingManagement() {
 
                                 <div>
                                     <Label htmlFor="meetingType">Meeting Type</Label>
-                                    <Select 
-                                        value={formData.meetingType} 
+                                    <Select
+                                        value={formData.meetingType}
                                         onValueChange={(value: any) => setFormData(prev => ({ ...prev, meetingType: value }))}
                                     >
                                         <SelectTrigger>
@@ -806,8 +1150,8 @@ export default function MeetingManagement() {
 
                                 <div>
                                     <Label htmlFor="duration">Duration</Label>
-                                    <Select 
-                                        value={formData.duration.toString()} 
+                                    <Select
+                                        value={formData.duration.toString()}
                                         onValueChange={(value) => setFormData(prev => ({ ...prev, duration: parseInt(value) }))}
                                     >
                                         <SelectTrigger>
@@ -1065,23 +1409,42 @@ export default function MeetingManagement() {
                                 <CardDescription>Create a performance goal for an employee</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label>Employee ID *</Label>
-                                        <Input
-                                            value={goalForm.employeeId}
-                                            onChange={(e) => setGoalForm(prev => ({ ...prev, employeeId: e.target.value }))}
-                                            placeholder="e.g., EMP001"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Employee Name *</Label>
-                                        <Input
-                                            value={goalForm.employeeName}
-                                            onChange={(e) => setGoalForm(prev => ({ ...prev, employeeName: e.target.value }))}
-                                            placeholder="e.g., John Doe"
-                                        />
-                                    </div>
+                                {/* Employee Selection */}
+                                <div>
+                                    <Label>Assign Goal To *</Label>
+                                    <Select
+                                        value={goalForm.employeeId}
+                                        onValueChange={(value) => {
+                                            const selectedEmployee = employees.find(emp => emp.employeeId === value);
+                                            if (selectedEmployee) {
+                                                setGoalForm(prev => ({
+                                                    ...prev,
+                                                    employeeId: selectedEmployee.employeeId,
+                                                    employeeName: selectedEmployee.name
+                                                }));
+                                            }
+                                        }}
+                                        disabled={loadingEmployees}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder={loadingEmployees ? "Loading employees..." : "Select an employee..."} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {employees.map((employee) => (
+                                                <SelectItem key={employee.employeeId} value={employee.employeeId}>
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <span className="font-medium">{employee.name}</span>
+                                                        <span className="text-xs text-muted-foreground ml-2">({employee.employeeId})</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {goalForm.employeeId && (
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            ✓ Selected: <strong>{goalForm.employeeName}</strong> ({goalForm.employeeId})
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1106,8 +1469,8 @@ export default function MeetingManagement() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label>Category</Label>
-                                        <Select 
-                                            value={goalForm.category} 
+                                        <Select
+                                            value={goalForm.category}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, category: value }))}
                                         >
                                             <SelectTrigger>
@@ -1123,8 +1486,8 @@ export default function MeetingManagement() {
                                     </div>
                                     <div>
                                         <Label>Priority</Label>
-                                        <Select 
-                                            value={goalForm.priority} 
+                                        <Select
+                                            value={goalForm.priority}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, priority: value }))}
                                         >
                                             <SelectTrigger>
@@ -1158,8 +1521,8 @@ export default function MeetingManagement() {
                                     </div>
                                     <div>
                                         <Label>Unit</Label>
-                                        <Select 
-                                            value={goalForm.unit} 
+                                        <Select
+                                            value={goalForm.unit}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, unit: value }))}
                                         >
                                             <SelectTrigger>
@@ -1240,8 +1603,8 @@ export default function MeetingManagement() {
                                         <Label className="text-muted-foreground">Priority</Label>
                                         <Badge className={
                                             viewingGoal.priority === 'high' ? 'bg-red-100 text-red-600' :
-                                            viewingGoal.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                                            'bg-gray-100 text-gray-600'
+                                                viewingGoal.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
+                                                    'bg-gray-100 text-gray-600'
                                         }>
                                             {viewingGoal.priority.toUpperCase()}
                                         </Badge>
@@ -1250,9 +1613,9 @@ export default function MeetingManagement() {
                                         <Label className="text-muted-foreground">Status</Label>
                                         <Badge className={
                                             viewingGoal.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                            viewingGoal.status === 'in-progress' ? 'bg-blue-100 text-blue-600' :
-                                            viewingGoal.status === 'not-started' ? 'bg-gray-100 text-gray-600' :
-                                            'bg-red-100 text-red-600'
+                                                viewingGoal.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                                    viewingGoal.status === 'not_started' ? 'bg-gray-100 text-gray-600' :
+                                                        'bg-red-100 text-red-600'
                                         }>
                                             {viewingGoal.status.toUpperCase().replace('-', ' ')}
                                         </Badge>
@@ -1269,8 +1632,8 @@ export default function MeetingManagement() {
                                             </span>
                                         </div>
                                         <div className="w-full bg-gray-200 rounded-full h-4">
-                                            <div 
-                                                className="bg-blue-600 h-4 rounded-full transition-all" 
+                                            <div
+                                                className="bg-blue-600 h-4 rounded-full transition-all"
                                                 style={{ width: `${viewingGoal.progress}%` }}
                                             />
                                         </div>
@@ -1281,9 +1644,9 @@ export default function MeetingManagement() {
                                     <div>
                                         <Label className="text-muted-foreground">Start Date</Label>
                                         <p className="mt-1">
-                                            {viewingGoal.startDate instanceof Date 
+                                            {viewingGoal.startDate instanceof Date
                                                 ? viewingGoal.startDate.toLocaleDateString()
-                                                : (viewingGoal.startDate as any).toDate 
+                                                : (viewingGoal.startDate as any).toDate
                                                     ? (viewingGoal.startDate as any).toDate().toLocaleDateString()
                                                     : new Date(viewingGoal.startDate).toLocaleDateString()}
                                         </p>
@@ -1291,9 +1654,9 @@ export default function MeetingManagement() {
                                     <div>
                                         <Label className="text-muted-foreground">End Date</Label>
                                         <p className="mt-1">
-                                            {viewingGoal.endDate instanceof Date 
+                                            {viewingGoal.endDate instanceof Date
                                                 ? viewingGoal.endDate.toLocaleDateString()
-                                                : (viewingGoal.endDate as any).toDate 
+                                                : (viewingGoal.endDate as any).toDate
                                                     ? (viewingGoal.endDate as any).toDate().toLocaleDateString()
                                                     : new Date(viewingGoal.endDate).toLocaleDateString()}
                                         </p>
@@ -1322,6 +1685,120 @@ export default function MeetingManagement() {
                                         className="flex-1"
                                     >
                                         Close
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Extension Approval/Rejection Modal */}
+                {showExtensionApproval && selectedExtensionGoal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-lg">
+                            <CardHeader>
+                                <CardTitle className={extensionAction === 'approve' ? 'text-green-700' : 'text-red-700'}>
+                                    {extensionAction === 'approve' ? 'Approve' : 'Reject'} Extension Request
+                                </CardTitle>
+                                <CardDescription>
+                                    Employee: {selectedExtensionGoal.employeeName || selectedExtensionGoal.employeeId}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Goal Details */}
+                                <div className="p-3 bg-gray-50 border rounded-lg">
+                                    <p className="font-semibold text-gray-900 mb-2">{selectedExtensionGoal.title}</p>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <p className="text-gray-600">Current Deadline:</p>
+                                            <p className="font-medium text-red-700">
+                                                {selectedExtensionGoal.endDate instanceof Date
+                                                    ? selectedExtensionGoal.endDate.toLocaleDateString()
+                                                    : (selectedExtensionGoal.endDate as any).toDate().toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Requested Deadline:</p>
+                                            <p className="font-medium text-blue-700">
+                                                {selectedExtensionGoal.requestedNewDeadline instanceof Date
+                                                    ? selectedExtensionGoal.requestedNewDeadline.toLocaleDateString()
+                                                    : (selectedExtensionGoal.requestedNewDeadline as any)?.toDate?.().toLocaleDateString() || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Days Overdue:</p>
+                                            <p className="font-medium text-red-700">{selectedExtensionGoal.daysOverdue || 0}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Progress:</p>
+                                            <p className="font-medium">{selectedExtensionGoal.progress}%</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Employee's Reason */}
+                                <div>
+                                    <Label>Employee's Reason:</Label>
+                                    <div className="mt-1 p-3 bg-blue-50 border border-blue-200 rounded">
+                                        <p className="text-sm text-gray-700 italic">
+                                            "{selectedExtensionGoal.extensionRequestReason || 'No reason provided'}"
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Rejection Reason (only if rejecting) */}
+                                {extensionAction === 'reject' && (
+                                    <div>
+                                        <Label htmlFor="rejectionReason">Reason for Rejection *</Label>
+                                        <Textarea
+                                            id="rejectionReason"
+                                            value={extensionRejectionReason}
+                                            onChange={(e) => setExtensionRejectionReason(e.target.value)}
+                                            placeholder="Explain why you're rejecting this extension request..."
+                                            rows={3}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Confirmation Message */}
+                                <div className={`p-3 ${extensionAction === 'approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg`}>
+                                    <p className={`text-sm font-medium ${extensionAction === 'approve' ? 'text-green-900' : 'text-red-900'}`}>
+                                        {extensionAction === 'approve'
+                                            ? '✅ Approving will update the goal\'s deadline and reset it to "In Progress"'
+                                            : '❌ Rejecting will keep the goal as "Overdue". The employee will be notified.'}
+                                    </p>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex space-x-3 pt-4">
+                                    <Button
+                                        onClick={extensionAction === 'approve' ? handleApproveExtension : handleRejectExtension}
+                                        disabled={submitting || (extensionAction === 'reject' && !extensionRejectionReason)}
+                                        className={`flex-1 ${extensionAction === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} text-white`}
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                {extensionAction === 'approve' ? <ThumbsUp className="mr-2 h-4 w-4" /> : <ThumbsDown className="mr-2 h-4 w-4" />}
+                                                {extensionAction === 'approve' ? 'Approve Extension' : 'Reject Request'}
+                                            </>
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setShowExtensionApproval(false);
+                                            setSelectedExtensionGoal(null);
+                                            setExtensionRejectionReason('');
+                                        }}
+                                        disabled={submitting}
+                                        className="flex-1"
+                                    >
+                                        Cancel
                                     </Button>
                                 </div>
                             </CardContent>

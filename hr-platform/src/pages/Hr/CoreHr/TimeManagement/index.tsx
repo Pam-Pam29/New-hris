@@ -32,7 +32,9 @@ import {
   CalendarDays,
   Eye,
   BarChart3,
-  Bell
+  Bell,
+  MapPin,
+  Building2
 } from 'lucide-react';
 
 // Import Employee Service
@@ -46,6 +48,7 @@ import { useToast } from '../../../../hooks/use-toast';
 // Import Firebase services for real-time sync
 import { getTimeTrackingService, TimeEntry, TimeAdjustmentRequest } from '../../../../services/timeTrackingService';
 import { getTimeNotificationService, TimeNotification } from '../../../../services/timeNotificationService';
+import { getOfficeLocationService, OfficeLocation, calculateDistance, formatDistance } from '../../../../services/officeLocationService';
 
 // Import Schedule Manager
 import { ScheduleManager } from '../../../../components/ScheduleManager';
@@ -108,6 +111,19 @@ export default function TimeManagement() {
   const [approvalNotes, setApprovalNotes] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
 
+  // Office Location state
+  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
+  const [defaultOffice, setDefaultOffice] = useState<OfficeLocation | null>(null);
+  const [showOfficeDialog, setShowOfficeDialog] = useState(false);
+  const [editingOffice, setEditingOffice] = useState<OfficeLocation | null>(null);
+  const [officeForm, setOfficeForm] = useState({
+    name: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    radius: '100' // 100 meters default
+  });
+
   // Initialize Employee Service
   useEffect(() => {
     const initializeService = async () => {
@@ -134,63 +150,150 @@ export default function TimeManagement() {
     }
   };
 
-  // Load attendance records from backend
+  // Load attendance records from backend (real time entries)
   const loadAttendanceRecords = async () => {
     try {
       const timeService = await getTimeService();
       const records = await timeService.getAttendanceRecords();
 
-      // If no records exist and we're using Firebase, create some sample data
-      if (records.length === 0 && timeService.constructor.name === 'FirebaseTimeService') {
-        console.log('No attendance records found in Firebase, creating sample data...');
-        try {
-          await timeService.createAttendanceRecord({
-            employee: 'John Doe',
-            date: '2024-01-15',
-            status: 'Present',
-            clockIn: '09:00',
-            clockOut: '17:00',
-            notes: 'Regular working day',
-            reason: ''
-          });
-
-          await timeService.createAttendanceRecord({
-            employee: 'Jane Smith',
-            date: '2024-01-15',
-            status: 'Late',
-            clockIn: '09:30',
-            clockOut: '17:30',
-            notes: 'Traffic delay',
-            reason: 'traffic'
-          });
-
-          await timeService.createAttendanceRecord({
-            employee: 'Mike Johnson',
-            date: '2024-01-15',
-            status: 'Present',
-            clockIn: '08:45',
-            clockOut: '16:45',
-            notes: 'Early start, early finish',
-            reason: ''
-          });
-
-          console.log('Sample attendance records created in Firebase');
-          // Reload records after creating sample data
-          const updatedRecords = await timeService.getAttendanceRecords();
-          setAttendanceRecords(updatedRecords);
-          setFilteredAttendanceRecords(updatedRecords);
-          return;
-        } catch (createError) {
-          console.error('Error creating sample attendance records:', createError);
-        }
-      }
+      console.log('📊 Loaded real time entries:', records.length);
+      console.log('📋 First record has location?:', {
+        hasLocation: !!records[0]?.location,
+        location: records[0]?.location,
+        recordId: records[0]?.id
+      });
 
       setAttendanceRecords(records);
       setFilteredAttendanceRecords(records);
+
+      // Check after setting state
+      setTimeout(() => {
+        console.log('📊 After setState - records in state:', attendanceRecords.length);
+        console.log('📋 First record in state has location?:', {
+          hasLocation: !!attendanceRecords[0]?.location,
+          location: attendanceRecords[0]?.location
+        });
+      }, 100);
     } catch (error) {
       console.error('Error loading attendance records:', error);
       setAttendanceRecords([]);
       setFilteredAttendanceRecords([]);
+    }
+  };
+
+  // Load office locations
+  const loadOfficeLocations = async () => {
+    try {
+      console.log('🔄 Loading office locations...');
+      const officeService = await getOfficeLocationService();
+      console.log('✅ Office service initialized');
+
+      const locations = await officeService.getOfficeLocations();
+      const defaultLoc = await officeService.getDefaultOfficeLocation();
+
+      // Remove duplicates based on ID
+      const uniqueLocations = locations.filter((location, index, self) =>
+        index === self.findIndex((t) => t.id === location.id)
+      );
+
+      setOfficeLocations(uniqueLocations);
+      setDefaultOffice(defaultLoc);
+      console.log('📍 Loaded office locations:', uniqueLocations.length);
+
+      if (defaultLoc) {
+        console.log('📍 Default office:', defaultLoc.name);
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading office locations:', error);
+      console.error('❌ Error details:', error.message);
+      // Don't show error to user - office locations are optional
+    }
+  };
+
+  const handleEditOffice = (office: OfficeLocation) => {
+    setEditingOffice(office);
+    setOfficeForm({
+      name: office.name,
+      address: office.address,
+      latitude: office.latitude.toString(),
+      longitude: office.longitude.toString(),
+      radius: office.radius.toString()
+    });
+    setShowOfficeDialog(true);
+  };
+
+  const handleDeleteOffice = async (officeId: string, officeName: string) => {
+    if (!confirm(`Are you sure you want to delete "${officeName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const officeService = await getOfficeLocationService();
+      await officeService.deleteOfficeLocation(officeId);
+      await loadOfficeLocations();
+
+      toast({
+        title: "Office Location Deleted",
+        description: `${officeName} has been removed successfully.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete office location",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveOfficeLocation = async () => {
+    try {
+      const officeService = await getOfficeLocationService();
+
+      if (editingOffice) {
+        // Update existing office
+        await officeService.updateOfficeLocation(editingOffice.id, {
+          name: officeForm.name,
+          address: officeForm.address,
+          latitude: parseFloat(officeForm.latitude),
+          longitude: parseFloat(officeForm.longitude),
+          radius: parseInt(officeForm.radius)
+        });
+
+        toast({
+          title: "Office Location Updated",
+          description: "Office location has been updated successfully.",
+        });
+      } else {
+        // Create new office
+        const locationData: Omit<OfficeLocation, 'id'> = {
+          name: officeForm.name,
+          address: officeForm.address,
+          latitude: parseFloat(officeForm.latitude),
+          longitude: parseFloat(officeForm.longitude),
+          radius: parseInt(officeForm.radius),
+          isDefault: officeLocations.length === 0, // First office is default
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        await officeService.createOfficeLocation(locationData);
+
+        toast({
+          title: "Office Location Added",
+          description: "Office location has been configured successfully.",
+        });
+      }
+
+      await loadOfficeLocations();
+      setShowOfficeDialog(false);
+      setEditingOffice(null);
+      setOfficeForm({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save office location",
+        variant: "destructive",
+      });
     }
   };
 
@@ -200,6 +303,11 @@ export default function TimeManagement() {
       fetchEmployees();
     }
   }, [employeeService]);
+
+  // Load office locations on mount
+  useEffect(() => {
+    loadOfficeLocations();
+  }, []);
 
   // Load attendance records on component mount
   useEffect(() => {
@@ -245,6 +353,23 @@ export default function TimeManagement() {
                 status = 'Late';
               }
 
+              // Extract location data from clockInLocation or location field
+              const locationData = entry.clockInLocation || entry.location;
+              let locationObj: any = undefined;
+
+              if (locationData) {
+                locationObj = {
+                  latitude: locationData.latitude,
+                  longitude: locationData.longitude,
+                  address: locationData.address,
+                  timestamp: locationData.timestamp,
+                  distanceFromOffice: (locationData as any).distanceFromOffice,
+                  distanceFormatted: (locationData as any).distanceFormatted,
+                  isAtOffice: (locationData as any).isAtOffice,
+                  officeName: (locationData as any).officeName
+                };
+              }
+
               return {
                 id: entry.id,
                 employee: entry.employeeName,
@@ -255,10 +380,12 @@ export default function TimeManagement() {
                 clockOut: clockOutTime,
                 status: entry.status === 'adjusted' ? 'Present' : status,
                 notes: entry.notes,
-                reason: entry.status === 'adjusted' ? 'Time adjusted' : ''
+                reason: entry.status === 'adjusted' ? 'Time adjusted' : '',
+                location: locationObj  // ← ADD LOCATION!
               };
             });
 
+            console.log('📡 Real-time: Converted entries with location data');
             setAttendanceRecords(records);
             setFilteredAttendanceRecords(records);
           }
@@ -387,6 +514,21 @@ export default function TimeManagement() {
 
   // Handle view details
   const handleViewDetails = (attendance: AttendanceRecord) => {
+    console.log('👁️ Viewing attendance details for:', attendance.employee || attendance.employeeName);
+    console.log('📋 Full attendance record:', JSON.stringify(attendance, null, 2));
+    console.log('📍 Location data check:', {
+      hasLocation: !!attendance.location,
+      locationIsUndefined: attendance.location === undefined,
+      locationIsNull: attendance.location === null,
+      locationKeys: attendance.location ? Object.keys(attendance.location) : [],
+      latitude: attendance.location?.latitude,
+      longitude: attendance.location?.longitude,
+      address: attendance.location?.address,
+      distanceFromOffice: (attendance.location as any)?.distanceFromOffice,
+      distanceFormatted: (attendance.location as any)?.distanceFormatted,
+      isAtOffice: (attendance.location as any)?.isAtOffice,
+      officeName: (attendance.location as any)?.officeName
+    });
     setSelectedDetails(attendance);
     setShowDetailsDialog(true);
   };
@@ -592,7 +734,7 @@ export default function TimeManagement() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Recent Notifications</h3>
-                <Badge variant="outline">{notifications.filter(n => !n.read).length} unread</Badge>
+                <Badge className="bg-gray-100 text-gray-800">{notifications.filter(n => !n.read).length} unread</Badge>
               </div>
             </CardHeader>
             <CardContent>
@@ -604,8 +746,12 @@ export default function TimeManagement() {
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-semibold text-sm">{notif.title}</p>
                           <Badge
-                            variant={notif.priority === 'high' ? 'destructive' : notif.priority === 'medium' ? 'default' : 'outline'}
-                            className="text-xs"
+                            className={`text-xs ${notif.priority === 'high'
+                                ? 'bg-red-100 text-red-800'
+                                : notif.priority === 'medium'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
                           >
                             {notif.type.replace(/_/g, ' ')}
                           </Badge>
@@ -644,7 +790,7 @@ export default function TimeManagement() {
                         <div className="flex items-center space-x-2 mb-2">
                           <User className="h-4 w-4 text-muted-foreground" />
                           <p className="font-semibold">{request.employeeName}</p>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge className="bg-gray-100 text-gray-800 text-xs">
                             {request.reason.replace(/_/g, ' ')}
                           </Badge>
                         </div>
@@ -725,7 +871,7 @@ export default function TimeManagement() {
 
         {/* Tabs for Attendance and Schedules */}
         <Tabs defaultValue="attendance" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
               Attendance & Time
@@ -733,6 +879,10 @@ export default function TimeManagement() {
             <TabsTrigger value="schedules" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Schedules
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Office Settings
             </TabsTrigger>
           </TabsList>
 
@@ -802,8 +952,8 @@ export default function TimeManagement() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all_employees">All Employees</SelectItem>
-                        {attendanceEmployees.filter(employee => employee !== '').map(employee => (
-                          <SelectItem key={employee} value={employee}>{employee}</SelectItem>
+                        {attendanceEmployees.filter(employee => employee && employee !== '').map(employee => (
+                          <SelectItem key={employee} value={employee!}>{employee}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -883,15 +1033,15 @@ export default function TimeManagement() {
                           <div className="flex items-start space-x-4 flex-1">
                             <div className="flex-shrink-0 mt-1">
                               <config.icon className={`h-5 w-5 ${row.status === 'Present' ? 'text-green-600' :
-                                  row.status === 'Late' ? 'text-yellow-600' : 'text-red-600'
+                                row.status === 'Late' ? 'text-yellow-600' : 'text-red-600'
                                 }`} />
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
                                 <h3 className="text-lg font-semibold">{row.employee}</h3>
                                 <Badge className={`${row.status === 'Present' ? 'bg-green-100 text-green-800' :
-                                    row.status === 'Late' ? 'bg-yellow-100 text-yellow-800' :
-                                      'bg-red-100 text-red-800'
+                                  row.status === 'Late' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
                                   }`}>
                                   {row.status}
                                 </Badge>
@@ -1227,40 +1377,99 @@ export default function TimeManagement() {
 
                 {selectedDetails && (
                   <div className="space-y-4 py-4">
-                    {/* Employee and Date */}
-                    <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground mb-1">Employee</div>
-                          <div className="font-semibold text-lg">{selectedDetails.employee}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground mb-1">Date</div>
-                          <div className="font-semibold text-lg">{selectedDetails.date}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="text-center">
-                        <div className="text-sm font-medium text-muted-foreground mb-1">Status</div>
-                        {(() => {
-                          const config = statusConfig[selectedDetails.status];
-                          const Icon = config.icon;
-                          return (
-                            <div className="flex items-center justify-center gap-2">
-                              <Icon className="h-5 w-5" />
-                              <span className={`font-semibold px-3 py-1 rounded-full text-sm ${config.color}`}>
+                    {/* Quick Summary Header */}
+                    <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900/50 dark:to-gray-900/50 rounded-lg border-2 border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col">
+                            <span className="text-2xl font-bold">{selectedDetails.employee || selectedDetails.employeeName}</span>
+                            {selectedDetails.employeeId && (
+                              <span className="text-sm text-muted-foreground">ID: {selectedDetails.employeeId}</span>
+                            )}
+                          </div>
+                          {(() => {
+                            const config = statusConfig[selectedDetails.status];
+                            const Icon = config.icon;
+                            return (
+                              <Badge className={`${config.color} text-sm px-3 py-1`}>
+                                <Icon className="h-4 w-4 mr-1" />
                                 {selectedDetails.status}
-                              </span>
-                            </div>
-                          );
-                        })()}
+                              </Badge>
+                            );
+                          })()}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">Date</div>
+                          <div className="text-lg font-semibold">{selectedDetails.date}</div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Times */}
+                    {/* Distance Warning - Show if employee is far from office */}
+                    {(selectedDetails.location as any)?.distanceFromOffice && !(selectedDetails.location as any)?.isAtOffice && (
+                      <div className={`p-4 rounded-lg border-2 ${(selectedDetails.location as any).distanceFromOffice > 1000
+                        ? 'bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-800'
+                        : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-800'
+                        }`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-full ${(selectedDetails.location as any).distanceFromOffice > 1000
+                            ? 'bg-orange-200'
+                            : 'bg-yellow-200'
+                            }`}>
+                            <AlertTriangle className={`h-5 w-5 ${(selectedDetails.location as any).distanceFromOffice > 1000
+                              ? 'text-orange-700'
+                              : 'text-yellow-700'
+                              }`} />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`font-semibold text-sm mb-1 ${(selectedDetails.location as any).distanceFromOffice > 1000
+                              ? 'text-orange-900 dark:text-orange-100'
+                              : 'text-yellow-900 dark:text-yellow-100'
+                              }`}>
+                              {(selectedDetails.location as any).distanceFromOffice > 1000
+                                ? '⚠️ Remote Clock-In Detected'
+                                : '⚠️ Off-Site Clock-In'}
+                            </h4>
+                            <p className={`text-sm ${(selectedDetails.location as any).distanceFromOffice > 1000
+                              ? 'text-orange-700 dark:text-orange-200'
+                              : 'text-yellow-700 dark:text-yellow-200'
+                              }`}>
+                              Employee clocked in <strong>{(selectedDetails.location as any).distanceFormatted}</strong>
+                              {(selectedDetails.location as any).officeName && ` from ${(selectedDetails.location as any).officeName}`}
+                            </p>
+                            {(selectedDetails.location as any).distanceFromOffice > 5000 && (
+                              <p className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                                💡 This employee may be working from home or another location
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* At Office Confirmation - Show if employee is at office */}
+                    {(selectedDetails.location as any)?.isAtOffice && (
+                      <div className="p-4 bg-green-50 rounded-lg border-2 border-green-300 dark:bg-green-950/30 dark:border-green-800">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-green-200 rounded-full">
+                            <CheckCircle className="h-5 w-5 text-green-700" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-sm text-green-900 dark:text-green-100 mb-1">
+                              ✅ Clocked In At Office
+                            </h4>
+                            <p className="text-sm text-green-700 dark:text-green-200">
+                              Employee clocked in at <strong>{(selectedDetails.location as any).officeName || 'the office'}</strong>
+                              {(selectedDetails.location as any).distanceFromOffice &&
+                                ` (within ${(selectedDetails.location as any).distanceFromOffice}m)`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Times and Hours */}
+                    <div className="text-sm font-semibold text-muted-foreground mb-2">⏰ Time Details</div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
                         <div className="text-center">
@@ -1299,9 +1508,57 @@ export default function TimeManagement() {
                       </div>
                     )}
 
+                    {/* Location Section */}
+                    <div className="text-sm font-semibold text-muted-foreground mb-2 mt-4">📍 Location Information</div>
+                    {selectedDetails.location ? (
+                      <div className="p-4 bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium text-blue-900 dark:text-blue-100">Clock In Location</div>
+                            {/* Distance Badge */}
+                            {(selectedDetails.location as any).distanceFormatted && (
+                              <Badge className={
+                                (selectedDetails.location as any).isAtOffice
+                                  ? 'bg-green-100 text-green-800 border-green-300'
+                                  : (selectedDetails.location as any).distanceFromOffice < 1000
+                                    ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                                    : 'bg-orange-100 text-orange-800 border-orange-300'
+                              }>
+                                {(selectedDetails.location as any).isAtOffice ? '✅ ' : '📍 '}
+                                {(selectedDetails.location as any).distanceFormatted}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm font-medium">
+                            {selectedDetails.location.address || 'Location not available'}
+                          </div>
+                          {selectedDetails.location.latitude && selectedDetails.location.longitude && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              <span className="font-mono">
+                                GPS: {selectedDetails.location.latitude.toFixed(6)}, {selectedDetails.location.longitude.toFixed(6)}
+                              </span>
+                            </div>
+                          )}
+                          {(selectedDetails.location as any).officeName && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Building2 className="h-3 w-3" />
+                              <span>Measured from: {(selectedDetails.location as any).officeName}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                        <p className="text-sm text-muted-foreground">No location data available</p>
+                        <p className="text-xs text-muted-foreground mt-1">Employee may have clocked in before location tracking was enabled</p>
+                      </div>
+                    )}
+
                     {/* Notes and Reason */}
                     {(selectedDetails.notes || selectedDetails.reason) && (
                       <div className="space-y-3">
+                        <div className="text-sm font-semibold text-muted-foreground mb-2 mt-4">📝 Additional Information</div>
                         {selectedDetails.notes && (
                           <div className="p-3 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 rounded-lg border border-gray-200 dark:border-gray-800">
                             <div className="text-sm font-medium text-muted-foreground mb-1">Notes</div>
@@ -1468,7 +1725,247 @@ export default function TimeManagement() {
           <TabsContent value="schedules" className="mt-6">
             <ScheduleManager />
           </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6 mt-6">
+            {/* Office Location Configuration */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="h-5 w-5" />
+                      Office Locations
+                    </CardTitle>
+                    <CardDescription>
+                      Configure office locations to track employee proximity when clocking in
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => {
+                    setEditingOffice(null);
+                    setOfficeForm({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+                    setShowOfficeDialog(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Office
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {officeLocations.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-2">No office locations configured</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add your office location to track employee proximity during clock-in
+                    </p>
+                    <Button onClick={() => {
+                      setEditingOffice(null);
+                      setOfficeForm({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+                      setShowOfficeDialog(true);
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Office Location
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {officeLocations.map(office => (
+                      <div key={office.id} className="flex items-start justify-between p-4 border rounded-lg">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="p-2 bg-blue-50 rounded-lg">
+                            <Building2 className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold">{office.name}</h3>
+                              {office.isDefault && (
+                                <Badge className="bg-green-100 text-green-800">Default</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-2">{office.address}</p>
+                            <div className="grid grid-cols-3 gap-3 text-xs text-muted-foreground">
+                              <div>
+                                <p className="font-medium">Latitude</p>
+                                <p className="font-mono">{office.latitude.toFixed(6)}</p>
+                              </div>
+                              <div>
+                                <p className="font-medium">Longitude</p>
+                                <p className="font-mono">{office.longitude.toFixed(6)}</p>
+                              </div>
+                              <div>
+                                <p className="font-medium">Radius</p>
+                                <p>{office.radius}m</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditOffice(office)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {!office.isDefault && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const service = await getOfficeLocationService();
+                                await service.setDefaultOffice(office.id);
+                                await loadOfficeLocations();
+                                toast({ title: "Default office updated" });
+                              }}
+                            >
+                              Set Default
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteOffice(office.id, office.name)}
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Info Box */}
+                {defaultOffice && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm text-blue-900 mb-1">
+                          How It Works
+                        </h4>
+                        <p className="text-xs text-blue-700">
+                          When employees clock in, their GPS location is compared to the office location.
+                          The system calculates and displays the distance:
+                        </p>
+                        <ul className="text-xs text-blue-700 mt-2 space-y-1 ml-4">
+                          <li>✅ <strong>Within {defaultOffice.radius}m:</strong> "At Office" (green)</li>
+                          <li>⚠️ <strong>100m - 1km:</strong> "XXXm from Office" (yellow)</li>
+                          <li>❌ <strong>Over 1km:</strong> "X.Xkm from Office" (orange)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
+
+        {/* Add/Edit Office Location Dialog */}
+        <Dialog open={showOfficeDialog} onOpenChange={(open) => {
+          setShowOfficeDialog(open);
+          if (!open) {
+            setEditingOffice(null);
+            setOfficeForm({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+          }
+        }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{editingOffice ? 'Edit' : 'Add'} Office Location</DialogTitle>
+              <DialogDescription>
+                {editingOffice ? 'Update' : 'Configure'} an office location to track employee proximity during clock-in
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Office Name</Label>
+                <Input
+                  value={officeForm.name}
+                  onChange={(e) => setOfficeForm({ ...officeForm, name: e.target.value })}
+                  placeholder="e.g., Main Office, Kigali Branch"
+                />
+              </div>
+
+              <div>
+                <Label>Address</Label>
+                <Textarea
+                  value={officeForm.address}
+                  onChange={(e) => setOfficeForm({ ...officeForm, address: e.target.value })}
+                  placeholder="e.g., KG 11 Ave, Kigali, Rwanda"
+                  rows={2}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Latitude</Label>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    value={officeForm.latitude}
+                    onChange={(e) => setOfficeForm({ ...officeForm, latitude: e.target.value })}
+                    placeholder="-1.9536"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Get from Google Maps: Right-click location → Copy coordinates
+                  </p>
+                </div>
+                <div>
+                  <Label>Longitude</Label>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    value={officeForm.longitude}
+                    onChange={(e) => setOfficeForm({ ...officeForm, longitude: e.target.value })}
+                    placeholder="30.0606"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Proximity Radius (meters)</Label>
+                <Input
+                  type="number"
+                  value={officeForm.radius}
+                  onChange={(e) => setOfficeForm({ ...officeForm, radius: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Employees within this radius are considered "At Office"
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  💡 <strong>Tip:</strong> To get accurate coordinates:
+                </p>
+                <ol className="text-xs text-amber-700 mt-2 ml-4 space-y-1">
+                  <li>1. Open <a href="https://www.google.com/maps" target="_blank" className="underline">Google Maps</a></li>
+                  <li>2. Right-click on your office location</li>
+                  <li>3. Click the coordinates at the top to copy them</li>
+                  <li>4. Paste here (format: -1.9536, 30.0606)</li>
+                </ol>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowOfficeDialog(false);
+                setEditingOffice(null);
+                setOfficeForm({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveOfficeLocation}
+                disabled={!officeForm.name || !officeForm.latitude || !officeForm.longitude}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {editingOffice ? 'Update' : 'Save'} Office Location
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

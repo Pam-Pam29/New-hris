@@ -4,6 +4,7 @@ export interface AttendanceRecord {
   id: string;
   employeeId: string;
   employeeName: string;
+  employee?: string; // Backward compatibility
   date: string;
   clockIn: string;
   clockOut: string;
@@ -13,6 +14,16 @@ export interface AttendanceRecord {
   adjustmentReason?: 'forgot_clock_in' | 'forgot_clock_out' | 'system_error' | 'other';
   lastModified?: string;
   modifiedBy?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+    timestamp?: Date;
+    distanceFromOffice?: number;
+    distanceFormatted?: string;
+    isAtOffice?: boolean;
+    officeName?: string;
+  };
 }
 
 export interface TimeAdjustment {

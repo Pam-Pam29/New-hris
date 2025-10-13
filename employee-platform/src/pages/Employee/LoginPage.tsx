@@ -15,34 +15,37 @@ import {
     Loader,
     Building
 } from 'lucide-react';
-import { authService, LoginCredentials } from './services/authService';
+import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
-    const [loginMethod, setLoginMethod] = useState<'work_email' | 'employee_id'>('work_email');
-    const [identifier, setIdentifier] = useState('');
+    const { login, isAuthenticated, currentEmployee, loading: authLoading } = useAuth();
+    const { company } = useCompany();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
-        // Check if user is already authenticated
-        // This would typically check Firebase auth state
-        const checkAuthState = async () => {
-            // Implementation would check Firebase auth state
-            // For now, we'll assume user needs to login
-        };
+        // If already logged in, redirect based on onboarding status
+        if (isAuthenticated && currentEmployee) {
+            console.log('✅ [Login] Already authenticated, redirecting...');
 
-        checkAuthState();
-    }, []);
+            if (currentEmployee.onboardingStatus === 'completed') {
+                navigate('/dashboard', { replace: true });
+            } else {
+                navigate('/onboarding', { replace: true });
+            }
+        }
+    }, [isAuthenticated, currentEmployee, navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!identifier || !password) {
-            setError('Please fill in all fields');
+        if (!email || !password) {
+            setError('Please enter both email and password');
             return;
         }
 
@@ -50,49 +53,33 @@ const LoginPage: React.FC = () => {
         setError('');
 
         try {
-            const credentials: LoginCredentials = {
-                identifier,
-                password,
-                loginMethod
-            };
+            console.log('🔐 [Login] Attempting login for:', email);
 
-            let result;
+            const result = await login(email, password);
 
-            if (loginMethod === 'work_email') {
-                result = await authService.loginWithWorkEmail(identifier, password);
+            if (result.success) {
+                console.log('✅ [Login] Login successful!');
+                // Redirect will happen automatically via useEffect above
             } else {
-                result = await authService.loginWithEmployeeId(identifier, password);
-            }
-
-            if (result.success && result.employeeId) {
-                setIsAuthenticated(true);
-
-                // Check if onboarding is complete
-                const onboardingStatus = await authService.checkOnboardingStatus(result.employeeId);
-
-                if (onboardingStatus.isComplete) {
-                    navigate('/dashboard');
-                } else {
-                    navigate('/onboarding');
-                }
-            } else {
-                setError(result.error || 'Invalid credentials');
+                setError(result.error || 'Invalid email or password');
             }
         } catch (error: any) {
-            setError(error.message || 'An unexpected error occurred');
+            console.error('❌ [Login] Error:', error);
+            setError('Login failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleForgotPassword = async () => {
-        if (!identifier) {
+        if (!email) {
             setError('Please enter your email address first');
             return;
         }
 
         try {
-            const success = await authService.resetPassword(identifier);
+            // TODO: Implement password reset
+            const success = false; // await authService.resetPassword(email);
             if (success) {
                 setError('Password reset email sent. Please check your inbox.');
             } else {
@@ -132,32 +119,6 @@ const LoginPage: React.FC = () => {
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                    {/* Login Method Toggle */}
-                    <div className="flex space-x-2 p-1 bg-gray-100 rounded-lg">
-                        <button
-                            type="button"
-                            onClick={() => setLoginMethod('work_email')}
-                            className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${loginMethod === 'work_email'
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                        >
-                            <Mail className="w-4 h-4" />
-                            <span>Work Email</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setLoginMethod('employee_id')}
-                            className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${loginMethod === 'employee_id'
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                        >
-                            <User className="w-4 h-4" />
-                            <span>Employee ID</span>
-                        </button>
-                    </div>
-
                     {/* Error Display */}
                     {error && (
                         <Alert variant="destructive">
@@ -169,29 +130,21 @@ const LoginPage: React.FC = () => {
                     {/* Login Form */}
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="identifier">
-                                {loginMethod === 'work_email' ? 'Work Email' : 'Employee ID'}
+                            <Label htmlFor="email">
+                                Work Email
                             </Label>
                             <div className="relative">
                                 <Input
-                                    id="identifier"
-                                    type={loginMethod === 'work_email' ? 'email' : 'text'}
-                                    value={identifier}
-                                    onChange={(e) => setIdentifier(e.target.value)}
-                                    placeholder={
-                                        loginMethod === 'work_email'
-                                            ? 'Enter your work email'
-                                            : 'Enter your employee ID'
-                                    }
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter your work email"
                                     required
                                     className="pl-10"
                                 />
                                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                                    {loginMethod === 'work_email' ? (
-                                        <Mail className="w-4 h-4" />
-                                    ) : (
-                                        <User className="w-4 h-4" />
-                                    )}
+                                    <Mail className="w-4 h-4" />
                                 </div>
                             </div>
                         </div>
@@ -224,7 +177,7 @@ const LoginPage: React.FC = () => {
                         <Button
                             type="submit"
                             className="w-full"
-                            disabled={isLoading || !identifier || !password}
+                            disabled={isLoading || !email || !password}
                         >
                             {isLoading ? (
                                 <span className="flex items-center">
@@ -252,8 +205,8 @@ const LoginPage: React.FC = () => {
                     <div className="text-center">
                         <p className="text-xs text-gray-500">
                             Need help? Contact HR at{' '}
-                            <a href="mailto:hr@company.com" className="text-blue-600 hover:underline">
-                                hr@company.com
+                            <a href={`mailto:hr@${company?.domain || 'company.com'}`} className="text-blue-600 hover:underline">
+                                hr@{company?.domain || 'company.com'}
                             </a>
                         </p>
                     </div>

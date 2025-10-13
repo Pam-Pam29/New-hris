@@ -406,36 +406,87 @@ export default function Payroll() {
   // Auto-add financial request deductions
   const autoAddFinancialDeductions = async (employeeId: string) => {
     try {
+      console.log('💰 Auto-adding financial deductions for employee:', employeeId);
+
       const payrollService = await getPayrollService();
       const requests = await payrollService.getFinancialRequestsByEmployee(employeeId);
 
+      console.log('📋 Total financial requests found:', requests.length);
+      console.log('📋 All requests:', requests);
+
       // Filter for approved/paid requests that need recovery
-      const pendingRecovery = requests.filter((req: any) =>
-        (req.requestType === 'loan' || req.requestType === 'advance') &&
-        (req.status === 'paid' || req.status === 'recovering') &&
-        req.remainingBalance &&
-        req.remainingBalance > 0
-      );
+      const pendingRecovery = requests.filter((req: any) => {
+        const isLoanOrAdvance = req.requestType === 'loan' || req.requestType === 'advance';
+        const isPaidOrRecovering = req.status === 'paid' || req.status === 'recovering';
+        const hasBalance = req.remainingBalance && req.remainingBalance > 0;
+
+        console.log(`  - ${req.requestType} (${req.status}): isLoanOrAdvance=${isLoanOrAdvance}, isPaidOrRecovering=${isPaidOrRecovering}, hasBalance=${hasBalance}, remainingBalance=${req.remainingBalance}`);
+
+        return isLoanOrAdvance && isPaidOrRecovering && hasBalance;
+      });
 
       console.log('🔍 Found', pendingRecovery.length, 'financial requests for recovery');
+      console.log('🔍 Pending recovery details:', pendingRecovery);
 
       const autoDeductions: typeof payrollForm.deductions = [];
 
       for (const request of pendingRecovery) {
         const req = request as any;
-        const deductAmount = req.installmentAmount || req.remainingBalance || 0;
+
+        // Log all loan details for debugging
+        console.log(`  📋 Loan ${req.id} details:`, {
+          requestType: req.requestType,
+          amount: req.amount,
+          remainingBalance: req.remainingBalance,
+          amountRecovered: req.amountRecovered,
+          repaymentType: req.repaymentType,
+          installmentMonths: req.installmentMonths,
+          installmentAmount: req.installmentAmount,
+          repaymentMethod: req.repaymentMethod
+        });
+
+        // Calculate the correct deduction amount
+        let deductAmount = 0;
+
+        if (req.repaymentType === 'installments' && req.installmentMonths && req.installmentMonths > 0) {
+          // For installments: calculate monthly installment
+          const monthsRemaining = req.installmentMonths - Math.floor((req.amountRecovered || 0) / (req.installmentAmount || 1));
+
+          if (req.installmentAmount && req.installmentAmount > 0 && req.installmentAmount < req.remainingBalance) {
+            // Use the set installment amount
+            deductAmount = req.installmentAmount;
+          } else {
+            // Recalculate based on original loan amount
+            const originalAmount = (req.remainingBalance || 0) + (req.amountRecovered || 0);
+            deductAmount = Math.ceil(originalAmount / req.installmentMonths);
+          }
+
+          // Don't deduct more than remaining balance
+          deductAmount = Math.min(deductAmount, req.remainingBalance || 0);
+
+          console.log(`  ✅ Installment calculation: ₦${req.remainingBalance + (req.amountRecovered || 0)} ÷ ${req.installmentMonths} months = ₦${deductAmount}/month`);
+        } else {
+          // For full repayment: deduct entire remaining balance
+          deductAmount = req.remainingBalance || 0;
+          console.log(`  ⚠️ Full repayment (installmentMonths: ${req.installmentMonths}, repaymentType: ${req.repaymentType})`);
+        }
+
+        console.log(`  💰 Final deduction: ₦${deductAmount} (remaining: ₦${req.remainingBalance}, type: ${req.repaymentType})`);
+
         autoDeductions.push({
           id: `fin-req-${req.id}`,
           name: `${req.requestType === 'loan' ? 'Loan' : 'Advance'} Repayment`,
-          amount: Math.min(deductAmount, req.remainingBalance || 0),
+          amount: deductAmount,
           type: 'loan',
           description: `${req.repaymentType === 'installments'
-            ? `Installment ${((req.amountRecovered || 0) / (req.installmentAmount || 1)) + 1}/${req.installmentMonths}`
-            : 'Full repayment'} - ${req.reason.substring(0, 50)}...`
+            ? `Installment ${Math.floor((req.amountRecovered || 0) / deductAmount) + 1}/${req.installmentMonths || '?'}`
+            : 'Full repayment'} - ${req.reason.substring(0, 50)}${req.reason.length > 50 ? '...' : ''}`
         });
       }
 
       if (autoDeductions.length > 0) {
+        console.log('✅ Adding', autoDeductions.length, 'auto-deductions to form:', autoDeductions);
+
         setPayrollForm(prev => ({
           ...prev,
           deductions: [...prev.deductions, ...autoDeductions]
@@ -445,18 +496,33 @@ export default function Payroll() {
           title: "Auto-added Deductions",
           description: `${autoDeductions.length} financial request deduction(s) added automatically.`,
         });
+      } else {
+        console.log('ℹ️ No financial deductions to add');
       }
     } catch (error) {
       console.error('❌ Error fetching financial deductions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load financial deductions",
+        variant: "destructive"
+      });
     }
   };
 
   // Auto-populate employee data when employee is selected
   const handleEmployeeSelect = async (employeeId: string) => {
-    const employee = employees.find(e => e.id === employeeId || e.employeeId === employeeId);
-    if (!employee) return;
+    console.log('🎯 handleEmployeeSelect called with ID:', employeeId);
+    console.log('🔍 Searching in employees:', employees.length);
 
-    console.log('👤 Selected employee:', employee);
+    const employee = employees.find(e => e.id === employeeId || e.employeeId === employeeId);
+
+    if (!employee) {
+      console.error('❌ Employee not found for ID:', employeeId);
+      console.log('📋 Available employee IDs:', employees.map(e => ({ id: e.id, employeeId: e.employeeId, name: e.name })));
+      return;
+    }
+
+    console.log('✅ Selected employee:', employee);
 
     // Get full employee profile with all data
     const dataFlowService = await getComprehensiveDataFlowService();
@@ -499,13 +565,10 @@ export default function Payroll() {
       'extractedHireDate': hireDate
     });
 
-    // Extract currency from employee profile (default to NGN for Nigerian system)
-    const currency = empAny.workInfo?.salary?.currency ||
-      empAny.salary?.currency ||
-      empAny.currency ||
-      'NGN'; // Default to Nigerian Naira
+    // Force Nigerian Naira for all payroll (Nigerian HRIS system)
+    const currency = 'NGN'; // Always use Nigerian Naira regardless of profile settings
 
-    console.log('💵 Currency:', currency);
+    console.log('💵 Currency:', currency, '(forced to NGN for Nigerian payroll)');
 
     // Auto-populate basic info, salary, and currency
     setPayrollForm(prev => ({
@@ -619,14 +682,14 @@ export default function Payroll() {
   };
 
   // Format currency based on type
-  const formatCurrency = (amount: number) => {
-    const currency = payrollForm.currency || 'NGN';
-    if (currency === 'NGN') {
-      return `₦${amount.toLocaleString()}`;
-    } else if (currency === 'USD') {
-      return `$${amount.toLocaleString()}`;
+  const formatCurrency = (amount: number, currency?: string) => {
+    const curr = currency || payrollForm.currency || 'NGN';
+    if (curr === 'NGN') {
+      return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (curr === 'USD') {
+      return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     } else {
-      return `${currency} ${amount.toLocaleString()}`;
+      return `${curr} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
   };
 
@@ -1228,18 +1291,49 @@ export default function Payroll() {
                               onClick={async () => {
                                 try {
                                   const payrollService = await getPayrollService();
+
+                                  // Calculate installment amount (preserve existing if already set)
+                                  const req = request as any;
+                                  let installmentAmount = req.installmentAmount; // Use existing if available
+
+                                  // Only recalculate if not set or equals full amount (needs recalculation)
+                                  if (!installmentAmount || installmentAmount >= request.amount) {
+                                    if (req.repaymentType === 'installments' && req.installmentMonths && req.installmentMonths > 1) {
+                                      installmentAmount = Math.ceil(request.amount / req.installmentMonths);
+                                    } else {
+                                      installmentAmount = request.amount; // Full repayment
+                                    }
+                                  }
+
+                                  console.log('💰 Marking as paid:', {
+                                    amount: request.amount,
+                                    repaymentType: req.repaymentType,
+                                    installmentMonths: req.installmentMonths,
+                                    existingInstallmentAmount: req.installmentAmount,
+                                    calculatedInstallmentAmount: installmentAmount
+                                  });
+
                                   await payrollService.updateFinancialRequest(request.id, {
                                     status: 'paid',
-                                    paidAt: new Date()
+                                    paidAt: new Date(),
+                                    remainingBalance: request.amount,  // Initialize with full amount
+                                    amountRecovered: 0,
+                                    installmentAmount: installmentAmount,
+                                    repaymentMethod: req.repaymentMethod || 'salary_deduction',
+                                    repaymentType: req.repaymentType || 'full',
+                                    installmentMonths: req.installmentMonths || 1
                                   } as any);
+
                                   toast({
                                     title: "Request Marked as Paid",
-                                    description: `₦${request.amount.toLocaleString()} has been marked as paid. It will be auto-deducted from next payroll.`,
+                                    description: `₦${request.amount.toLocaleString()} has been marked as paid. It will be auto-deducted from next payroll (₦${installmentAmount.toLocaleString()} per payroll).`,
                                   });
+
                                   // Refresh requests
                                   const requestsData = await payrollService.getFinancialRequests();
                                   setFinancialRequests(requestsData);
                                 } catch (error) {
+                                  console.error('❌ Error marking as paid:', error);
                                   toast({
                                     title: "Error",
                                     description: "Failed to mark as paid",
@@ -1274,7 +1368,14 @@ export default function Payroll() {
       </Card>
 
       {/* Enhanced Add Payroll Dialog */}
-      <Dialog open={addPayrollOpen} onOpenChange={setAddPayrollOpen}>
+      <Dialog open={addPayrollOpen} onOpenChange={(open) => {
+        if (open) {
+          console.log('📝 Opening payroll dialog');
+          console.log('👥 Available employees:', employees.length);
+          console.log('📋 Employees data:', employees);
+        }
+        setAddPayrollOpen(open);
+      }}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Payroll Record</DialogTitle>
@@ -1295,29 +1396,44 @@ export default function Payroll() {
             <TabsContent value="basic" className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="employeeSelect">Select Employee *</Label>
-                <Select
-                  value={payrollForm.employeeId}
-                  onValueChange={handleEmployeeSelect}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an employee to create payroll for..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem
-                        key={employee.id}
-                        value={employee.employeeId || employee.id}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="font-medium">{employee.name}</span>
-                          <span className="text-xs text-muted-foreground ml-4">
-                            {employee.department} • {employee.employmentType || 'Full-time'}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loading ? (
+                  <div className="flex items-center justify-center p-4 border rounded-md">
+                    <p className="text-sm text-muted-foreground">Loading employees...</p>
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="flex items-center justify-center p-4 border rounded-md border-yellow-300 bg-yellow-50">
+                    <p className="text-sm text-yellow-700">No employees found. Please add employees first.</p>
+                  </div>
+                ) : (
+                  <Select
+                    value={payrollForm.employeeId}
+                    onValueChange={handleEmployeeSelect}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose an employee to create payroll for..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((employee) => (
+                        <SelectItem
+                          key={employee.id}
+                          value={employee.employeeId || employee.id}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="font-medium">{employee.name}</span>
+                            <span className="text-xs text-muted-foreground ml-4">
+                              {employee.department} • {employee.employmentType || 'Full-time'}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {!loading && employees.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {employees.length} employee{employees.length !== 1 ? 's' : ''} available
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   💡 Department, position, and tax deductions will be auto-populated based on employee type
                 </p>
@@ -1429,7 +1545,7 @@ export default function Payroll() {
             <TabsContent value="earnings" className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="baseSalary">Base Salary ({payrollForm.currency === 'NGN' ? '₦' : '$'})</Label>
+                  <Label htmlFor="baseSalary">Base Salary (₦)</Label>
                   <Input
                     id="baseSalary"
                     type="number"
@@ -1439,7 +1555,7 @@ export default function Payroll() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="overtime">Overtime ({payrollForm.currency === 'NGN' ? '₦' : '$'})</Label>
+                  <Label htmlFor="overtime">Overtime (₦)</Label>
                   <Input
                     id="overtime"
                     type="number"
@@ -1449,7 +1565,7 @@ export default function Payroll() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bonuses">Bonuses ({payrollForm.currency === 'NGN' ? '₦' : '$'})</Label>
+                  <Label htmlFor="bonuses">Bonuses (₦)</Label>
                   <Input
                     id="bonuses"
                     type="number"
@@ -1464,7 +1580,7 @@ export default function Payroll() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-green-900">Gross Pay (Calculated)</span>
                   <span className="text-2xl font-bold text-green-700">
-                    {formatCurrency(calculateFormTotals().grossPay)}
+                    {formatCurrency(calculateFormTotals().grossPay, 'NGN')}
                   </span>
                 </div>
                 <p className="text-xs text-green-600">
@@ -1505,7 +1621,7 @@ export default function Payroll() {
                           />
                         </div>
                         <div className="col-span-2 space-y-1">
-                          <Label className="text-xs">Amount</Label>
+                          <Label className="text-xs">Amount (₦)</Label>
                           <Input
                             type="number"
                             value={allowance.amount}
@@ -1600,7 +1716,7 @@ export default function Payroll() {
                             />
                           </div>
                           <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">Amount</Label>
+                            <Label className="text-xs">Amount (₦)</Label>
                             <Input
                               type="number"
                               value={deduction.amount}
@@ -1656,13 +1772,13 @@ export default function Payroll() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-red-900">Total Deductions</span>
                   <span className="text-xl font-bold text-red-700">
-                    -{formatCurrency(calculateFormTotals().totalDeductions)}
+                    -{formatCurrency(calculateFormTotals().totalDeductions, 'NGN')}
                   </span>
                 </div>
                 <div className="border-t border-red-200 pt-2 flex justify-between items-center">
                   <span className="text-lg font-semibold text-green-900">Net Pay</span>
                   <span className="text-2xl font-bold text-green-700">
-                    {formatCurrency(calculateFormTotals().netPay)}
+                    {formatCurrency(calculateFormTotals().netPay, 'NGN')}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1708,11 +1824,11 @@ export default function Payroll() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground">Gross Pay</Label>
-                  <p className="font-medium text-lg">${selectedPayroll.grossPay.toLocaleString()}</p>
+                  <p className="font-medium text-lg">{formatCurrency(selectedPayroll.grossPay, selectedPayroll.currency)}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Net Pay</Label>
-                  <p className="font-medium text-lg text-green-600">${selectedPayroll.netPay.toLocaleString()}</p>
+                  <p className="font-medium text-lg text-green-600">{formatCurrency(selectedPayroll.netPay, selectedPayroll.currency)}</p>
                 </div>
               </div>
               {selectedPayroll.allowances.length > 0 && (

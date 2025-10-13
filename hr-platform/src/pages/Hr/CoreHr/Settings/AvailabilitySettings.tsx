@@ -11,7 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '../../../../components/ui/select';
-import { Calendar, Clock, Plus, Trash2, Save } from 'lucide-react';
+import { Calendar, Clock, Plus, Trash2, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { hrAvailabilityService, AvailabilitySlot } from '../../../../services/hrAvailabilityService';
 
 const DAYS_OF_WEEK = [
@@ -28,6 +28,9 @@ export default function AvailabilitySettings() {
     const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [showBookingPageSection, setShowBookingPageSection] = useState(false);
+    const [bookingPageUrl, setBookingPageUrl] = useState('');
+    const [savingUrl, setSavingUrl] = useState(false);
     const [newSlot, setNewSlot] = useState({
         dayOfWeek: 1,
         startTime: '09:00',
@@ -38,6 +41,7 @@ export default function AvailabilitySettings() {
 
     useEffect(() => {
         loadAvailability();
+        loadBookingPageUrl();
     }, []);
 
     const loadAvailability = async () => {
@@ -52,13 +56,55 @@ export default function AvailabilitySettings() {
         }
     };
 
+    const loadBookingPageUrl = async () => {
+        try {
+            const { getFirebaseDb } = await import('../../../../config/firebase');
+            const { collection, getDocs, query, limit } = await import('firebase/firestore');
+            const db = getFirebaseDb();
+            const settingsQuery = query(collection(db, 'hrSettings'), limit(1));
+            const snapshot = await getDocs(settingsQuery);
+
+            if (!snapshot.empty) {
+                const settings = snapshot.docs[0].data();
+                if (settings.bookingPageUrl) {
+                    setBookingPageUrl(settings.bookingPageUrl);
+                    setShowBookingPageSection(true); // Auto-expand if URL exists
+                }
+            }
+        } catch (error) {
+            console.log('No booking page URL configured yet');
+        }
+    };
+
+    const saveBookingPageUrl = async () => {
+        setSavingUrl(true);
+        try {
+            const { getFirebaseDb } = await import('../../../../config/firebase');
+            const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+            const db = getFirebaseDb();
+
+            await setDoc(doc(db, 'hrSettings', 'general'), {
+                bookingPageUrl: bookingPageUrl,
+                updatedAt: serverTimestamp(),
+                updatedBy: 'hr'
+            }, { merge: true });
+
+            alert('✅ Booking page URL saved! Employees will now see a button to book meetings on your calendar.');
+        } catch (error) {
+            console.error('Failed to save booking page URL:', error);
+            alert('❌ Failed to save booking page URL');
+        } finally {
+            setSavingUrl(false);
+        }
+    };
+
     const handleAddSlot = async () => {
         try {
             await hrAvailabilityService.addAvailabilitySlot({
                 ...newSlot,
                 isRecurring: true
             });
-            
+
             setShowAddForm(false);
             setNewSlot({
                 dayOfWeek: 1,
@@ -67,7 +113,7 @@ export default function AvailabilitySettings() {
                 hrName: 'HR Manager',
                 hrId: 'hr-001'
             });
-            
+
             await loadAvailability();
         } catch (error) {
             console.error('Failed to add slot:', error);
@@ -106,7 +152,7 @@ export default function AvailabilitySettings() {
                     hrId: 'hr-001'
                 });
             }
-            
+
             await loadAvailability();
         } catch (error) {
             console.error('Failed to set up standard hours:', error);
@@ -140,6 +186,103 @@ export default function AvailabilitySettings() {
                     </Button>
                 </div>
             </div>
+
+            {/* Google Calendar Booking Page URL - Collapsible */}
+            <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200">
+                <CardHeader
+                    className="cursor-pointer hover:bg-green-100/50 transition-colors"
+                    onClick={() => setShowBookingPageSection(!showBookingPageSection)}
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-green-900" />
+                            <CardTitle className="text-green-900">
+                                Google Calendar Booking Page (Optional)
+                            </CardTitle>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowBookingPageSection(!showBookingPageSection);
+                            }}
+                        >
+                            {showBookingPageSection ? (
+                                <ChevronUp className="h-5 w-5 text-green-700" />
+                            ) : (
+                                <ChevronDown className="h-5 w-5 text-green-700" />
+                            )}
+                        </Button>
+                    </div>
+                    {!showBookingPageSection && bookingPageUrl && (
+                        <p className="text-xs text-green-700 mt-2 font-medium">
+                            ✅ Booking page configured - Click to view/edit
+                        </p>
+                    )}
+                    {!showBookingPageSection && !bookingPageUrl && (
+                        <p className="text-xs text-gray-600 mt-2">
+                            Click to configure Google Calendar booking page URL
+                        </p>
+                    )}
+                </CardHeader>
+
+                {showBookingPageSection && (
+                    <CardContent className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+                        <div>
+                            <Label htmlFor="bookingPageUrl" className="text-gray-700 font-medium">
+                                Booking Page URL
+                            </Label>
+                            <Input
+                                id="bookingPageUrl"
+                                type="url"
+                                value={bookingPageUrl}
+                                onChange={(e) => setBookingPageUrl(e.target.value)}
+                                placeholder="https://calendar.google.com/calendar/u/0/appointments/schedules/..."
+                                className="mt-1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                💡 <strong>How to get this:</strong> Create an appointment schedule in Google Calendar → Click "Get shareable link" → Paste the URL here
+                            </p>
+                        </div>
+
+                        {bookingPageUrl && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <p className="text-sm text-blue-800 mb-2">
+                                    <strong>Preview:</strong> Employees will see this when scheduling:
+                                </p>
+                                <div className="p-2 bg-white rounded border border-blue-300 text-xs text-gray-700">
+                                    ✨ HR has a booking page! Book there to get your Google Meet link:
+                                    <div className="mt-1 p-2 bg-green-100 rounded text-center font-medium">
+                                        [Open HR Booking Page] ←  Button
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <Button
+                            onClick={saveBookingPageUrl}
+                            disabled={savingUrl || !bookingPageUrl}
+                            className="w-full bg-green-600 hover:bg-green-700"
+                        >
+                            {savingUrl ? (
+                                <>Saving...</>
+                            ) : (
+                                <>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    Save Booking Page URL
+                                </>
+                            )}
+                        </Button>
+
+                        {!bookingPageUrl && (
+                            <p className="text-xs text-gray-500 italic">
+                                If you don't have a Google Calendar booking page, leave this blank. Employees can still schedule meetings normally.
+                            </p>
+                        )}
+                    </CardContent>
+                )}
+            </Card>
 
             {/* Add New Slot Form */}
             {showAddForm && (
@@ -216,7 +359,7 @@ export default function AvailabilitySettings() {
                         <div className="space-y-2">
                             {DAYS_OF_WEEK.map(day => {
                                 const daySlots = availabilitySlots.filter(slot => slot.dayOfWeek === day.value);
-                                
+
                                 return (
                                     <div key={day.value} className="flex items-center py-3 border-b">
                                         <div className="w-32 font-medium text-gray-700">{day.label}</div>

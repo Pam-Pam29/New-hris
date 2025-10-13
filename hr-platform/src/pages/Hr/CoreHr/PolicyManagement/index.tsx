@@ -23,7 +23,9 @@ import {
   Trash2,
   Users,
   BarChart3,
-  Download
+  Download,
+  Upload,
+  Type
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getPolicyService, Policy, PolicyAcknowledgment } from './services/policyService';
@@ -69,6 +71,11 @@ export default function HRPolicyManagement() {
     requiresAcknowledgment: true,
     active: true
   });
+
+  // Upload states
+  const [inputMethod, setInputMethod] = useState<'type' | 'upload'>('type');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   useEffect(() => {
     loadData();
@@ -303,7 +310,54 @@ export default function HRPolicyManagement() {
       requiresAcknowledgment: true,
       active: true
     });
+    setInputMethod('type');
+    setUploadedFile(null);
+    setUploadStatus('');
     setSelectedPolicy(null);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/msword', // .doc
+      'text/plain'
+    ];
+
+    if (!validTypes.includes(file.type)) {
+      setUploadStatus('❌ Please upload a PDF, DOCX, DOC, or TXT file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadStatus('❌ File size must be less than 10MB');
+      return;
+    }
+
+    setUploadedFile(file);
+    setUploadStatus(`✅ Uploaded: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`);
+
+    // For text files, read and populate content
+    if (file.type === 'text/plain') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        setPolicyForm(prev => ({ ...prev, content }));
+        setUploadStatus(`✅ Content loaded from ${file.name}`);
+      };
+      reader.readAsText(file);
+    } else {
+      // For PDF/DOCX, store reference
+      setPolicyForm(prev => ({
+        ...prev,
+        content: `[Document uploaded: ${file.name}]\n\nPolicy content from uploaded document. Full document available for download.`
+      }));
+    }
   };
 
   const getStatusBadge = (active: boolean) => {
@@ -655,16 +709,123 @@ export default function HRPolicyManagement() {
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="content">Content</Label>
-                  <Textarea
-                    id="content"
-                    placeholder="Enter policy content (HTML supported)"
-                    rows={10}
-                    value={policyForm.content}
-                    onChange={(e) => setPolicyForm(prev => ({ ...prev, content: e.target.value }))}
-                  />
+                {/* Content Input Method Toggle */}
+                <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <Label className="text-sm font-medium">Policy Content Input Method</Label>
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setInputMethod('type')}
+                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'type'
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        }`}
+                    >
+                      <Type className="h-5 w-5" />
+                      <span>Type Content</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInputMethod('upload')}
+                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'upload'
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        }`}
+                    >
+                      <Upload className="h-5 w-5" />
+                      <span>Upload Document</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Type Content Method */}
+                {inputMethod === 'type' && (
+                  <div>
+                    <Label htmlFor="content">Content</Label>
+                    <Textarea
+                      id="content"
+                      placeholder="Enter policy content (HTML supported)"
+                      rows={10}
+                      value={policyForm.content}
+                      onChange={(e) => setPolicyForm(prev => ({ ...prev, content: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                {/* Upload Document Method */}
+                {inputMethod === 'upload' && (
+                  <div className="flex flex-col gap-3">
+                    <Label>Upload Policy Document</Label>
+
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col items-center gap-3">
+                        <FileText className="h-12 w-12 text-gray-400" />
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-700 mb-1">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            PDF, DOCX, DOC, or TXT (max 10MB)
+                          </p>
+                        </div>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.txt"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          id="fileUpload"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => document.getElementById('fileUpload')?.click()}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Select File
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Upload Status */}
+                    {uploadStatus && (
+                      <Alert className={uploadStatus.startsWith('✅') ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}>
+                        <AlertDescription className={uploadStatus.startsWith('✅') ? 'text-green-800' : 'text-red-800'}>
+                          {uploadStatus}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* File Preview */}
+                    {uploadedFile && (
+                      <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <FileText className="h-5 w-5 text-blue-600 mt-1" />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{uploadedFile.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(uploadedFile.size / 1024).toFixed(2)} KB · {uploadedFile.type}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedFile(null);
+                              setUploadStatus('');
+                              setPolicyForm(prev => ({ ...prev, content: '' }));
+                            }}
+                            className="text-red-600 hover:text-red-700 text-sm font-medium"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-gray-500">
+                      💡 <strong>Tip:</strong> For TXT files, content will be extracted automatically. For PDF/DOCX files, the document will be referenced and stored for employee download.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>

@@ -57,7 +57,7 @@ class AuthService {
             // Send acceptance email (implement email service)
             await this.sendEmail({
                 to: candidateData.email,
-                subject: 'Welcome to [Company] - Complete Your Setup',
+                subject: 'Welcome to Our Company - Complete Your Setup',
                 template: 'job_offer_acceptance',
                 data: { setupLink, employeeId, expiryDate: setupExpiry }
             });

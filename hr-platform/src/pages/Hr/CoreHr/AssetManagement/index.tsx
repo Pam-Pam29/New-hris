@@ -17,6 +17,7 @@ import {
   Plus,
   Package,
   Users,
+  User,
   AlertTriangle,
   AlertCircle,
   CheckCircle,
@@ -37,7 +38,9 @@ import {
   Calendar,
   Laptop,
   Monitor,
-  Smartphone
+  Smartphone,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { AssetForm } from './component/AssetForm';
 import { AssetAssignmentDialog } from './component/AssetAssignmentDialog';
@@ -60,6 +63,7 @@ interface AssetFormProps {
   form: {
     name: string;
     serialNumber: string;
+    type: string;
     category: string;
     status: string;
     assignedTo: string;
@@ -112,10 +116,12 @@ export default function AssetManagement() {
     description: '',
     assetTypes: [] as { assetType: string; category: string; quantity: number; isRequired: boolean; specifications: string }[]
   });
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [editingKit, setEditingKit] = useState<any>(null);
   const [form, setForm] = useState({
     name: '',
     serialNumber: '',
+    type: '',
     category: '',
     status: 'Available',
     assignedTo: '',
@@ -233,11 +239,13 @@ export default function AssetManagement() {
 
       // If employeeId is empty, unassign the asset
       if (!employeeId || employeeId.trim() === '') {
-        const { assignedTo, assignedDate, ...assetWithoutAssignment } = asset;
         const updatedAsset = {
-          ...assetWithoutAssignment,
-          status: 'Available' as const
+          ...asset,
+          status: 'Available' as const,
+          assignedTo: '', // Explicitly clear assignedTo
+          assignedDate: '' // Explicitly clear assignedDate
         };
+        console.log('🔄 Unassigning asset:', assetId, 'Clearing assignedTo field');
         await service.updateAsset(assetId, updatedAsset);
         setAssets(prev => prev.map(a => a.id === assetId ? updatedAsset : a));
         toast({
@@ -321,6 +329,10 @@ export default function AssetManagement() {
 
         if (result.missingAssets.length > 0) {
           message += `\n\nSome assets were unavailable:\n${result.missingAssets.join('\n')}`;
+        }
+
+        if (result.maintenanceWarning) {
+          message += `\n\n⚠️ Note: ${result.maintenanceWarning}`;
         }
 
         toast({
@@ -593,6 +605,16 @@ export default function AssetManagement() {
         return;
       }
 
+      if (!form.type.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Asset type is required.',
+          variant: 'destructive',
+        });
+        setSending(false);
+        return;
+      }
+
       if (!form.category.trim()) {
         toast({
           title: 'Validation Error',
@@ -608,6 +630,7 @@ export default function AssetManagement() {
 
       const assetData: Omit<Asset, 'id'> = {
         name: form.name,
+        type: form.type,
         category: form.category,
         serialNumber: form.serialNumber,
         status: form.status as Asset['status'],
@@ -861,6 +884,8 @@ export default function AssetManagement() {
               <div>
                 <div className="font-semibold text-foreground">{asset.name}</div>
                 <div className="text-sm text-muted-foreground">
+                  {asset.type && <span className="font-medium text-blue-600">{asset.type}</span>}
+                  {asset.type && asset.serialNumber && ' • '}
                   {asset.serialNumber && `SN: ${asset.serialNumber}`}
                   {asset.serialNumber && asset.category && ' • '}
                   {asset.category}
@@ -915,7 +940,7 @@ export default function AssetManagement() {
               </div>
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-success">${asset.purchasePrice.toLocaleString()}</span>
+                <span className="text-sm font-medium text-success">₦{asset.purchasePrice.toLocaleString()}</span>
               </div>
             </div>
           );
@@ -1060,6 +1085,35 @@ export default function AssetManagement() {
         </div>
       </div>
 
+      {/* Pending Asset Requests Alert */}
+      {requests.filter(r => r.status === 'Pending').length > 0 && (
+        <Alert className="mb-6 bg-orange-50 border-orange-200 animate-pulse-slow">
+          <AlertCircle className="h-5 w-5 text-orange-600" />
+          <AlertDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-orange-900">
+                  {requests.filter(r => r.status === 'Pending').length} Pending Asset Request{requests.filter(r => r.status === 'Pending').length > 1 ? 's' : ''}
+                </span>
+                <p className="text-sm text-orange-700 mt-1">
+                  Employees are waiting for asset assignments. Click on a request below to review and fulfill.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300"
+                onClick={() => {
+                  // Switch to Asset Requests tab
+                  setActiveTab('requests');
+                }}
+              >
+                View Requests
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <Card>
@@ -1123,72 +1177,115 @@ export default function AssetManagement() {
         </Card>
       </div>
 
-      {/* Search and Filters */}
-      <Card className="bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200 shadow-lg mb-8">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search assets by name, serial, or category..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                />
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={categoryFilter}
-                  onChange={e => setCategoryFilter(e.target.value)}
-                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">All Categories</option>
-                  {categoryOptions.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-                <select
-                  value={statusFilter}
-                  onChange={e => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">All Statuses</option>
-                  {statusOptions.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-                <select
-                  value={locationFilter}
-                  onChange={e => setLocationFilter(e.target.value)}
-                  className="px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">All Locations</option>
-                  {locationOptions.map(location => (
-                    <option key={location} value={location}>{location}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="assets">Asset Inventory</TabsTrigger>
           <TabsTrigger value="assignments">Employee Assignments</TabsTrigger>
           <TabsTrigger value="requests">Asset Requests</TabsTrigger>
-          <TabsTrigger value="starterkits">Starter Kits</TabsTrigger>
+          <TabsTrigger value="starterkits">
+            <span className="flex items-center gap-2">
+              Starter Kits
+              {(() => {
+                const newEmployeesCount = employees.filter(employee =>
+                  !assets.some(asset =>
+                    asset.assignedTo === employee.id ||
+                    asset.assignedTo === employee.name ||
+                    asset.assignedTo === (employee as any).employeeId
+                  )
+                ).length;
+
+                return newEmployeesCount > 0 ? (
+                  <Badge className="bg-orange-500 text-white ml-1">{newEmployeesCount}</Badge>
+                ) : null;
+              })()}
+            </span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Asset Inventory Tab */}
         <TabsContent value="assets" className="space-y-6">
           <Card className="bg-white shadow-lg border-0 overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-              <CardTitle className="text-2xl font-bold text-gray-800">Asset Inventory</CardTitle>
+              <div className="flex items-center justify-between gap-4">
+                <CardTitle className="text-2xl font-bold text-gray-800">Asset Inventory</CardTitle>
+
+                {/* Search and Collapsible Filters */}
+                <div className="flex flex-col gap-2 flex-1 max-w-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Search assets..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFiltersExpanded(!filtersExpanded)}
+                      className="flex items-center gap-2"
+                    >
+                      <Filter className="h-4 w-4" />
+                      Filters
+                      {filtersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+
+                  {/* Collapsible Filters */}
+                  {filtersExpanded && (
+                    <div className="flex gap-2">
+                      <select
+                        value={categoryFilter}
+                        onChange={e => setCategoryFilter(e.target.value)}
+                        className="px-3 py-1.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">All Categories</option>
+                        {categoryOptions.map(category => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        className="px-3 py-1.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">All Statuses</option>
+                        {statusOptions.map(status => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={locationFilter}
+                        onChange={e => setLocationFilter(e.target.value)}
+                        className="px-3 py-1.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">All Locations</option>
+                        {locationOptions.map(location => (
+                          <option key={location} value={location}>{location}</option>
+                        ))}
+                      </select>
+                      {(categoryFilter || statusFilter || locationFilter) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setCategoryFilter('');
+                            setStatusFilter('');
+                            setLocationFilter('');
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <AtomicTanstackTable
@@ -1214,7 +1311,7 @@ export default function AssetManagement() {
         </TabsContent>
 
         {/* Asset Requests Tab */}
-        <TabsContent value="requests" className="space-y-6">
+        <TabsContent value="requests" className="space-y-6" id="asset-requests-section">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1452,6 +1549,132 @@ export default function AssetManagement() {
               )}
             </CardContent>
           </Card>
+
+          {/* Employees Needing Starter Kits */}
+          <Card className="border-2 border-orange-200">
+            <CardHeader className="bg-orange-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-orange-900 flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Employees Needing Starter Kits
+                  </CardTitle>
+                  <p className="text-sm text-orange-700 mt-1">
+                    New employees who haven't been assigned their starter kit yet
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {(() => {
+                // Get employees without any assigned assets (new employees)
+                const newEmployees = employees.filter(employee =>
+                  !assets.some(asset =>
+                    asset.assignedTo === employee.id ||
+                    asset.assignedTo === employee.name ||
+                    asset.assignedTo === (employee as any).employeeId
+                  )
+                );
+
+                if (newEmployees.length === 0) {
+                  return (
+                    <div className="text-center py-8">
+                      <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-3" />
+                      <p className="text-gray-600">All employees have been assigned their starter kits! 🎉</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <Alert className="bg-orange-50 border-orange-200">
+                      <AlertCircle className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800">
+                        <strong>{newEmployees.length}</strong> employee{newEmployees.length !== 1 ? 's' : ''} waiting for starter kit assignment
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {newEmployees.map(employee => {
+                        const jobTitle = (employee as any).position || (employee as any).role || 'No job title';
+                        const matchingKit = starterKits.find(kit =>
+                          kit.jobTitle.toLowerCase() === jobTitle.toLowerCase() && kit.isActive
+                        );
+
+                        return (
+                          <Card key={employee.id || (employee as any).employeeId || employee.name} className="border-l-4 border-l-orange-500">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-5 w-5 text-blue-600" />
+                                  <div>
+                                    <CardTitle className="text-base">{employee.name}</CardTitle>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{jobTitle}</p>
+                                  </div>
+                                </div>
+                                <Badge className="bg-orange-100 text-orange-800">New</Badge>
+                              </div>
+                            </CardHeader>
+                            <CardContent>
+                              {matchingKit ? (
+                                <div className="space-y-3">
+                                  <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                                    <p className="text-xs font-medium text-blue-900">
+                                      ✅ Kit Available: {matchingKit.name}
+                                    </p>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                      {matchingKit.assets?.length || 0} asset type{(matchingKit.assets?.length || 0) !== 1 ? 's' : ''}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCreateNewEmployeeKit(employee.id || (employee as any).employeeId)}
+                                    className="w-full bg-green-600 hover:bg-green-700"
+                                  >
+                                    <Package className="h-4 w-4 mr-2" />
+                                    Auto-Assign Kit
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <div className="p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                    <p className="text-xs font-medium text-yellow-900">
+                                      ⚠️ No Kit for "{jobTitle}"
+                                    </p>
+                                    <p className="text-xs text-yellow-700 mt-1">
+                                      Create a kit for this role first
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setStarterKitForm({
+                                        name: `${jobTitle} Kit`,
+                                        department: (employee as any).department || '',
+                                        jobTitle: jobTitle,
+                                        description: `Starter kit for ${jobTitle} role`,
+                                        assetTypes: []
+                                      });
+                                      setShowStarterKitDialog(true);
+                                    }}
+                                    className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Create Kit
+                                  </Button>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -1511,8 +1734,13 @@ export default function AssetManagement() {
             {selectedRequest && (
               <div className="p-3 bg-blue-50 rounded-lg">
                 <p className="text-sm font-medium">Request Details:</p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedRequest.assetType} • {selectedRequest.category} • Priority: {selectedRequest.priority}
+                {selectedRequest.assetName && (
+                  <p className="text-sm font-semibold text-blue-900 mt-1">
+                    Requested Asset: {selectedRequest.assetName}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Type: {selectedRequest.assetType} • Category: {selectedRequest.category} • Priority: {selectedRequest.priority}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Justification: {selectedRequest.justification}
@@ -1530,24 +1758,43 @@ export default function AssetManagement() {
               >
                 <option value="">-- Select an available asset --</option>
                 {assets
-                  .filter(a => a.status === 'Available')
                   .filter(a => {
-                    // Filter by matching category if possible
+                    // Must be available and not assigned
+                    const isAvailable = a.status === 'Available';
+                    const notAssigned = !a.assignedTo || a.assignedTo.trim() === '';
+                    return isAvailable && notAssigned;
+                  })
+                  .filter(a => {
+                    // Priority 1: Match by specific asset name if provided
+                    if (selectedRequest?.assetName) {
+                      return a.name.toLowerCase() === selectedRequest.assetName.toLowerCase();
+                    }
+
+                    // Priority 2: Match by asset type if provided
+                    if (selectedRequest?.assetType) {
+                      const typeMatch = a.type && a.type.toLowerCase() === selectedRequest.assetType.toLowerCase();
+                      if (typeMatch) return true;
+                    }
+
+                    // Priority 3: Match by category
                     if (selectedRequest?.category) {
                       return a.category.toLowerCase().includes(selectedRequest.category.toLowerCase());
                     }
+
                     return true;
                   })
                   .map(asset => (
                     <option key={asset.id} value={asset.id}>
-                      {asset.name} ({asset.serialNumber}) - {asset.category} - {asset.condition}
+                      {asset.name} ({asset.serialNumber}) - {asset.type || asset.category} - {asset.condition}
                     </option>
                   ))
                 }
               </select>
               <p className="text-xs text-muted-foreground mt-1">
-                Only showing available assets
-                {selectedRequest?.category && ` matching category: ${selectedRequest.category}`}
+                {selectedRequest?.assetName && `Showing: ${selectedRequest.assetName}`}
+                {!selectedRequest?.assetName && selectedRequest?.assetType && `Showing: ${selectedRequest.assetType} assets`}
+                {!selectedRequest?.assetName && !selectedRequest?.assetType && selectedRequest?.category && `Showing: ${selectedRequest.category} assets`}
+                {!selectedRequest?.assetName && !selectedRequest?.assetType && !selectedRequest?.category && 'Showing all available assets'}
               </p>
             </div>
 
@@ -1731,12 +1978,29 @@ export default function AssetManagement() {
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <Label className="text-xs">Asset Type *</Label>
-                          <Input
-                            placeholder="e.g., Laptop"
+                          <select
                             value={assetType.assetType}
                             onChange={(e) => updateAssetType(index, 'assetType', e.target.value)}
-                            className="h-9"
-                          />
+                            className="w-full h-9 px-3 border rounded-md text-sm"
+                          >
+                            <option value="">Select Type</option>
+                            <option value="Laptop">Laptop</option>
+                            <option value="Desktop">Desktop</option>
+                            <option value="Monitor">Monitor</option>
+                            <option value="Phone">Phone</option>
+                            <option value="Tablet">Tablet</option>
+                            <option value="Keyboard">Keyboard</option>
+                            <option value="Mouse">Mouse</option>
+                            <option value="Headset">Headset</option>
+                            <option value="Desk">Desk</option>
+                            <option value="Chair">Chair</option>
+                            <option value="Printer">Printer</option>
+                            <option value="Scanner">Scanner</option>
+                            <option value="Projector">Projector</option>
+                            <option value="Server">Server</option>
+                            <option value="Router">Router</option>
+                            <option value="Other">Other</option>
+                          </select>
                         </div>
                         <div>
                           <Label className="text-xs">Category *</Label>

@@ -1,0 +1,44 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+.env.development
+*.env
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+pglite-debug.log
+npm-debug.log*
+yarn-debug.log*
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
+
+
+
+
+

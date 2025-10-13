@@ -19,6 +19,7 @@ import { db } from '../config/firebase';
 // Comprehensive interfaces for all HRIS systems
 export interface EmployeeProfile {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     personalInfo: {
         firstName: string;
@@ -111,6 +112,7 @@ export interface EmployeeProfile {
 
 export interface LeaveType {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     name: string;
     maxDays: number;
     carryOver: boolean;
@@ -125,6 +127,7 @@ export interface LeaveType {
 
 export interface LeaveRequest {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     leaveTypeId: string;
@@ -143,6 +146,7 @@ export interface LeaveRequest {
 
 export interface LeaveBalance {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     leaveTypeId: string;
     leaveTypeName: string;
@@ -157,6 +161,7 @@ export interface LeaveBalance {
 
 export interface Policy {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     title: string;
     description: string;
     content: string;
@@ -175,6 +180,7 @@ export interface Policy {
 
 export interface PolicyAcknowledgment {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     policyId: string;
     employeeId: string;
     employeeName: string;
@@ -186,6 +192,7 @@ export interface PolicyAcknowledgment {
 
 export interface PerformanceGoal {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     title: string;
     description: string;
@@ -204,6 +211,7 @@ export interface PerformanceGoal {
 
 export interface PerformanceReview {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     reviewerId: string;
@@ -223,6 +231,7 @@ export interface PerformanceReview {
 
 export interface MeetingSchedule {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     managerId: string;
@@ -243,6 +252,7 @@ export interface MeetingSchedule {
 
 export interface NotificationData {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     employeeId: string;
     title: string;
     message: string;
@@ -269,13 +279,13 @@ export interface IComprehensiveDataFlowService {
     updateLeaveType(id: string, updates: Partial<LeaveType>): Promise<void>;
     deleteLeaveType(id: string): Promise<void>;
 
-    getLeaveRequests(employeeId?: string): Promise<LeaveRequest[]>;
+    getLeaveRequests(employeeId?: string, companyId?: string): Promise<LeaveRequest[]>;
     createLeaveRequest(request: Omit<LeaveRequest, 'id' | 'submittedAt'>): Promise<LeaveRequest>;
     updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<void>;
     approveLeaveRequest(id: string, reviewedBy: string, comments?: string): Promise<void>;
     rejectLeaveRequest(id: string, reviewedBy: string, comments?: string): Promise<void>;
 
-    getLeaveBalances(employeeId?: string): Promise<LeaveBalance[]>;
+    getLeaveBalances(employeeId?: string, companyId?: string): Promise<LeaveBalance[]>;
     updateLeaveBalance(employeeId: string, leaveTypeId: string, updates: Partial<LeaveBalance>): Promise<void>;
 
     // Policy Management
@@ -309,9 +319,9 @@ export interface IComprehensiveDataFlowService {
     subscribeToNotifications(employeeId: string, callback: (notifications: NotificationData[]) => void): () => void;
 
     // Real-time subscriptions
-    subscribeToLeaveRequests(employeeId: string, callback: (requests: LeaveRequest[]) => void): () => void;
-    subscribeToPerformanceGoals(employeeId: string, callback: (goals: PerformanceGoal[]) => void): () => void;
-    subscribeToPolicies(callback: (policies: Policy[]) => void): () => void;
+    subscribeToLeaveRequests(employeeId: string, callback: (requests: LeaveRequest[]) => void, companyId?: string): () => void;
+    subscribeToPerformanceGoals(employeeId: string, callback: (goals: PerformanceGoal[]) => void, companyId?: string): () => void;
+    subscribeToPolicies(callback: (policies: Policy[]) => void, companyId?: string): () => void;
 }
 
 // Firebase Comprehensive Data Flow Service Implementation
@@ -758,37 +768,53 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Real-time subscriptions
-    subscribeToLeaveRequests(employeeId: string, callback: (requests: LeaveRequest[]) => void): () => void {
-        const q = query(
+    subscribeToLeaveRequests(employeeId: string, callback: (requests: LeaveRequest[]) => void, companyId?: string): () => void {
+        // Build query with both employeeId (required) and companyId (optional for multi-tenancy)
+        let q = query(
             collection(db, 'leaveRequests'),
             where('employeeId', '==', employeeId),
             orderBy('submittedAt', 'desc')
         );
 
+        // Note: Can't add companyId filter here due to composite index requirements
+        // Instead, we'll filter in memory after fetching
+
         return onSnapshot(q, (querySnapshot) => {
-            const requests = querySnapshot.docs.map(doc =>
+            let requests = querySnapshot.docs.map(doc =>
                 this.convertFirestoreToLeaveRequest(doc.data())
             );
+
+            // Filter by companyId in memory if provided
+            if (companyId) {
+                requests = requests.filter(r => r.companyId === companyId);
+            }
+
             callback(requests);
         });
     }
 
-    subscribeToPerformanceGoals(employeeId: string, callback: (goals: PerformanceGoal[]) => void): () => void {
-        const q = query(
+    subscribeToPerformanceGoals(employeeId: string, callback: (goals: PerformanceGoal[]) => void, companyId?: string): () => void {
+        let q = query(
             collection(db, 'performanceGoals'),
             where('employeeId', '==', employeeId),
             orderBy('createdAt', 'desc')
         );
 
         return onSnapshot(q, (querySnapshot) => {
-            const goals = querySnapshot.docs.map(doc =>
+            let goals = querySnapshot.docs.map(doc =>
                 this.convertFirestoreToPerformanceGoal(doc.data())
             );
+
+            // Filter by companyId in memory if provided
+            if (companyId) {
+                goals = goals.filter(g => g.companyId === companyId);
+            }
+
             callback(goals);
         });
     }
 
-    subscribeToPolicies(callback: (policies: Policy[]) => void): () => void {
+    subscribeToPolicies(callback: (policies: Policy[]) => void, companyId?: string): () => void {
         const q = query(
             collection(db, 'policies'),
             where('isActive', '==', true),
@@ -796,9 +822,15 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         );
 
         return onSnapshot(q, (querySnapshot) => {
-            const policies = querySnapshot.docs.map(doc =>
+            let policies = querySnapshot.docs.map(doc =>
                 this.convertFirestoreToPolicy(doc.data())
             );
+
+            // Filter by companyId in memory if provided
+            if (companyId) {
+                policies = policies.filter(p => p.companyId === companyId);
+            }
+
             callback(policies);
         });
     }
@@ -1089,20 +1121,36 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         });
     }
 
-    async getLeaveRequests(employeeId?: string): Promise<LeaveRequest[]> {
+    async getLeaveRequests(employeeId?: string, companyId?: string): Promise<LeaveRequest[]> {
         let q = query(collection(db, 'leaveRequests'), orderBy('submittedAt', 'desc'));
+
+        // Filter by companyId for multi-tenancy (if provided)
+        if (companyId) {
+            q = query(collection(db, 'leaveRequests'), where('companyId', '==', companyId), orderBy('submittedAt', 'desc'));
+        }
+
+        // Further filter by employeeId (if provided)
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
+
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => this.convertFirestoreToLeaveRequest(doc.data()));
     }
 
-    async getLeaveBalances(employeeId?: string): Promise<LeaveBalance[]> {
+    async getLeaveBalances(employeeId?: string, companyId?: string): Promise<LeaveBalance[]> {
         let q = query(collection(db, 'leaveBalances'));
+
+        // Filter by companyId for multi-tenancy (if provided)
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+
+        // Further filter by employeeId (if provided)
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
+
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({
             ...doc.data(),

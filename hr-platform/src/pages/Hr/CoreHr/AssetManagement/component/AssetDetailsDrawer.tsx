@@ -158,6 +158,10 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
                 </div>
               </div>
               <div>
+                <label className="text-sm font-medium text-muted-foreground">Asset Type</label>
+                <p className="mt-1 font-medium text-blue-600">{asset.type || 'Not specified'}</p>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-muted-foreground">Category</label>
                 <p className="mt-1 font-medium">{asset.category}</p>
               </div>
@@ -182,7 +186,7 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
                 <label className="text-sm font-medium text-muted-foreground">Purchase Price</label>
                 <div className="flex items-center gap-1 mt-1">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">${asset.purchasePrice.toLocaleString()}</span>
+                  <span className="font-medium">₦{asset.purchasePrice.toLocaleString()}</span>
                 </div>
               </div>
               <div>

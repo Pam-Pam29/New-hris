@@ -10,320 +10,50 @@ import { Separator } from '../../components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Building, Briefcase, CreditCard, Users, Shield, ArrowLeft, Heart, GraduationCap, FileText, Upload, Download, Eye } from 'lucide-react';
 import { getComprehensiveDataFlowService, EmployeeProfile } from '../../services/comprehensiveDataFlowService';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { useAuth } from '../../context/AuthContext';
 
 // Use the EmployeeProfile interface from the service
 type ComprehensiveProfile = EmployeeProfile;
 
 export default function EmployeeProfilePage() {
+    const { currentEmployee } = useAuth(); // Get logged-in employee from auth context
     const [profile, setProfile] = useState<ComprehensiveProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [editData, setEditData] = useState<Partial<ComprehensiveProfile>>({});
     const [activeTab, setActiveTab] = useState('personal');
 
-    // Load profile data on component mount
+    const currentEmployeeId = currentEmployee?.employeeId || '';
+
+    // Load profile data on component mount and when employee changes
     useEffect(() => {
         const loadProfile = async () => {
+            if (!currentEmployeeId) {
+                console.log('⏳ [Profile] Waiting for employee authentication...');
+                return;
+            }
+
             try {
+                setLoading(true);
                 const dataFlowService = await getComprehensiveDataFlowService();
 
-                // Get all employees from Firebase
-                const allEmployees = await dataFlowService.getAllEmployees();
-                console.log('All employees loaded for profile:', allEmployees);
+                console.log('📋 [Profile] Loading profile for employee:', currentEmployeeId);
 
-                if (allEmployees.length > 0) {
-                    // Try to find the employee by ID from localStorage or use the first one
-                    let employeeProfile = allEmployees[0];
-                    const savedEmployeeId = localStorage.getItem('currentEmployeeId');
+                // Load the employee's profile directly
+                const employeeProfile = await dataFlowService.getEmployeeProfile(currentEmployeeId);
 
-                    if (savedEmployeeId) {
-                        const foundEmployee = allEmployees.find(emp =>
-                            emp.id === savedEmployeeId ||
-                            emp.employeeId === savedEmployeeId
-                        );
-                        if (foundEmployee) {
-                            employeeProfile = foundEmployee;
-                            console.log('Found saved employee profile:', employeeProfile);
-                        } else {
-                            console.log('Saved employee ID not found, using first employee');
-                        }
-                    }
+                if (employeeProfile) {
+                    console.log('✅ [Profile] Loaded profile for:', employeeProfile.personalInfo?.firstName, employeeProfile.personalInfo?.lastName);
 
-                    console.log('Using employee profile:', employeeProfile);
-                    console.log('Employee profile ID fields:', {
-                        employeeId: employeeProfile.employeeId,
-                        id: employeeProfile.id
-                    });
-                    console.log('Date of birth in loaded profile:', employeeProfile.personalInfo?.dateOfBirth, typeof employeeProfile.personalInfo?.dateOfBirth);
-                    console.log('Hire date in loaded profile:', employeeProfile.workInfo?.hireDate, typeof employeeProfile.workInfo?.hireDate);
-
-                    // Save the current employee ID to localStorage
-                    localStorage.setItem('currentEmployeeId', employeeProfile.id || employeeProfile.employeeId);
-
-                    // Check if the profile has the required structure
-                    if (!employeeProfile.personalInfo) {
-                        console.error('Profile missing personalInfo:', employeeProfile);
-                        throw new Error('Invalid profile structure: missing personalInfo');
-                    }
-
-                    // Convert the Firebase profile to our interface
-                    try {
-                        const comprehensiveProfile: ComprehensiveProfile = {
-                            id: employeeProfile.employeeId || employeeProfile.id || 'emp-001',
-                            employeeId: employeeProfile.employeeId || employeeProfile.id || 'emp-001',
-                            createdAt: employeeProfile.createdAt || new Date(),
-                            updatedAt: employeeProfile.updatedAt || new Date(),
-                            personalInfo: {
-                                firstName: employeeProfile.personalInfo?.firstName || 'John',
-                                lastName: employeeProfile.personalInfo?.lastName || 'Doe',
-                                middleName: employeeProfile.personalInfo?.middleName || '',
-                                dateOfBirth: employeeProfile.personalInfo?.dateOfBirth ?
-                                    (employeeProfile.personalInfo.dateOfBirth instanceof Date ?
-                                        employeeProfile.personalInfo.dateOfBirth :
-                                        new Date(employeeProfile.personalInfo.dateOfBirth)) : new Date('1990-05-15'),
-                                gender: employeeProfile.personalInfo?.gender || 'Male',
-                                maritalStatus: employeeProfile.personalInfo?.maritalStatus || 'Married',
-                                nationality: employeeProfile.personalInfo?.nationality || 'American',
-                                otherNationality: employeeProfile.personalInfo?.otherNationality || '',
-                                identificationNumber: employeeProfile.personalInfo?.identificationNumber || '***-**-1234'
-                            },
-                            contactInfo: {
-                                personalEmail: employeeProfile.contactInfo?.personalEmail || 'john.doe@email.com',
-                                workEmail: employeeProfile.contactInfo?.workEmail || 'john.doe@company.com',
-                                personalPhone: employeeProfile.contactInfo?.personalPhone || '+1 (555) 123-4567',
-                                workPhone: employeeProfile.contactInfo?.workPhone || '+1 (555) 987-6543',
-                                address: {
-                                    street: employeeProfile.contactInfo?.address?.street || '123 Main Street',
-                                    city: employeeProfile.contactInfo?.address?.city || 'New York',
-                                    state: employeeProfile.contactInfo?.address?.state || 'NY',
-                                    zipCode: employeeProfile.contactInfo?.address?.zipCode || '10001',
-                                    country: employeeProfile.contactInfo?.address?.country || 'USA'
-                                },
-                                emergencyContacts: Array.isArray(employeeProfile.contactInfo?.emergencyContacts) ?
-                                    employeeProfile.contactInfo.emergencyContacts.map(contact => ({
-                                        name: contact?.name || 'Unknown',
-                                        relationship: contact?.relationship || 'Unknown',
-                                        phone: contact?.phone || '',
-                                        email: contact?.email || '',
-                                        isPrimary: contact?.isPrimary || false,
-                                        address: contact?.address || ''
-                                    })) : []
-                            },
-                            workInfo: {
-                                position: employeeProfile.workInfo?.position || 'Senior Software Developer',
-                                department: employeeProfile.workInfo?.department || 'Engineering',
-                                hireDate: employeeProfile.workInfo?.hireDate ?
-                                    (employeeProfile.workInfo.hireDate instanceof Date ?
-                                        employeeProfile.workInfo.hireDate :
-                                        new Date(employeeProfile.workInfo.hireDate)) : new Date('2022-01-15'),
-                                employmentType: employeeProfile.workInfo?.employmentType || 'Full-time',
-                                workLocation: employeeProfile.workInfo?.workLocation || 'New York Office',
-                                workSchedule: employeeProfile.workInfo?.workSchedule || 'Monday-Friday, 9 AM - 5 PM',
-                                salary: {
-                                    baseSalary: employeeProfile.workInfo?.salary?.baseSalary || 95000,
-                                    currency: employeeProfile.workInfo?.salary?.currency || 'USD',
-                                    payFrequency: employeeProfile.workInfo?.salary?.payFrequency || 'Bi-weekly'
-                                }
-                            },
-                            bankingInfo: {
-                                bankName: employeeProfile.bankingInfo?.bankName || 'First National Bank',
-                                accountNumber: employeeProfile.bankingInfo?.accountNumber || '****1234',
-                                routingNumber: employeeProfile.bankingInfo?.routingNumber || '021000021',
-                                accountType: employeeProfile.bankingInfo?.accountType || 'Checking',
-                                salaryPaymentMethod: employeeProfile.bankingInfo?.salaryPaymentMethod || 'Direct Deposit'
-                            },
-                            skills: Array.isArray(employeeProfile.skills) ?
-                                employeeProfile.skills.map(skill => ({
-                                    name: skill?.name || 'Unknown',
-                                    level: skill?.level || 'Beginner',
-                                    certified: skill?.certified || false,
-                                    certificationDate: skill?.certificationDate ?
-                                        (skill.certificationDate instanceof Date ?
-                                            skill.certificationDate :
-                                            new Date(skill.certificationDate)) : undefined,
-                                    expiryDate: skill?.expiryDate ?
-                                        (skill.expiryDate instanceof Date ?
-                                            skill.expiryDate :
-                                            new Date(skill.expiryDate)) : undefined
-                                })) : [],
-                            familyInfo: {
-                                spouse: employeeProfile.familyInfo?.spouse ? {
-                                    name: employeeProfile.familyInfo.spouse?.name || 'Unknown',
-                                    occupation: employeeProfile.familyInfo.spouse?.occupation || 'Unknown',
-                                    phone: employeeProfile.familyInfo.spouse?.phone || '',
-                                    email: employeeProfile.familyInfo.spouse?.email || ''
-                                } : undefined,
-                                dependents: Array.isArray(employeeProfile.familyInfo?.dependents) ?
-                                    employeeProfile.familyInfo.dependents.map(dependent => ({
-                                        name: dependent?.name || 'Unknown',
-                                        relationship: dependent?.relationship || 'Unknown',
-                                        dateOfBirth: dependent?.dateOfBirth ?
-                                            (dependent.dateOfBirth instanceof Date ?
-                                                dependent.dateOfBirth :
-                                                new Date(dependent.dateOfBirth)) : new Date('1990-01-01'),
-                                        ssn: dependent?.ssn || '***-**-0000'
-                                    })) : [],
-                                beneficiaries: Array.isArray(employeeProfile.familyInfo?.beneficiaries) ?
-                                    employeeProfile.familyInfo.beneficiaries.map(beneficiary => ({
-                                        name: beneficiary?.name || 'Unknown',
-                                        relationship: beneficiary?.relationship || 'Unknown',
-                                        percentage: beneficiary?.percentage || 0,
-                                        contactInfo: beneficiary?.contactInfo || ''
-                                    })) : []
-                            },
-                            profileStatus: {
-                                completeness: employeeProfile.profileStatus?.completeness || 85,
-                                lastUpdated: employeeProfile.profileStatus?.lastUpdated ?
-                                    (employeeProfile.profileStatus.lastUpdated instanceof Date ?
-                                        employeeProfile.profileStatus.lastUpdated :
-                                        new Date(employeeProfile.profileStatus.lastUpdated)) : new Date(),
-                                updatedBy: employeeProfile.profileStatus?.updatedBy || 'emp-001',
-                                status: employeeProfile.profileStatus?.status || 'approved'
-                            }
-                        };
-
-                        console.log('Setting profile:', comprehensiveProfile);
-                        console.log('Converted date of birth:', comprehensiveProfile.personalInfo.dateOfBirth, typeof comprehensiveProfile.personalInfo.dateOfBirth);
-                        console.log('Converted hire date:', comprehensiveProfile.workInfo.hireDate, typeof comprehensiveProfile.workInfo.hireDate);
-                        setProfile(comprehensiveProfile);
-                    } catch (profileError) {
-                        console.error('Error converting profile:', profileError);
-                        console.error('Problematic profile data:', employeeProfile);
-                        // Set a default profile instead of throwing
-                        const defaultProfile: ComprehensiveProfile = {
-                            id: 'emp-001',
-                            employeeId: 'emp-001',
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                            personalInfo: {
-                                firstName: 'John',
-                                lastName: 'Doe',
-                                middleName: 'Michael',
-                                dateOfBirth: new Date('1990-05-15'),
-                                gender: 'Male',
-                                maritalStatus: 'Married',
-                                nationality: 'American',
-                                otherNationality: '',
-                                identificationNumber: '***-**-1234'
-                            },
-                            contactInfo: {
-                                personalEmail: 'john.doe@email.com',
-                                workEmail: 'john.doe@company.com',
-                                personalPhone: '+1 (555) 123-4567',
-                                workPhone: '+1 (555) 987-6543',
-                                address: {
-                                    street: '123 Main Street',
-                                    city: 'New York',
-                                    state: 'NY',
-                                    zipCode: '10001',
-                                    country: 'USA'
-                                },
-                                emergencyContacts: []
-                            },
-                            workInfo: {
-                                position: 'Senior Software Developer',
-                                department: 'Engineering',
-                                hireDate: new Date('2022-01-15'),
-                                employmentType: 'Full-time',
-                                workLocation: 'New York Office',
-                                workSchedule: 'Monday-Friday, 9 AM - 5 PM',
-                                salary: {
-                                    baseSalary: 95000,
-                                    currency: 'USD',
-                                    payFrequency: 'Monthly'
-                                }
-                            },
-                            bankingInfo: {
-                                bankName: 'First National Bank',
-                                accountNumber: '****1234',
-                                routingNumber: '021000021',
-                                accountType: 'Checking',
-                                salaryPaymentMethod: 'Direct Deposit'
-                            },
-                            skills: [],
-                            familyInfo: {
-                                spouse: undefined,
-                                dependents: [],
-                                beneficiaries: []
-                            },
-                            profileStatus: {
-                                completeness: 0,
-                                lastUpdated: new Date(),
-                                updatedBy: 'emp-001',
-                                status: 'draft'
-                            }
-                        };
-                        setProfile(defaultProfile);
-                    }
+                    // Set profile directly - the service already returns the correct format
+                    setProfile(employeeProfile as any);
                 } else {
-                    console.log('No employees found, using default profile');
-                    // Use default profile if no employees found
-                    const defaultProfile: ComprehensiveProfile = {
-                        id: 'emp-001',
-                        employeeId: 'emp-001',
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                        personalInfo: {
-                            firstName: 'John',
-                            lastName: 'Doe',
-                            middleName: 'Michael',
-                            dateOfBirth: new Date('1990-05-15'),
-                            gender: 'Male',
-                            maritalStatus: 'Married',
-                            nationality: 'American',
-                            identificationNumber: '***-**-1234'
-                        },
-                        contactInfo: {
-                            personalEmail: 'john.doe@email.com',
-                            workEmail: 'john.doe@company.com',
-                            personalPhone: '+1 (555) 123-4567',
-                            workPhone: '+1 (555) 987-6543',
-                            address: {
-                                street: '123 Main Street',
-                                city: 'New York',
-                                state: 'NY',
-                                zipCode: '10001',
-                                country: 'USA'
-                            },
-                            emergencyContacts: []
-                        },
-                        workInfo: {
-                            position: 'Senior Software Developer',
-                            department: 'Engineering',
-                            hireDate: new Date('2022-01-15'),
-                            employmentType: 'Full-time',
-                            workLocation: 'New York Office',
-                            workSchedule: 'Monday-Friday, 9 AM - 5 PM',
-                            salary: {
-                                baseSalary: 95000,
-                                currency: 'USD',
-                                payFrequency: 'Bi-weekly'
-                            }
-                        },
-                        bankingInfo: {
-                            bankName: 'First National Bank',
-                            accountNumber: '****1234',
-                            routingNumber: '021000021',
-                            accountType: 'Checking',
-                            salaryPaymentMethod: 'Direct Deposit'
-                        },
-                        skills: [],
-                        familyInfo: {
-                            spouse: undefined,
-                            dependents: [],
-                            beneficiaries: []
-                        },
-                        profileStatus: {
-                            completeness: 0,
-                            lastUpdated: new Date(),
-                            updatedBy: 'emp-001',
-                            status: 'draft'
-                        }
-                    };
-                    setProfile(defaultProfile);
+                    console.warn('⚠️ [Profile] Employee profile not found for:', currentEmployeeId);
+                    setProfile(null);
                 }
+
                 setLoading(false);
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -336,7 +66,7 @@ export default function EmployeeProfilePage() {
         };
 
         loadProfile();
-    }, []);
+    }, [currentEmployeeId]); // Reload when employee changes (login/logout)
 
     const handleEdit = () => {
         setEditData(profile || {});
@@ -1017,7 +747,7 @@ export default function EmployeeProfilePage() {
                                                     placeholder="Enter base salary"
                                                 />
                                             ) : (
-                                                <p className="text-sm py-2">{currentData.workInfo?.salary?.baseSalary ? `$${currentData.workInfo.salary.baseSalary.toLocaleString()}` : 'N/A'}</p>
+                                                <p className="text-sm py-2">{currentData.workInfo?.salary?.baseSalary ? `₦${currentData.workInfo.salary.baseSalary.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</p>
                                             )}
                                         </div>
                                         <div>

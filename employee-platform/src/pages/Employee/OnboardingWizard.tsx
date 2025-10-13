@@ -26,7 +26,6 @@ import {
     OnboardingStep,
     OnboardingProgress
 } from './services/onboardingService';
-import { authService } from './services/authService';
 import ContractReview from './ContractReview';
 import ContractUpload from './ContractUpload';
 import PersonalInfoForm from './PersonalInfoForm';
@@ -37,12 +36,13 @@ import WorkEmailSetup from './WorkEmailSetup';
 import PolicyAcknowledgment from './PolicyAcknowledgment';
 import SystemTraining from './SystemTraining';
 import OnboardingCompletion from './OnboardingCompletion';
+import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 
-interface OnboardingWizardProps {
-    employeeId: string;
-}
-
-const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ employeeId }) => {
+const OnboardingWizard: React.FC = () => {
+    const { currentEmployee } = useAuth();
+    const { company } = useCompany();
+    const employeeId = currentEmployee?.employeeId || '';
     const navigate = useNavigate();
     const [progress, setProgress] = useState<OnboardingProgress | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -121,15 +121,87 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ employeeId }) => {
         loadProgress();
     }, [employeeId]);
 
+    const createDefaultContract = async (employeeId: string) => {
+        try {
+            console.log('📄 [Onboarding] Creating default contract for:', employeeId);
+
+            // Import contract service
+            const { contractService } = await import('./services/contractService');
+
+            // Check if contract already exists
+            const existingContract = await contractService.getEmployeeContract(employeeId);
+            if (existingContract) {
+                console.log('✅ [Onboarding] Contract already exists');
+                return;
+            }
+
+            // Create default contract
+            const defaultContract = {
+                id: employeeId,
+                employeeId: employeeId,
+                position: 'Software Developer', // Default position
+                department: 'Engineering',
+                effectiveDate: new Date(),
+                terms: {
+                    salary: 500000, // Default salary in NGN
+                    currency: 'NGN',
+                    benefits: [
+                        'Health Insurance',
+                        'Annual Leave (21 days)',
+                        'Sick Leave (10 days)',
+                        'Maternity/Paternity Leave',
+                        'Professional Development',
+                        'Remote Work Allowance'
+                    ],
+                    workingHours: '40 hours per week, Monday to Friday',
+                    probationPeriod: 3
+                },
+                documentUrl: '', // Will be populated when HR uploads actual contract
+                status: 'pending_review' as const,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            await contractService.createContract(defaultContract);
+            console.log('✅ [Onboarding] Default contract created');
+
+        } catch (error) {
+            console.error('❌ [Onboarding] Error creating default contract:', error);
+        }
+    };
+
     const loadProgress = async () => {
         try {
-            const onboardingProgress = await onboardingService.getOnboardingProgress(employeeId);
-            if (onboardingProgress) {
-                setProgress(onboardingProgress);
-            } else {
-                setError('Unable to load onboarding progress');
+            let onboardingProgress = await onboardingService.getOnboardingProgress(employeeId);
+
+            if (!onboardingProgress) {
+                // Initialize onboarding progress if none exists
+                onboardingProgress = {
+                    employeeId,
+                    currentStep: 'contract_review' as OnboardingStep, // Start with contract review
+                    completedSteps: [],
+                    workEmail: '',
+                    contractReviewed: false,
+                    contractUploaded: false,
+                    personalInfoCompleted: false,
+                    emergencyContactsCompleted: false,
+                    bankingInfoCompleted: false,
+                    documentsUploaded: false,
+                    workEmailSetup: false,
+                    policiesAcknowledged: false,
+                    systemTrainingCompleted: false
+                };
+
+                // Save the initial progress
+                await onboardingService.saveOnboardingProgress(onboardingProgress);
+
+                // Create default contract if none exists
+                await createDefaultContract(employeeId);
             }
+
+            setProgress(onboardingProgress);
         } catch (error) {
+            console.error('Error loading onboarding progress:', error);
             setError('Unable to load onboarding progress');
         } finally {
             setIsLoading(false);
@@ -173,28 +245,36 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ employeeId }) => {
     };
 
     const completeOnboarding = async () => {
-        if (!progress) return;
+        if (!progress || !employeeId) return;
 
         setIsCompleting(true);
         try {
-            // Transition to work email login
-            if (progress.workEmail) {
-                await authService.transitionToWorkEmail(employeeId, progress.workEmail);
-            }
+            console.log('🎉 [Onboarding] Completing onboarding for:', employeeId);
 
-            // Mark onboarding complete
-            await onboardingService.completeOnboarding(employeeId);
-            await authService.markOnboardingComplete(employeeId);
+            // Mark onboarding as complete in Firebase
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('../../config/firebase');
 
-            // Send welcome email with work email credentials
-            if (progress.workEmail) {
-                await onboardingService.sendWelcomePackage(employeeId, progress.workEmail);
+            await updateDoc(doc(db, 'employees', employeeId), {
+                'onboarding.status': 'completed',
+                'onboarding.completedAt': new Date(),
+                'onboarding.currentStep': Object.keys(onboardingSteps).length,
+                'profileStatus.completeness': 100 // Mark profile as complete
+            });
+
+            console.log('✅ [Onboarding] Onboarding marked as complete!');
+
+            // Update current employee in auth context
+            if (currentEmployee) {
+                currentEmployee.onboardingStatus = 'completed';
+                currentEmployee.profileCompleteness = 100;
             }
 
             // Redirect to main dashboard
             navigate('/dashboard');
         } catch (error) {
-            setError('Failed to complete onboarding');
+            console.error('❌ [Onboarding] Error completing onboarding:', error);
+            setError('Failed to complete onboarding. Please try again.');
         } finally {
             setIsCompleting(false);
         }
@@ -262,7 +342,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ employeeId }) => {
                 {/* Header */}
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                        Welcome to [Company]!
+                        Welcome to {company?.displayName || 'Our Company'}!
                     </h1>
                     <p className="text-gray-600">
                         Let's get you set up. This will only take a few minutes.

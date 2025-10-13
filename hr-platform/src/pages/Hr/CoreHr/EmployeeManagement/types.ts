@@ -1,5 +1,6 @@
 export interface Employee {
   id: string; // Changed to string to match Employee Dashboard
+  companyId: string; // Multi-tenancy: Company ID
   employeeId: string; // Add employeeId field for linking
   avatar?: string;
   name: string;

@@ -3,13 +3,15 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "../ui/na
 import { Separator } from "../ui/separator";
 import { Avatar } from "../ui/avatar";
 import { Sun, Moon } from 'lucide-react';
-import { Users, Briefcase, FileText, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Briefcase, FileText, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import { User } from 'lucide-react';
 import { Button } from "../ui/button";
 import { useTheme } from '../atoms/ThemeProvider';
 import { TypographyH2, TypographySmall, TypographyMuted } from '../ui/typography';
 import { useLocation } from 'react-router-dom';
 import { Popover } from '../ui/popover';
+import { useCompany } from '../../context/CompanyContext';
+import { getCompanyService, Company } from '../../services/companyService';
 
 const navStructure = [
   {
@@ -44,22 +46,46 @@ const navStructure = [
   },
 ];
 
-const mockCompanies = [
-  { name: 'Acme Corp', icon: Building2 },
-  { name: 'Beta Inc', icon: Briefcase },
-  { name: 'Gamma LLC', icon: Shield },
-];
-
 export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
+  const { companyId, company, setCompany } = useCompany();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState(mockCompanies[0]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
 
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
+
+  // Load companies from Firebase
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const companyService = await getCompanyService();
+        const allCompanies = await companyService.getActiveCompanies();
+        setCompanies(allCompanies);
+        console.log('📋 Loaded companies for switcher:', allCompanies.length);
+      } catch (error) {
+        console.error('Error loading companies:', error);
+      } finally {
+        setLoadingCompanies(false);
+      }
+    };
+    loadCompanies();
+  }, []);
+
+  // Handle company switch
+  const handleCompanySwitch = (selectedCompany: Company) => {
+    console.log('🔄 Switching to company:', selectedCompany.displayName);
+    setCompany(selectedCompany);
+    localStorage.setItem('companyId', selectedCompany.id);
+    setCompanyPopoverOpen(false);
+
+    // Show success message
+    console.log(`✅ Switched to ${selectedCompany.displayName}. All data will now be filtered for this company.`);
+  };
 
   return (
     <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-72'} bg-card border-r border-border/50 flex flex-col text-foreground transition-all duration-300 shadow-soft animate-slide-in`}>
@@ -72,32 +98,54 @@ export function Sidebar() {
               aria-label="Switch company"
               onClick={() => setCompanyPopoverOpen((o) => !o)}
             >
-              <selectedCompany.icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+              <Building2 className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
               {!collapsed && (
                 <>
                   <div className="flex flex-col items-start">
-                    <span className="font-bold text-lg text-gradient">{selectedCompany.name}</span>
+                    <span className="font-bold text-lg text-gradient">
+                      {company?.displayName || 'Loading...'}
+                    </span>
                     <span className="text-xs text-muted-foreground">HRIS System</span>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+                  {companies.length > 1 && (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+                  )}
                 </>
               )}
             </button>
           </Popover.Trigger>
-          <Popover.Content align="start" className="w-56 p-2 glass-effect">
-            <ul className="flex flex-col gap-1">
-              {mockCompanies.map((company) => (
-                <li key={company.name}>
-                  <button
-                    className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group ${selectedCompany.name === company.name ? 'bg-primary/10 text-primary font-semibold' : ''}`}
-                    onClick={() => { setSelectedCompany(company); setCompanyPopoverOpen(false); }}
-                  >
-                    <company.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span>{company.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <Popover.Content align="start" className="w-64 p-2 glass-effect">
+            {loadingCompanies ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                Loading companies...
+              </div>
+            ) : companies.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No companies available
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {companies.map((comp) => (
+                  <li key={comp.id}>
+                    <button
+                      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group ${companyId === comp.id ? 'bg-primary/10 text-primary font-semibold' : ''}`}
+                      onClick={() => handleCompanySwitch(comp)}
+                    >
+                      <Building2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      <div className="flex flex-col items-start flex-1">
+                        <span className="text-sm">{comp.displayName}</span>
+                        {comp.domain && (
+                          <span className="text-xs text-muted-foreground">{comp.domain}</span>
+                        )}
+                      </div>
+                      {companyId === comp.id && (
+                        <CheckCircle className="w-4 h-4 text-primary" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Popover.Content>
         </Popover>
         <button

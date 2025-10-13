@@ -52,20 +52,6 @@ export default function EmployeeAssetAssignments({
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [showManageModal, setShowManageModal] = useState(false);
 
-    // Debug logging - check what we're working with
-    useEffect(() => {
-        console.log('🔍 DEBUG - Total assets:', assets.length);
-        console.log('🔍 DEBUG - Assigned assets:', assets.filter(a => a.status === 'Assigned'));
-        console.log('🔍 DEBUG - Total employees:', employees.length);
-        console.log('🔍 DEBUG - Employee IDs:', employees.map(e => ({ name: e.name, id: e.id, empId: (e as any).employeeId })));
-
-        assets.forEach(asset => {
-            if (asset.status === 'Assigned' && asset.assignedTo) {
-                console.log('🔍 Asset', asset.name, 'assigned to:', asset.assignedTo, '(type:', typeof asset.assignedTo, ')');
-            }
-        });
-    }, [assets, employees]);
-
     // Get employee assignments
     const employeeAssignments = employees.map(employee => {
         // Try matching by both id and name since assignedTo might use either
@@ -73,10 +59,6 @@ export default function EmployeeAssetAssignments({
             const matches = asset.assignedTo === employee.id ||
                 asset.assignedTo === employee.name ||
                 asset.assignedTo === (employee as any).employeeId;
-
-            if (matches) {
-                console.log('✅ Matched asset', asset.name, 'to employee', employee.name);
-            }
 
             return matches;
         });
@@ -150,185 +132,10 @@ export default function EmployeeAssetAssignments({
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Employee Asset Assignments</h2>
-                    <p className="text-gray-600">Manage asset assignments and new employee starter kits</p>
+                    <p className="text-gray-600">View assets assigned to each employee. Use the "Starter Kits" tab to assign kits to new employees.</p>
                 </div>
-                <Button
-                    onClick={() => {
-                        alert('Quick Starter Kit: This will auto-assign essential assets to new employees. Use the "Starter Kits" tab to create custom templates, or click "Assign Kit" on individual new employees below.');
-                    }}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-                    variant="outline"
-                >
-                    <Plus className="h-4 w-4" />
-                    Quick Starter Kit Info
-                </Button>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center">
-                            <Users className="h-4 w-4 text-blue-600" />
-                            <div className="ml-2">
-                                <p className="text-sm font-medium text-muted-foreground">Total Employees</p>
-                                <p className="text-2xl font-bold">{totalEmployees}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center">
-                            <Package className="h-4 w-4 text-green-600" />
-                            <div className="ml-2">
-                                <p className="text-sm font-medium text-muted-foreground">With Assets</p>
-                                <p className="text-2xl font-bold">{employeesWithAssets}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center">
-                            <CheckCircle className="h-4 w-4 text-purple-600" />
-                            <div className="ml-2">
-                                <p className="text-sm font-medium text-muted-foreground">Complete Kits</p>
-                                <p className="text-2xl font-bold">{employeesWithCompleteKits}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center">
-                            <DollarSign className="h-4 w-4 text-orange-600" />
-                            <div className="ml-2">
-                                <p className="text-sm font-medium text-muted-foreground">Total Value</p>
-                                <p className="text-2xl font-bold">${totalAssetValue.toLocaleString()}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* New Employees Starter Kit */}
-            {newEmployees.length > 0 && (
-                <Card className="border-yellow-200">
-                    <CardHeader className="bg-yellow-50 border-b">
-                        <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <Gift className="h-5 w-5 text-yellow-600" />
-                            New Employees Without Assets ({newEmployees.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                        <p className="text-gray-600 mb-4">These employees need their starter kit assigned.</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {newEmployees.slice(0, 6).map((employee) => (
-                                <div key={employee.id} className="border-2 border-yellow-100 rounded-xl p-4 bg-white hover:shadow-md transition-all duration-300">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="p-2 bg-yellow-100 rounded-lg">
-                                                <User className="h-5 w-5 text-yellow-600" />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-medium text-gray-900">{employee.name}</h4>
-                                                <p className="text-sm text-gray-500">{employee.position}</p>
-                                            </div>
-                                        </div>
-                                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                                            New
-                                        </Badge>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            className="flex-1 bg-yellow-600 hover:bg-yellow-700"
-                                            onClick={() => onCreateNewEmployeeKit(employee.id)}
-                                            title="Auto-assign starter kit based on job title"
-                                        >
-                                            <Gift className="h-4 w-4 mr-2" />
-                                            Auto-Assign Kit
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="default"
-                                            onClick={() => {
-                                                setSelectedEmployee(employee);
-                                                setShowManageModal(true);
-                                            }}
-                                            title="Manually select assets to assign"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {newEmployees.length > 6 && (
-                            <div className="mt-4 text-center">
-                                <Button variant="outline">
-                                    View All New Employees ({newEmployees.length})
-                                </Button>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Available Starter Kit Assets */}
-            {starterKitAssets.length > 0 && (
-                <Card className="border-green-200">
-                    <CardHeader className="bg-green-50 border-b">
-                        <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <Package className="h-5 w-5 text-green-600" />
-                            Available Starter Kit Assets ({starterKitAssets.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {starterKitAssets.map((asset) => (
-                                <div key={asset.id} className="border-2 border-green-100 rounded-xl p-4 bg-white hover:shadow-md transition-all duration-300">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="p-2 bg-green-100 rounded-lg">
-                                                {getCategoryIcon(asset.category)}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-medium text-gray-900 text-sm">{asset.name}</h4>
-                                                <p className="text-xs text-gray-500">{asset.category}</p>
-                                            </div>
-                                        </div>
-                                        <Badge className={getPriorityColor(asset.priority)}>
-                                            {asset.priority}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">${asset.purchasePrice}</span>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="text-green-600 border-green-300 hover:bg-green-50"
-                                            onClick={() => {
-                                                // Open manage modal to select which employee to assign to
-                                                if (newEmployees.length > 0) {
-                                                    setSelectedEmployee(newEmployees[0]);
-                                                    setShowManageModal(true);
-                                                }
-                                            }}
-                                        >
-                                            Assign
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
 
             {/* Employee Assignments */}
             <Card>
@@ -517,7 +324,7 @@ export default function EmployeeAssetAssignments({
                                                                 <Badge className={getPriorityColor(asset.priority)}>
                                                                     {asset.priority}
                                                                 </Badge>
-                                                                <p className="text-sm font-semibold mt-1">${asset.purchasePrice.toLocaleString()}</p>
+                                                                <p className="text-sm font-semibold mt-1">₦{asset.purchasePrice.toLocaleString()}</p>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -556,7 +363,39 @@ export default function EmployeeAssetAssignments({
                                     <>
                                         {/* Currently Assigned */}
                                         <div>
-                                            <h3 className="font-semibold mb-3">Currently Assigned ({employeeAssets.length}):</h3>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="font-semibold">Currently Assigned ({employeeAssets.length}):</h3>
+                                                {employeeAssets.length > 0 && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        className="text-xs"
+                                                        onClick={async () => {
+                                                            if (confirm(`⚠️ Unassign ALL ${employeeAssets.length} assets from ${selectedEmployee.name}?\n\nThis will make all their assets available again.`)) {
+                                                                console.log(`🗑️ Unassigning all ${employeeAssets.length} assets from ${selectedEmployee.name}`);
+
+                                                                // Unassign all assets
+                                                                for (const asset of employeeAssets) {
+                                                                    await onAssignAsset(asset.id, ''); // Empty string to unassign
+                                                                    console.log(`   ✅ Unassigned: ${asset.name}`);
+                                                                }
+
+                                                                console.log(`🎉 All assets unassigned from ${selectedEmployee.name}`);
+                                                                console.log('⏳ Waiting 3 seconds for Firebase to fully propagate changes...');
+
+                                                                // Wait for Firebase to fully update (3 seconds for maximum safety)
+                                                                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                                                                console.log('✅ Firebase should be updated now. Safe to re-assign!');
+                                                                setShowManageModal(false);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-3 w-3 mr-1" />
+                                                        Unassign All
+                                                    </Button>
+                                                )}
+                                            </div>
                                             {employeeAssets.length === 0 ? (
                                                 <p className="text-sm text-muted-foreground">No assets assigned</p>
                                             ) : (

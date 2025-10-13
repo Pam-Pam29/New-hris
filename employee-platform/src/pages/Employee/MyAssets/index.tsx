@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Badge } from '../../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
+import { useCompany } from '../../../context/CompanyContext';
+import { useAuth } from '../../../context/AuthContext';
 import {
     Package,
     Calendar,
@@ -14,9 +16,12 @@ import {
     Loader,
     Eye,
     Plus,
-    Send
+    Send,
+    Star,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
-import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -42,6 +47,9 @@ interface Asset {
     manufacturer?: string;
     model?: string;
     warrantyExpiration?: string;
+    isEssential?: boolean;
+    priority?: 'Urgent' | 'High' | 'Medium' | 'Low';
+    type?: string;
 }
 
 interface AssetAssignment {
@@ -59,6 +67,7 @@ interface AssetRequest {
     id: string;
     employeeId: string;
     employeeName: string;
+    assetName?: string;
     assetType: string;
     category: string;
     justification: string;
@@ -74,12 +83,14 @@ interface AssetRequest {
 }
 
 export default function MyAssets() {
+    const { companyId } = useCompany();
+    const { currentEmployee } = useAuth();
+
     const [employeeId] = useState(() => {
-        const savedEmployeeId = localStorage.getItem('currentEmployeeId');
-        return savedEmployeeId || 'EMP001';
+        return currentEmployee?.employeeId || localStorage.getItem('currentEmployeeId') || 'EMP001';
     });
 
-    const [employeeName, setEmployeeName] = useState('Employee User');
+    const [employeeName, setEmployeeName] = useState(currentEmployee?.firstName + ' ' + currentEmployee?.lastName || 'Employee User');
 
     const [assets, setAssets] = useState<Asset[]>([]);
     const [assignments, setAssignments] = useState<AssetAssignment[]>([]);
@@ -89,16 +100,96 @@ export default function MyAssets() {
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [showRequestModal, setShowRequestModal] = useState(false);
+    const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
+    const [starterKitExpanded, setStarterKitExpanded] = useState(true);
 
     const [requestForm, setRequestForm] = useState({
+        assetName: '',
         assetType: '',
         category: '',
         justification: '',
         priority: 'Medium' as 'Urgent' | 'High' | 'Medium' | 'Low'
     });
 
+    // Real-time sync for assets, assignments, and requests
     useEffect(() => {
-        loadAssets();
+        if (!employeeId) return;
+
+        console.log('📡 Setting up real-time asset sync for employee:', employeeId);
+
+        // Real-time listener for assigned assets
+        const assetsQuery = query(
+            collection(db, 'assets'),
+            where('assignedTo', '==', employeeId),
+            where('status', '==', 'Assigned')
+        );
+
+        const unsubscribeAssets = onSnapshot(
+            assetsQuery,
+            (snapshot) => {
+                const assetsData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as Asset));
+                setAssets(assetsData);
+                console.log('📡 Real-time update: Assets changed -', assetsData.length, 'assigned to employee');
+                setLoading(false);
+            },
+            (error) => {
+                console.error('Error in assets listener:', error);
+                setLoading(false);
+            }
+        );
+
+        // Real-time listener for assignment history
+        const assignmentsQuery = query(
+            collection(db, 'asset_assignments'),
+            where('employeeId', '==', employeeId)
+        );
+
+        const unsubscribeAssignments = onSnapshot(
+            assignmentsQuery,
+            (snapshot) => {
+                const assignmentsData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as AssetAssignment));
+                setAssignments(assignmentsData);
+                console.log('📡 Real-time update: Assignment history changed');
+            },
+            (error) => {
+                console.error('Error in assignments listener:', error);
+            }
+        );
+
+        // Real-time listener for asset requests
+        const requestsQuery = query(
+            collection(db, 'assetRequests'),
+            where('employeeId', '==', employeeId)
+        );
+
+        const unsubscribeRequests = onSnapshot(
+            requestsQuery,
+            (snapshot) => {
+                const requestsData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as AssetRequest));
+                setRequests(requestsData);
+                console.log('📡 Real-time update: Asset requests changed');
+            },
+            (error) => {
+                console.error('Error in requests listener:', error);
+            }
+        );
+
+        // Cleanup listeners on unmount
+        return () => {
+            console.log('🔌 Cleaning up asset listeners');
+            unsubscribeAssets();
+            unsubscribeAssignments();
+            unsubscribeRequests();
+        };
     }, [employeeId]);
 
     // Load employee name
@@ -120,56 +211,45 @@ export default function MyAssets() {
         loadEmployeeName();
     }, [employeeId]);
 
-    const loadAssets = async () => {
-        setLoading(true);
-        try {
-            // Load assets assigned to this employee
-            const assetsQuery = query(
-                collection(db, 'assets'),
-                where('assignedTo', '==', employeeId),
-                where('status', '==', 'Assigned')
-            );
-            const assetsSnapshot = await getDocs(assetsQuery);
-            const assetsData = assetsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Asset));
+    // Real-time sync for available assets (for request form)
+    useEffect(() => {
+        console.log('📡 Setting up real-time sync for available assets (for requests)');
 
-            // Load assignment history
-            const assignmentsQuery = query(
-                collection(db, 'asset_assignments'),
-                where('employeeId', '==', employeeId)
-            );
-            const assignmentsSnapshot = await getDocs(assignmentsQuery);
-            const assignmentsData = assignmentsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as AssetAssignment));
+        const assetsQuery = collection(db, 'assets');
 
-            // Load asset requests
-            const requestsQuery = query(
-                collection(db, 'assetRequests'),
-                where('employeeId', '==', employeeId)
-            );
-            const requestsSnapshot = await getDocs(requestsQuery);
-            const requestsData = requestsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as AssetRequest));
+        const unsubscribe = onSnapshot(
+            assetsQuery,
+            (snapshot) => {
+                const allAssets = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as Asset));
 
-            setAssets(assetsData);
-            setAssignments(assignmentsData);
-            setRequests(requestsData);
-            console.log('📦 Loaded assets:', assetsData.length, 'Requests:', requestsData.length);
-        } catch (error) {
-            console.error('Failed to load assets:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+                // Filter for truly available assets only
+                const availableData = allAssets.filter(asset => {
+                    const isAvailable = asset.status === 'Available';
+                    const notAssigned = !asset.assignedTo || asset.assignedTo.trim() === '';
+                    const notUnderRepair = asset.status !== 'Under Repair';
+
+                    return isAvailable && notAssigned && notUnderRepair;
+                });
+
+                setAvailableAssets(availableData);
+                console.log('📦 Available assets updated:', availableData.length, '(excluding assigned and under maintenance)');
+            },
+            (error) => {
+                console.error('Error in available assets listener:', error);
+            }
+        );
+
+        return () => {
+            console.log('🔌 Cleaning up available assets listener');
+            unsubscribe();
+        };
+    }, []);
 
     const handleSubmitRequest = async () => {
-        if (!requestForm.assetType || !requestForm.category || !requestForm.justification) {
+        if (!requestForm.assetType || !requestForm.assetName || !requestForm.category || !requestForm.justification) {
             alert('Please fill in all required fields');
             return;
         }
@@ -180,6 +260,7 @@ export default function MyAssets() {
             await addDoc(requestsRef, {
                 employeeId,
                 employeeName,
+                assetName: requestForm.assetName,
                 assetType: requestForm.assetType,
                 category: requestForm.category,
                 justification: requestForm.justification,
@@ -188,15 +269,16 @@ export default function MyAssets() {
                 requestedDate: Timestamp.now()
             });
 
-            console.log('✅ Asset request submitted');
+            console.log('✅ Asset request submitted:', requestForm.assetName);
             setShowRequestModal(false);
             setRequestForm({
+                assetName: '',
                 assetType: '',
                 category: '',
                 justification: '',
                 priority: 'Medium'
             });
-            await loadAssets();
+            // Real-time sync will automatically update the requests list
             alert('Asset request submitted successfully!');
         } catch (error) {
             console.error('Failed to submit request:', error);
@@ -344,17 +426,77 @@ export default function MyAssets() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="flex items-center">
-                            <Wrench className="h-4 w-4 text-yellow-600" />
+                            <Star className="h-4 w-4 text-purple-600" />
                             <div className="ml-2">
-                                <p className="text-sm font-medium text-muted-foreground">Needs Maintenance</p>
+                                <p className="text-sm font-medium text-muted-foreground">Starter Kit Items</p>
                                 <p className="text-2xl font-bold">
-                                    {activeAssets.filter(a => a.nextMaintenance && new Date(a.nextMaintenance) < new Date()).length}
+                                    {activeAssets.filter(a => a.isEssential).length}
                                 </p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Starter Kit Summary */}
+            {activeAssets.some(a => a.isEssential) && (
+                <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Star className="h-5 w-5 text-purple-600" />
+                                <div>
+                                    <CardTitle className="text-purple-900">Your Starter Kit</CardTitle>
+                                    <CardDescription className="text-purple-700">
+                                        Essential equipment for your role
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setStarterKitExpanded(!starterKitExpanded)}
+                                className="text-purple-600 hover:text-purple-800 hover:bg-purple-100"
+                            >
+                                {starterKitExpanded ? (
+                                    <>
+                                        <ChevronUp className="h-5 w-5" />
+                                        <span className="ml-1 text-sm">Collapse</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="h-5 w-5" />
+                                        <span className="ml-1 text-sm">Expand</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    {starterKitExpanded && (
+                        <CardContent>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {activeAssets.filter(a => a.isEssential).map(asset => (
+                                    <div key={asset.id} className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm">
+                                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 truncate">{asset.name}</p>
+                                            <p className="text-xs font-semibold text-blue-600">{asset.type || asset.category}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 p-3 bg-white rounded-lg">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-600">Kit Completion:</span>
+                                    <span className="font-semibold text-purple-900">
+                                        {activeAssets.filter(a => a.isEssential).length} / {activeAssets.filter(a => a.isEssential).length} items ✅
+                                    </span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    )}
+                </Card>
+            )}
 
             {/* Main Content */}
             <Tabs defaultValue="active" className="w-full">
@@ -387,14 +529,37 @@ export default function MyAssets() {
                                             <div className="flex items-start space-x-3">
                                                 {getCategoryIcon(asset.category)}
                                                 <div className="flex-1">
-                                                    <CardTitle className="text-lg">{asset.name}</CardTitle>
+                                                    <div className="flex items-center gap-2">
+                                                        <CardTitle className="text-lg">{asset.name}</CardTitle>
+                                                        {asset.isEssential && (
+                                                            <Badge className="bg-purple-100 text-purple-800 text-xs">
+                                                                <Star className="h-3 w-3 mr-1" />
+                                                                Starter Kit
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <CardDescription className="mt-1">
+                                                        {asset.type && (
+                                                            <span className="font-medium text-blue-600">{asset.type}</span>
+                                                        )}
+                                                        {asset.type && asset.category && ' • '}
                                                         {asset.category}
                                                         {asset.model && ` • ${asset.model}`}
                                                     </CardDescription>
                                                 </div>
                                             </div>
-                                            {getConditionBadge(asset.condition)}
+                                            <div className="flex flex-col gap-1">
+                                                {getConditionBadge(asset.condition)}
+                                                {asset.priority && asset.priority !== 'Medium' && (
+                                                    <Badge className={
+                                                        asset.priority === 'High' ? 'bg-orange-100 text-orange-800 text-xs' :
+                                                            asset.priority === 'Urgent' ? 'bg-red-100 text-red-800 text-xs' :
+                                                                'bg-gray-100 text-gray-800 text-xs'
+                                                    }>
+                                                        {asset.priority}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
                                     </CardHeader>
                                     <CardContent>
@@ -495,7 +660,7 @@ export default function MyAssets() {
                                                         {asset?.name || 'Asset'}
                                                     </h3>
                                                     {asset && (
-                                                        <Badge variant="outline">{asset.serialNumber}</Badge>
+                                                        <Badge className="bg-gray-100 text-gray-800">{asset.serialNumber}</Badge>
                                                     )}
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
@@ -560,8 +725,15 @@ export default function MyAssets() {
                                     <div className="flex items-start justify-between">
                                         <div className="space-y-2 flex-1">
                                             <div className="flex items-center space-x-2">
-                                                <h3 className="font-semibold text-lg">{request.assetType}</h3>
-                                                <Badge variant="outline">{request.category}</Badge>
+                                                <h3 className="font-semibold text-lg">
+                                                    {request.assetName || request.assetType}
+                                                </h3>
+                                                <Badge className="text-xs bg-blue-100 text-blue-800">
+                                                    {request.assetType}
+                                                </Badge>
+                                                <Badge className="text-xs bg-gray-100 text-gray-800">
+                                                    {request.category}
+                                                </Badge>
                                             </div>
 
                                             <div className="flex items-center space-x-4">
@@ -626,32 +798,99 @@ export default function MyAssets() {
                         <CardContent className="space-y-4">
                             <div>
                                 <Label htmlFor="assetType">Asset Type *</Label>
-                                <Input
-                                    id="assetType"
-                                    placeholder="e.g., Laptop, Monitor, Keyboard"
+                                <Select
                                     value={requestForm.assetType}
-                                    onChange={(e) => setRequestForm(prev => ({ ...prev, assetType: e.target.value }))}
-                                />
+                                    onValueChange={(value) => {
+                                        setRequestForm(prev => ({
+                                            ...prev,
+                                            assetType: value,
+                                            assetName: '' // Clear asset name when type changes
+                                        }));
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select asset type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Laptop">Laptop</SelectItem>
+                                        <SelectItem value="Desktop">Desktop</SelectItem>
+                                        <SelectItem value="Monitor">Monitor</SelectItem>
+                                        <SelectItem value="Phone">Phone</SelectItem>
+                                        <SelectItem value="Tablet">Tablet</SelectItem>
+                                        <SelectItem value="Keyboard">Keyboard</SelectItem>
+                                        <SelectItem value="Mouse">Mouse</SelectItem>
+                                        <SelectItem value="Headset">Headset</SelectItem>
+                                        <SelectItem value="Desk">Desk</SelectItem>
+                                        <SelectItem value="Chair">Chair</SelectItem>
+                                        <SelectItem value="Printer">Printer</SelectItem>
+                                        <SelectItem value="Scanner">Scanner</SelectItem>
+                                        <SelectItem value="Projector">Projector</SelectItem>
+                                        <SelectItem value="Server">Server</SelectItem>
+                                        <SelectItem value="Router">Router</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="assetName">Asset Name *</Label>
+                                {requestForm.assetType ? (
+                                    <>
+                                        <Select
+                                            value={requestForm.assetName}
+                                            onValueChange={(value) => {
+                                                const selectedAsset = availableAssets.find(a => a.id === value);
+                                                if (selectedAsset) {
+                                                    setRequestForm(prev => ({
+                                                        ...prev,
+                                                        assetName: selectedAsset.name,
+                                                        category: selectedAsset.category
+                                                    }));
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select asset" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableAssets
+                                                    .filter(a => a.type === requestForm.assetType)
+                                                    .map(asset => (
+                                                        <SelectItem key={asset.id} value={asset.id}>
+                                                            {asset.name} ({asset.serialNumber})
+                                                        </SelectItem>
+                                                    ))
+                                                }
+                                                {availableAssets.filter(a => a.type === requestForm.assetType).length === 0 && (
+                                                    <SelectItem value="none" disabled>No available {requestForm.assetType}s</SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                        {availableAssets.filter(a => a.type === requestForm.assetType).length === 0 && (
+                                            <Alert className="mt-2 bg-yellow-50 border-yellow-200">
+                                                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                                                <AlertDescription className="text-sm text-yellow-800">
+                                                    No {requestForm.assetType}s currently available. Some may be assigned to employees or under maintenance/repair.
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="p-3 bg-gray-50 rounded-md border border-dashed border-gray-300">
+                                        <p className="text-sm text-gray-500">Please select an asset type first</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
                                 <Label htmlFor="category">Category *</Label>
-                                <Select
+                                <Input
+                                    id="category"
                                     value={requestForm.category}
-                                    onValueChange={(value) => setRequestForm(prev => ({ ...prev, category: value }))}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select category" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="IT Equipment">IT Equipment</SelectItem>
-                                        <SelectItem value="Furniture">Furniture</SelectItem>
-                                        <SelectItem value="Mobile Device">Mobile Device</SelectItem>
-                                        <SelectItem value="Vehicle">Vehicle</SelectItem>
-                                        <SelectItem value="Office Equipment">Office Equipment</SelectItem>
-                                        <SelectItem value="Other">Other</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    disabled
+                                    className="bg-gray-50"
+                                    placeholder="Auto-filled from selected asset"
+                                />
                             </div>
 
                             <div>
@@ -709,6 +948,7 @@ export default function MyAssets() {
                                     onClick={() => {
                                         setShowRequestModal(false);
                                         setRequestForm({
+                                            assetName: '',
                                             assetType: '',
                                             category: '',
                                             justification: '',

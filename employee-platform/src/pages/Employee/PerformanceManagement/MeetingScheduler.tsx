@@ -8,6 +8,8 @@ import { Textarea } from '../../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { Progress } from '../../../components/ui/progress';
+import { useCompany } from '../../../context/CompanyContext';
+import { useAuth } from '../../../context/AuthContext';
 import {
     Calendar,
     Clock,
@@ -21,7 +23,8 @@ import {
     Target,
     TrendingUp,
     Edit,
-    Trash2
+    Trash2,
+    AlertTriangle
 } from 'lucide-react';
 import { usePerformanceMeetings, usePerformanceGoals, usePerformanceReviews } from '../../../hooks/useRealTimeSync';
 import { PerformanceMeeting, PerformanceGoal, PerformanceReview, normalizeMeetingStatus, getMeetingStatusInfo, formatMeetingDate } from '../../../types/performanceManagement';
@@ -29,15 +32,20 @@ import { performanceSyncService } from '../../../services/performanceSyncService
 import { googleMeetService } from '../../../services/googleMeetService';
 import { meetingNotificationService } from '../../../services/meetingNotificationService';
 import { hrAvailabilityService } from '../../../services/hrAvailabilityService';
+import { GoalStatusBadge, AtRiskBadge } from '../../../components/GoalStatusBadge';
+import { goalOverdueService } from '../../../services/goalOverdueService';
 
 export default function PerformanceManagement() {
+    const { companyId } = useCompany();
+    const { currentEmployee } = useAuth();
+
     const [employeeId] = useState(() => {
-        const savedEmployeeId = localStorage.getItem('currentEmployeeId');
-        return savedEmployeeId || 'EMP123456ABC';
+        return currentEmployee?.employeeId || localStorage.getItem('currentEmployeeId') || 'EMP123456ABC';
     });
-    const [employeeName, setEmployeeName] = useState<string>('');
+    const [employeeName, setEmployeeName] = useState<string>(currentEmployee?.firstName + ' ' + currentEmployee?.lastName || '');
     const [availableTimeSlots, setAvailableTimeSlots] = useState<{ startTime: string; endTime: string; }[]>([]);
     const [loadingSlots, setLoadingSlots] = useState(false);
+    const [hrBookingPageUrl, setHrBookingPageUrl] = useState<string>('');
 
     // Helper function to display unit correctly
     const formatUnit = (unit: string) => {
@@ -52,7 +60,27 @@ export default function PerformanceManagement() {
     const [viewingGoal, setViewingGoal] = useState<PerformanceGoal | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
-    
+
+    // Extension request states
+    const [showExtensionRequest, setShowExtensionRequest] = useState(false);
+    const [extensionGoal, setExtensionGoal] = useState<PerformanceGoal | null>(null);
+    const [extensionForm, setExtensionForm] = useState({
+        newDeadline: '',
+        reason: ''
+    });
+
+    // Extension decision acknowledgment
+    const [showExtensionDecision, setShowExtensionDecision] = useState(false);
+    const [decisionGoal, setDecisionGoal] = useState<PerformanceGoal | null>(null);
+
+    // Completion celebration states
+    const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
+    const [completedGoalInfo, setCompletedGoalInfo] = useState<{
+        title: string;
+        daysEarly: number;
+        completedDate: string;
+    } | null>(null);
+
     // Form state for meetings
     const [meetingForm, setMeetingForm] = useState({
         title: '',
@@ -60,7 +88,7 @@ export default function PerformanceManagement() {
         meetingType: 'one-on-one' as const,
         scheduledDate: '',
         scheduledTime: '',
-        duration: 60,
+        duration: 30, // Default to 30 minutes
         location: '',
         meetingLink: ''
     });
@@ -83,7 +111,7 @@ export default function PerformanceManagement() {
     const { data: allGoals, loading: goalsLoading } = usePerformanceGoals(employeeId);
     const { data: allReviews, loading: reviewsLoading } = usePerformanceReviews(employeeId);
     const loading = meetingsLoading || goalsLoading || reviewsLoading;
-    
+
     // Filter data for this employee
     const meetings = ((allMeetings as PerformanceMeeting[]) || []).filter(
         meeting => meeting.employeeId === employeeId
@@ -91,7 +119,20 @@ export default function PerformanceManagement() {
     const goals = (allGoals as PerformanceGoal[]) || [];
     const reviews = (allReviews as PerformanceReview[]) || [];
 
-    // Load employee name
+    // Check for overdue goals on mount (only for this employee)
+    useEffect(() => {
+        const checkOverdueGoals = async () => {
+            try {
+                await goalOverdueService.checkAndUpdateOverdueGoals(employeeId);
+                console.log('✅ Checked for overdue goals');
+            } catch (error) {
+                console.error('Failed to check overdue goals:', error);
+            }
+        };
+        checkOverdueGoals();
+    }, [employeeId]);
+
+    // Load employee name and HR booking page URL
     useEffect(() => {
         const loadEmployeeName = async () => {
             try {
@@ -107,8 +148,44 @@ export default function PerformanceManagement() {
                 console.error('Failed to load employee name:', error);
             }
         };
+
+        const loadHrBookingPage = async () => {
+            try {
+                // Try to get HR booking page URL from hrSettings collection
+                const { db } = await import('../../../config/firebase');
+                const { collection, getDocs, query, limit } = await import('firebase/firestore');
+                const settingsQuery = query(collection(db, 'hrSettings'), limit(1));
+                const snapshot = await getDocs(settingsQuery);
+
+                if (!snapshot.empty) {
+                    const settings = snapshot.docs[0].data();
+                    if (settings.bookingPageUrl) {
+                        setHrBookingPageUrl(settings.bookingPageUrl);
+                        console.log('📅 HR Booking Page URL loaded:', settings.bookingPageUrl);
+                    }
+                }
+            } catch (error) {
+                console.log('No HR booking page configured (this is optional)');
+            }
+        };
+
         loadEmployeeName();
+        loadHrBookingPage();
     }, [employeeId]);
+
+    // Check for extension decisions that need acknowledgment
+    useEffect(() => {
+        const goalWithDecision = goals.find(goal =>
+            goal.extensionRequested === true &&
+            (goal.extensionApproved === true || goal.extensionApproved === false) &&
+            !goal.extensionDecisionAcknowledged
+        );
+
+        if (goalWithDecision && !showExtensionDecision) {
+            setDecisionGoal(goalWithDecision);
+            setShowExtensionDecision(true);
+        }
+    }, [goals, showExtensionDecision]);
 
     // Load available time slots when date changes
     useEffect(() => {
@@ -166,7 +243,7 @@ export default function PerformanceManagement() {
         setSubmitting(true);
         try {
             const scheduledDateTime = new Date(`${meetingForm.scheduledDate}T${meetingForm.scheduledTime}`);
-            
+
             await performanceSyncService.scheduleMeeting({
                 employeeId,
                 employeeName: employeeName || 'Unknown Employee',
@@ -187,7 +264,7 @@ export default function PerformanceManagement() {
                 meetingType: 'one-on-one',
                 scheduledDate: '',
                 scheduledTime: '',
-                duration: 60,
+                duration: 30, // Default to 30 minutes
                 location: '',
                 meetingLink: ''
             });
@@ -223,10 +300,21 @@ export default function PerformanceManagement() {
                 priority: goalForm.priority
             };
 
+            let result: any;
             if (editingGoal) {
-                await performanceSyncService.updateGoal(editingGoal.id, goalData);
+                result = await performanceSyncService.updateGoal(editingGoal.id, goalData);
             } else {
-                await performanceSyncService.createGoal(goalData);
+                result = await performanceSyncService.createGoal(goalData);
+            }
+
+            // Check if goal was auto-completed
+            if (result && result.completed) {
+                setCompletedGoalInfo({
+                    title: goalForm.title,
+                    daysEarly: result.daysEarly || 0,
+                    completedDate: new Date().toLocaleDateString()
+                });
+                setShowCompletionCelebration(true);
             }
 
             setShowGoalForm(false);
@@ -257,52 +345,118 @@ export default function PerformanceManagement() {
 
     const handleEditGoal = (goal: PerformanceGoal) => {
         setEditingGoal(goal);
-        
+
         // Convert dates to string format for input fields
         let startDateStr = '';
         let endDateStr = '';
-        
+
         if (goal.startDate) {
-            const startDate = goal.startDate instanceof Date 
-                ? goal.startDate 
-                : (goal.startDate as any).toDate 
-                    ? (goal.startDate as any).toDate() 
+            const startDate = goal.startDate instanceof Date
+                ? goal.startDate
+                : (goal.startDate as any).toDate
+                    ? (goal.startDate as any).toDate()
                     : new Date(goal.startDate);
             startDateStr = startDate.toISOString().split('T')[0];
         }
-        
+
         if (goal.endDate) {
-            const endDate = goal.endDate instanceof Date 
-                ? goal.endDate 
-                : (goal.endDate as any).toDate 
-                    ? (goal.endDate as any).toDate() 
+            const endDate = goal.endDate instanceof Date
+                ? goal.endDate
+                : (goal.endDate as any).toDate
+                    ? (goal.endDate as any).toDate()
                     : new Date(goal.endDate);
             endDateStr = endDate.toISOString().split('T')[0];
         }
-        
+
         setGoalForm({
             title: goal.title,
             description: goal.description,
-            category: goal.category,
+            category: goal.category as any,
             targetValue: goal.targetValue,
             currentValue: goal.currentValue,
-            unit: goal.unit,
+            unit: goal.unit as any,
             startDate: startDateStr,
             endDate: endDateStr,
-            priority: goal.priority
+            priority: goal.priority as any
         });
         setShowGoalForm(true);
-        
+
         console.log('📝 Editing goal with dates:', { startDate: startDateStr, endDate: endDateStr });
     };
 
     const handleDeleteGoal = async (goalId: string) => {
         if (!confirm('Are you sure you want to delete this goal?')) return;
-        
+
         try {
             await performanceSyncService.deleteGoal(goalId);
         } catch (error) {
             console.error('Failed to delete goal:', error);
+        }
+    };
+
+    const handleRequestExtension = (goal: PerformanceGoal) => {
+        setExtensionGoal(goal);
+
+        // Auto-fill with +7 days from current deadline
+        const currentDeadline = goal.endDate instanceof Date
+            ? goal.endDate
+            : (goal.endDate as any).toDate();
+        const suggestedDeadline = new Date(currentDeadline);
+        suggestedDeadline.setDate(suggestedDeadline.getDate() + 7);
+
+        setExtensionForm({
+            newDeadline: suggestedDeadline.toISOString().split('T')[0],
+            reason: ''
+        });
+        setShowExtensionRequest(true);
+    };
+
+    const handleSubmitExtension = async () => {
+        if (!extensionGoal || !extensionForm.newDeadline || !extensionForm.reason) {
+            alert('Please fill in all fields');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await goalOverdueService.requestExtension(
+                extensionGoal.id,
+                new Date(extensionForm.newDeadline),
+                extensionForm.reason,
+                employeeId
+            );
+
+            alert('✅ Extension request submitted! Your manager will review it.');
+            setShowExtensionRequest(false);
+            setExtensionGoal(null);
+            setExtensionForm({ newDeadline: '', reason: '' });
+        } catch (error) {
+            console.error('Failed to request extension:', error);
+            alert('❌ Failed to submit extension request');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleAcknowledgeDecision = async () => {
+        if (!decisionGoal) return;
+
+        setSubmitting(true);
+        try {
+            const { db } = await import('../../../config/firebase');
+            const { doc, updateDoc } = await import('firebase/firestore');
+
+            await updateDoc(doc(db, 'performanceGoals', decisionGoal.id), {
+                extensionDecisionAcknowledged: true
+            });
+
+            setShowExtensionDecision(false);
+            setDecisionGoal(null);
+        } catch (error) {
+            console.error('Failed to acknowledge decision:', error);
+            alert('❌ Failed to acknowledge. Please try again.');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -317,24 +471,21 @@ export default function PerformanceManagement() {
     const getStatusBadge = (status: string) => {
         const statusInfo = getMeetingStatusInfo(status);
         return (
-            <Badge variant={statusInfo.variant} className={`${statusInfo.bgColor} ${statusInfo.color}`}>
+            <Badge className={`${statusInfo.bgColor} ${statusInfo.color} border-0`}>
                 {statusInfo.text}
             </Badge>
         );
     };
 
-    const getGoalStatusBadge = (status: string) => {
-        const statusColors = {
-            not_started: 'bg-gray-100 text-gray-600',
-            in_progress: 'bg-blue-100 text-blue-600',
-            completed: 'bg-green-100 text-green-600',
-            cancelled: 'bg-red-100 text-red-600'
-        };
-        return (
-            <Badge className={statusColors[status as keyof typeof statusColors] || statusColors.in_progress}>
-                {status.replace('_', ' ').toUpperCase()}
-            </Badge>
-        );
+    // Calculate days until due for at-risk badge
+    const getDaysUntilDue = (goal: PerformanceGoal): number => {
+        const endDate = goal.endDate instanceof Date
+            ? goal.endDate
+            : (goal.endDate as any).toDate();
+        const now = new Date();
+        const diffTime = endDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
     };
 
     if (loading) {
@@ -354,6 +505,11 @@ export default function PerformanceManagement() {
     const approvedMeetings = meetings.filter(m => normalizeMeetingStatus(m.status) === 'approved');
     const activeGoals = goals.filter(g => g.status === 'in_progress');
     const completedGoals = goals.filter(g => g.status === 'completed');
+    const overdueGoals = goals.filter(g => g.status === 'overdue');
+    const atRiskGoals = activeGoals.filter(g => {
+        const daysUntilDue = getDaysUntilDue(g);
+        return daysUntilDue <= 7 && daysUntilDue > 0 && g.progress < 80;
+    });
 
     return (
         <div className="p-6">
@@ -367,48 +523,96 @@ export default function PerformanceManagement() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <Card>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <Target className="h-4 w-4 text-blue-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Active Goals</p>
-                                    <p className="text-2xl font-bold">{activeGoals.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Target className="h-5 w-5 text-blue-600 mr-2" />
+                                    <p className="text-2xl font-bold text-blue-600">{activeGoals.length}</p>
                                 </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Active Goal{activeGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">In progress</p>
                             </div>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                                    <p className="text-2xl font-bold">{completedGoals.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                                    <p className="text-2xl font-bold text-green-600">{completedGoals.length}</p>
                                 </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Completed Goal{completedGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">Achieved</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card className={overdueGoals.length > 0 ? 'border-2 border-red-200 bg-red-50' : ''}>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <Calendar className="h-4 w-4 text-purple-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Meetings</p>
-                                    <p className="text-2xl font-bold">{approvedMeetings.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <AlertTriangle className={`h-5 w-5 ${overdueGoals.length > 0 ? 'text-red-600 animate-pulse' : 'text-gray-400'} mr-2`} />
+                                    <p className={`text-2xl font-bold ${overdueGoals.length > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                        {overdueGoals.length}
+                                    </p>
                                 </div>
+                                <p className={`text-sm font-medium ${overdueGoals.length > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                    Overdue Goal{overdueGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className={`text-xs mt-1 ${overdueGoals.length > 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                                    {overdueGoals.length > 0 ? 'Needs attention!' : 'None'}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card className={atRiskGoals.length > 0 ? 'border-2 border-amber-200 bg-amber-50' : ''}>
                         <CardContent className="pt-6">
-                            <div className="flex items-center">
-                                <Clock className="h-4 w-4 text-yellow-600" />
-                                <div className="ml-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                                    <p className="text-2xl font-bold">{pendingMeetings.length}</p>
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Clock className={`h-5 w-5 ${atRiskGoals.length > 0 ? 'text-amber-600' : 'text-gray-400'} mr-2`} />
+                                    <p className={`text-2xl font-bold ${atRiskGoals.length > 0 ? 'text-amber-600' : 'text-gray-600'}`}>
+                                        {atRiskGoals.length}
+                                    </p>
                                 </div>
+                                <p className={`text-sm font-medium ${atRiskGoals.length > 0 ? 'text-amber-700' : 'text-gray-700'}`}>
+                                    At Risk Goal{atRiskGoals.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className={`text-xs mt-1 ${atRiskGoals.length > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                    {atRiskGoals.length > 0 ? 'Due soon' : 'None'}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className={approvedMeetings.length > 0 ? 'border-l-4 border-l-purple-500' : ''}>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Calendar className="h-5 w-5 text-purple-600 mr-2" />
+                                    <p className="text-2xl font-bold text-purple-600">{approvedMeetings.length}</p>
+                                </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Approved Meeting{approvedMeetings.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">Upcoming</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className={pendingMeetings.length > 0 ? 'border-l-4 border-l-yellow-500' : ''}>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center mb-2">
+                                    <Clock className="h-5 w-5 text-yellow-600 mr-2" />
+                                    <p className="text-2xl font-bold text-yellow-600">{pendingMeetings.length}</p>
+                                </div>
+                                <p className="text-sm font-medium text-gray-700">
+                                    Pending Meeting{pendingMeetings.length !== 1 ? 's' : ''}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -452,67 +656,164 @@ export default function PerformanceManagement() {
                             </Card>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {goals.map(goal => (
-                                    <Card key={goal.id}>
-                                        <CardHeader>
-                                            <div className="flex items-center justify-between">
-                                                <CardTitle className="text-lg">{goal.title}</CardTitle>
-                                                {getGoalStatusBadge(goal.status)}
-                                            </div>
-                                            <CardDescription>{goal.description}</CardDescription>
-                                        </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div>
-                                                <div className="flex justify-between text-sm mb-2">
-                                                    <span>Progress</span>
-                                                    <span className="font-medium">{goal.progress}%</span>
+                                {goals.map(goal => {
+                                    const daysUntilDue = getDaysUntilDue(goal);
+                                    const isAtRisk = daysUntilDue <= 7 && daysUntilDue > 0 && goal.progress < 80 && goal.status !== 'overdue';
+                                    const isOverdue = goal.status === 'overdue';
+                                    const isCompleted = goal.status === 'completed';
+
+                                    return (
+                                        <Card key={goal.id} className={
+                                            isCompleted ? 'border-2 border-green-200 bg-green-50/30' :
+                                                isOverdue ? 'border-2 border-red-200 bg-red-50/30' :
+                                                    isAtRisk ? 'border-2 border-amber-200 bg-amber-50/30' : ''
+                                        }>
+                                            <CardHeader>
+                                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                                    <CardTitle className="text-lg">{goal.title}</CardTitle>
+                                                    <div className="flex items-center gap-2">
+                                                        <GoalStatusBadge goal={goal} showDetails={false} />
+                                                        {isAtRisk && <AtRiskBadge daysUntilDue={daysUntilDue} />}
+                                                    </div>
                                                 </div>
-                                                <Progress value={goal.progress} className="h-2" />
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2 text-sm">
-                                                <div>
-                                                    <p className="text-muted-foreground">Current</p>
-                                                    <p className="font-medium">{goal.currentValue}{formatUnit(goal.unit)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground">Target</p>
-                                                    <p className="font-medium">{goal.targetValue}{formatUnit(goal.unit)}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex space-x-2">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleViewGoal(goal)}
-                                                    className="flex-1"
-                                                >
-                                                    <Calendar className="h-4 w-4 mr-1" />
-                                                    View
-                                                </Button>
-                                                {goal.status !== 'completed' && goal.status !== 'cancelled' && (
-                                                    <>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleEditGoal(goal)}
-                                                            className="flex-1"
-                                                        >
-                                                            <Edit className="h-4 w-4 mr-1" />
-                                                            Edit
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            onClick={() => handleDeleteGoal(goal.id)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </>
+                                                <CardDescription>{goal.description}</CardDescription>
+
+                                                {/* Completion Celebration */}
+                                                {isCompleted && (
+                                                    <div className="mt-2 p-3 bg-green-100 border border-green-200 rounded-lg">
+                                                        <p className="text-sm text-green-800 font-medium flex items-center gap-2">
+                                                            🎉 Goal Achieved!
+                                                            {goal.completedEarly && goal.daysEarlyOrLate && goal.daysEarlyOrLate > 0 && (
+                                                                <span className="text-xs">
+                                                                    ✨ {goal.daysEarlyOrLate} day{goal.daysEarlyOrLate !== 1 ? 's' : ''} early!
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        {goal.completedDate && (
+                                                            <p className="text-xs text-green-700 mt-1">
+                                                                Completed on: {goal.completedDate instanceof Date
+                                                                    ? goal.completedDate.toLocaleDateString()
+                                                                    : (goal.completedDate as any).toDate?.().toLocaleDateString() || 'Recently'}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
+
+                                                {/* Overdue Warning */}
+                                                {isOverdue && (
+                                                    <div className="mt-2 p-3 bg-red-100 border border-red-200 rounded-lg">
+                                                        <p className="text-sm text-red-800 font-medium">
+                                                            ⚠️ This goal is {goal.daysOverdue} day{goal.daysOverdue !== 1 ? 's' : ''} overdue
+                                                        </p>
+
+                                                        {/* Extension Status Display */}
+                                                        {goal.extensionRequested && goal.extensionApproved === true ? (
+                                                            <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded">
+                                                                <p className="text-xs text-green-800 font-semibold flex items-center gap-1">
+                                                                    ✅ Extension Approved!
+                                                                </p>
+                                                                <p className="text-xs text-green-700 mt-1">
+                                                                    New deadline: {goal.requestedNewDeadline ?
+                                                                        (goal.requestedNewDeadline instanceof Date ?
+                                                                            goal.requestedNewDeadline.toLocaleDateString() :
+                                                                            (goal.requestedNewDeadline as any).toDate?.().toLocaleDateString() || 'Updated'
+                                                                        ) : 'Updated'}
+                                                                </p>
+                                                            </div>
+                                                        ) : goal.extensionRequested && goal.extensionApproved === false ? (
+                                                            <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded">
+                                                                <p className="text-xs text-orange-800 font-semibold flex items-center gap-1">
+                                                                    ❌ Extension Request Rejected
+                                                                </p>
+                                                                {goal.extensionRejectionReason && (
+                                                                    <p className="text-xs text-orange-700 mt-1">
+                                                                        Reason: {goal.extensionRejectionReason}
+                                                                    </p>
+                                                                )}
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleRequestExtension(goal)}
+                                                                    className="mt-2 w-full bg-white hover:bg-orange-50 border-orange-400 text-orange-700 text-xs"
+                                                                >
+                                                                    <Clock className="h-3 w-3 mr-1" />
+                                                                    Request Another Extension
+                                                                </Button>
+                                                            </div>
+                                                        ) : goal.extensionRequested ? (
+                                                            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                                                                ⏳ Extension request pending manager approval
+                                                            </p>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleRequestExtension(goal)}
+                                                                className="mt-2 bg-white hover:bg-red-50 border-red-300 text-red-700"
+                                                            >
+                                                                <Clock className="h-3 w-3 mr-1" />
+                                                                Request Extension
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <div>
+                                                    <div className="flex justify-between text-sm mb-2">
+                                                        <span>Progress</span>
+                                                        <span className="font-medium">{goal.progress}%</span>
+                                                    </div>
+                                                    <Progress
+                                                        value={goal.progress}
+                                                        className={`h-2 ${isCompleted ? '[&>div]:bg-green-500' : ''}`}
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                                    <div>
+                                                        <p className="text-muted-foreground">Current</p>
+                                                        <p className="font-medium">{goal.currentValue}{formatUnit(goal.unit)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-muted-foreground">Target</p>
+                                                        <p className="font-medium">{goal.targetValue}{formatUnit(goal.unit)}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex space-x-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleViewGoal(goal)}
+                                                        className="flex-1"
+                                                    >
+                                                        <Calendar className="h-4 w-4 mr-1" />
+                                                        View
+                                                    </Button>
+                                                    {goal.status !== 'completed' && goal.status !== 'cancelled' && (
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleEditGoal(goal)}
+                                                                className="flex-1"
+                                                            >
+                                                                <Edit className="h-4 w-4 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => handleDeleteGoal(goal.id)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         )}
                     </TabsContent>
@@ -547,7 +848,7 @@ export default function PerformanceManagement() {
                                             </div>
                                         </CardContent>
                                     </Card>
-                                                ) : (
+                                ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {approvedMeetings.map(meeting => (
                                             <Card key={meeting.id}>
@@ -574,16 +875,27 @@ export default function PerformanceManagement() {
                                                         </div>
                                                     )}
                                                     {meeting.meetingLink && (() => {
-                                                        const meetingDate = meeting.scheduledDate instanceof Date 
-                                                            ? meeting.scheduledDate 
-                                                            : (meeting.scheduledDate as any).toDate 
-                                                                ? (meeting.scheduledDate as any).toDate() 
+                                                        const meetingDate = meeting.scheduledDate instanceof Date
+                                                            ? meeting.scheduledDate
+                                                            : (meeting.scheduledDate as any).toDate
+                                                                ? (meeting.scheduledDate as any).toDate()
                                                                 : new Date(meeting.scheduledDate);
                                                         const now = new Date();
                                                         const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
-                                                        const canJoin = now >= fifteenMinutesBefore;
+                                                        const meetingEndTime = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
 
-                                                        if (canJoin) {
+                                                        const canJoin = now >= fifteenMinutesBefore && now <= meetingEndTime;
+                                                        const meetingEnded = now > meetingEndTime;
+
+                                                        if (meetingEnded) {
+                                                            return (
+                                                                <div className="mt-2 p-3 bg-red-50 rounded-lg text-center border border-red-200">
+                                                                    <p className="text-xs text-red-600 font-medium">
+                                                                        ⏰ Meeting ended
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        } else if (canJoin) {
                                                             return (
                                                                 <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block">
                                                                     <Button size="sm" variant="outline" className="w-full mt-2">
@@ -658,7 +970,7 @@ export default function PerformanceManagement() {
                                     {meetings.map(meeting => {
                                         const status = normalizeMeetingStatus(meeting.status);
                                         const isRejected = status === 'rejected';
-                                        
+
                                         return (
                                             <Card key={meeting.id} className={isRejected ? 'border-red-300 bg-red-50' : ''}>
                                                 <CardHeader>
@@ -679,7 +991,7 @@ export default function PerformanceManagement() {
                                                         <Clock className="h-4 w-4 mr-2" />
                                                         {meeting.duration} minutes
                                                     </div>
-                                                    
+
                                                     {/* Show rejection reason if rejected */}
                                                     {isRejected && meeting.rejectionReason && (
                                                         <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
@@ -687,19 +999,30 @@ export default function PerformanceManagement() {
                                                             <p className="text-sm text-red-800">Reason: {meeting.rejectionReason}</p>
                                                         </div>
                                                     )}
-                                                    
+
                                                     {/* Show meeting link ONLY for approved meetings */}
                                                     {status === 'approved' && meeting.meetingLink && (() => {
-                                                        const meetingDate = meeting.scheduledDate instanceof Date 
-                                                            ? meeting.scheduledDate 
-                                                            : (meeting.scheduledDate as any).toDate 
-                                                                ? (meeting.scheduledDate as any).toDate() 
+                                                        const meetingDate = meeting.scheduledDate instanceof Date
+                                                            ? meeting.scheduledDate
+                                                            : (meeting.scheduledDate as any).toDate
+                                                                ? (meeting.scheduledDate as any).toDate()
                                                                 : new Date(meeting.scheduledDate);
                                                         const now = new Date();
                                                         const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
-                                                        const canJoin = now >= fifteenMinutesBefore;
+                                                        const meetingEndTime = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
 
-                                                        if (canJoin) {
+                                                        const canJoin = now >= fifteenMinutesBefore && now <= meetingEndTime;
+                                                        const meetingEnded = now > meetingEndTime;
+
+                                                        if (meetingEnded) {
+                                                            return (
+                                                                <div className="mt-2 p-3 bg-red-50 rounded-lg text-center border border-red-200">
+                                                                    <p className="text-xs text-red-600 font-medium">
+                                                                        ⏰ Meeting ended
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        } else if (canJoin) {
                                                             return (
                                                                 <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block">
                                                                     <Button size="sm" variant="outline" className="w-full mt-2">
@@ -719,7 +1042,7 @@ export default function PerformanceManagement() {
                                                             );
                                                         }
                                                     })()}
-                                                    
+
                                                     {/* Show cancel button for pending meetings */}
                                                     {status === 'pending' && (
                                                         <Button
@@ -765,7 +1088,7 @@ export default function PerformanceManagement() {
                                                 </div>
                                                 <Badge className={
                                                     review.status === 'acknowledged' ? 'bg-green-100 text-green-600' :
-                                                    'bg-blue-100 text-blue-600'
+                                                        'bg-blue-100 text-blue-600'
                                                 }>
                                                     {review.status.toUpperCase()}
                                                 </Badge>
@@ -871,8 +1194,8 @@ export default function PerformanceManagement() {
 
                                 <div>
                                     <Label htmlFor="meetingType">Meeting Type</Label>
-                                    <Select 
-                                        value={meetingForm.meetingType} 
+                                    <Select
+                                        value={meetingForm.meetingType}
                                         onValueChange={(value: any) => setMeetingForm(prev => ({ ...prev, meetingType: value }))}
                                     >
                                         <SelectTrigger>
@@ -924,11 +1247,10 @@ export default function PerformanceManagement() {
                                                             key={idx}
                                                             type="button"
                                                             onClick={() => setMeetingForm(prev => ({ ...prev, scheduledTime: slot.startTime }))}
-                                                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${
-                                                                isSelected 
-                                                                    ? 'bg-blue-600 text-white border-blue-600' 
-                                                                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                                                            }`}
+                                                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${isSelected
+                                                                ? 'bg-blue-600 text-white border-blue-600'
+                                                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                                                                }`}
                                                         >
                                                             {slot.startTime} - {slot.endTime}
                                                         </button>
@@ -945,8 +1267,8 @@ export default function PerformanceManagement() {
 
                                 <div>
                                     <Label htmlFor="duration">Duration</Label>
-                                    <Select 
-                                        value={meetingForm.duration.toString()} 
+                                    <Select
+                                        value={meetingForm.duration.toString()}
                                         onValueChange={(value) => setMeetingForm(prev => ({ ...prev, duration: parseInt(value) }))}
                                     >
                                         <SelectTrigger>
@@ -973,8 +1295,31 @@ export default function PerformanceManagement() {
 
                                 <div>
                                     <Label htmlFor="meetingLink">Meeting Link *</Label>
+
+                                    {/* HR Booking Page Button (if available) */}
+                                    {hrBookingPageUrl && (
+                                        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                            <p className="text-sm text-green-800 font-medium mb-2">
+                                                ✨ HR has a booking page! Book there to get your Google Meet link:
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => window.open(hrBookingPageUrl, '_blank')}
+                                                className="w-full bg-green-600 text-white hover:bg-green-700 border-green-600"
+                                            >
+                                                <Calendar className="h-4 w-4 mr-2" />
+                                                Open HR Booking Page
+                                                <span className="ml-2 text-xs opacity-90">(New Tab)</span>
+                                            </Button>
+                                            <p className="text-xs text-green-700 mt-2">
+                                                👉 After booking, copy the Google Meet link and paste it below
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <p className="text-xs text-blue-600 mb-2">
-                                        💡 Create a meeting link first (Google Meet, Zoom, Teams) and paste it here. Create just before the meeting time to ensure it's fresh.
+                                        💡 {hrBookingPageUrl ? 'Or create a meeting link manually:' : 'Create a meeting link first (Google Meet, Zoom, Teams) and paste it here. Create just before the meeting time to ensure it\'s fresh.'}
                                     </p>
                                     <Input
                                         id="meetingLink"
@@ -983,11 +1328,13 @@ export default function PerformanceManagement() {
                                         placeholder="https://meet.google.com/xxx-xxxx-xxx"
                                         required
                                     />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        💡 <a href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
-                                            Click to create Google Meet
-                                        </a> (copy the link from URL bar before joining, or use Zoom/Teams link)
-                                    </p>
+                                    {!hrBookingPageUrl && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            💡 <a href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
+                                                Click to create Google Meet
+                                            </a> (copy the link from URL bar before joining, or use Zoom/Teams link)
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex space-x-3 pt-4">
@@ -1045,8 +1392,8 @@ export default function PerformanceManagement() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label htmlFor="category">Category</Label>
-                                        <Select 
-                                            value={goalForm.category} 
+                                        <Select
+                                            value={goalForm.category}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, category: value }))}
                                         >
                                             <SelectTrigger>
@@ -1062,8 +1409,8 @@ export default function PerformanceManagement() {
                                     </div>
                                     <div>
                                         <Label htmlFor="priority">Priority</Label>
-                                        <Select 
-                                            value={goalForm.priority} 
+                                        <Select
+                                            value={goalForm.priority}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, priority: value }))}
                                         >
                                             <SelectTrigger>
@@ -1099,8 +1446,8 @@ export default function PerformanceManagement() {
                                     </div>
                                     <div>
                                         <Label htmlFor="unit">Unit</Label>
-                                        <Select 
-                                            value={goalForm.unit} 
+                                        <Select
+                                            value={goalForm.unit}
                                             onValueChange={(value: any) => setGoalForm(prev => ({ ...prev, unit: value }))}
                                         >
                                             <SelectTrigger>
@@ -1118,7 +1465,7 @@ export default function PerformanceManagement() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label htmlFor="startDate">
-                                            Start Date * 
+                                            Start Date *
                                             {editingGoal && <span className="text-xs text-green-600 ml-2">(already set)</span>}
                                         </Label>
                                         <Input
@@ -1130,7 +1477,7 @@ export default function PerformanceManagement() {
                                     </div>
                                     <div>
                                         <Label htmlFor="endDate">
-                                            End Date * 
+                                            End Date *
                                             {editingGoal && <span className="text-xs text-green-600 ml-2">(already set)</span>}
                                         </Label>
                                         <Input
@@ -1190,8 +1537,8 @@ export default function PerformanceManagement() {
                                         <Label className="text-muted-foreground">Priority</Label>
                                         <Badge className={
                                             viewingGoal.priority === 'high' ? 'bg-red-100 text-red-600' :
-                                            viewingGoal.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                                            'bg-gray-100 text-gray-600'
+                                                viewingGoal.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
+                                                    'bg-gray-100 text-gray-600'
                                         }>
                                             {viewingGoal.priority.toUpperCase()}
                                         </Badge>
@@ -1208,8 +1555,8 @@ export default function PerformanceManagement() {
                                             </span>
                                         </div>
                                         <div className="w-full bg-gray-200 rounded-full h-3">
-                                            <div 
-                                                className="bg-blue-600 h-3 rounded-full transition-all" 
+                                            <div
+                                                className="bg-blue-600 h-3 rounded-full transition-all"
                                                 style={{ width: `${viewingGoal.progress}%` }}
                                             />
                                         </div>
@@ -1220,9 +1567,9 @@ export default function PerformanceManagement() {
                                     <div>
                                         <Label className="text-muted-foreground">Start Date</Label>
                                         <p className="mt-1">
-                                            {viewingGoal.startDate instanceof Date 
+                                            {viewingGoal.startDate instanceof Date
                                                 ? viewingGoal.startDate.toLocaleDateString()
-                                                : (viewingGoal.startDate as any).toDate 
+                                                : (viewingGoal.startDate as any).toDate
                                                     ? (viewingGoal.startDate as any).toDate().toLocaleDateString()
                                                     : new Date(viewingGoal.startDate).toLocaleDateString()}
                                         </p>
@@ -1230,9 +1577,9 @@ export default function PerformanceManagement() {
                                     <div>
                                         <Label className="text-muted-foreground">End Date</Label>
                                         <p className="mt-1">
-                                            {viewingGoal.endDate instanceof Date 
+                                            {viewingGoal.endDate instanceof Date
                                                 ? viewingGoal.endDate.toLocaleDateString()
-                                                : (viewingGoal.endDate as any).toDate 
+                                                : (viewingGoal.endDate as any).toDate
                                                     ? (viewingGoal.endDate as any).toDate().toLocaleDateString()
                                                     : new Date(viewingGoal.endDate).toLocaleDateString()}
                                         </p>
@@ -1241,14 +1588,7 @@ export default function PerformanceManagement() {
 
                                 <div>
                                     <Label className="text-muted-foreground">Status</Label>
-                                    <Badge className={
-                                        viewingGoal.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                        viewingGoal.status === 'in-progress' ? 'bg-blue-100 text-blue-600' :
-                                        viewingGoal.status === 'not-started' ? 'bg-gray-100 text-gray-600' :
-                                        'bg-red-100 text-red-600'
-                                    }>
-                                        {viewingGoal.status.toUpperCase().replace('-', ' ')}
-                                    </Badge>
+                                    <GoalStatusBadge goal={viewingGoal} showDetails={true} />
                                 </div>
 
                                 <div className="flex space-x-3 pt-4">
@@ -1273,6 +1613,320 @@ export default function PerformanceManagement() {
                                         className="flex-1"
                                     >
                                         Close
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Extension Request Modal */}
+                {showExtensionRequest && extensionGoal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-lg">
+                            <CardHeader>
+                                <CardTitle className="text-red-700">Request Deadline Extension</CardTitle>
+                                <CardDescription>
+                                    Request more time to complete: {extensionGoal.title}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Current Status */}
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <p className="text-red-700 font-medium">Current Deadline:</p>
+                                            <p className="text-red-900">
+                                                {extensionGoal.endDate instanceof Date
+                                                    ? extensionGoal.endDate.toLocaleDateString()
+                                                    : (extensionGoal.endDate as any).toDate
+                                                        ? (extensionGoal.endDate as any).toDate().toLocaleDateString()
+                                                        : new Date(extensionGoal.endDate).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-red-700 font-medium">Days Overdue:</p>
+                                            <p className="text-red-900 font-bold">{extensionGoal.daysOverdue || 0} days</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-red-700 font-medium">Progress:</p>
+                                            <p className="text-red-900">{extensionGoal.progress}%</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-red-700 font-medium">Target:</p>
+                                            <p className="text-red-900">{extensionGoal.targetValue}{formatUnit(extensionGoal.unit)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* New Deadline */}
+                                <div>
+                                    <Label htmlFor="extensionDeadline">Requested New Deadline *</Label>
+                                    <Input
+                                        id="extensionDeadline"
+                                        type="date"
+                                        value={extensionForm.newDeadline}
+                                        onChange={(e) => setExtensionForm(prev => ({ ...prev, newDeadline: e.target.value }))}
+                                        min={new Date().toISOString().split('T')[0]}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        💡 Choose a realistic deadline you can meet
+                                    </p>
+                                </div>
+
+                                {/* Reason */}
+                                <div>
+                                    <Label htmlFor="extensionReason">Reason for Extension *</Label>
+                                    <Textarea
+                                        id="extensionReason"
+                                        value={extensionForm.reason}
+                                        onChange={(e) => setExtensionForm(prev => ({ ...prev, reason: e.target.value }))}
+                                        placeholder="Explain why you need more time..."
+                                        rows={4}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        💡 Be specific about challenges faced and your plan to complete
+                                    </p>
+                                </div>
+
+                                {/* Info Box */}
+                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p className="text-sm text-blue-800">
+                                        <strong>📋 What happens next:</strong>
+                                    </p>
+                                    <ul className="text-xs text-blue-700 mt-2 space-y-1 list-disc list-inside">
+                                        <li>Your manager will review this request</li>
+                                        <li>You'll be notified of their decision</li>
+                                        <li>If approved, your deadline will be updated</li>
+                                        <li>If denied, you should prioritize completing this goal</li>
+                                    </ul>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex space-x-3 pt-4">
+                                    <Button
+                                        onClick={handleSubmitExtension}
+                                        disabled={submitting || !extensionForm.newDeadline || !extensionForm.reason}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                                Submitting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="mr-2 h-4 w-4" />
+                                                Submit Request
+                                            </>
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setShowExtensionRequest(false);
+                                            setExtensionGoal(null);
+                                            setExtensionForm({ newDeadline: '', reason: '' });
+                                        }}
+                                        disabled={submitting}
+                                        className="flex-1"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Extension Decision Acknowledgment Modal */}
+                {showExtensionDecision && decisionGoal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+                        <Card className={`w-full max-w-lg border-4 ${decisionGoal.extensionApproved
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-orange-400 bg-orange-50'
+                            }`}>
+                            <CardHeader className="text-center">
+                                <div className="mx-auto mb-4 w-16 h-16 rounded-full flex items-center justify-center ${decisionGoal.extensionApproved ? 'bg-green-100' : 'bg-orange-100'}">
+                                    <span className="text-4xl">
+                                        {decisionGoal.extensionApproved ? '✅' : '❌'}
+                                    </span>
+                                </div>
+                                <CardTitle className={`text-2xl ${decisionGoal.extensionApproved ? 'text-green-800' : 'text-orange-800'
+                                    }`}>
+                                    Extension Request {decisionGoal.extensionApproved ? 'Approved!' : 'Rejected'}
+                                </CardTitle>
+                                <CardDescription className="text-base mt-2">
+                                    Goal: <strong>{decisionGoal.title}</strong>
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {decisionGoal.extensionApproved ? (
+                                    /* Approved */
+                                    <div className="p-4 bg-green-100 border-2 border-green-300 rounded-lg">
+                                        <p className="text-green-900 font-semibold mb-3">
+                                            🎉 Good news! Your extension has been approved.
+                                        </p>
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-green-700 font-medium">New Deadline:</span>
+                                                <span className="text-green-900 font-bold">
+                                                    {decisionGoal.requestedNewDeadline ?
+                                                        (decisionGoal.requestedNewDeadline instanceof Date ?
+                                                            decisionGoal.requestedNewDeadline.toLocaleDateString('en-US', {
+                                                                weekday: 'short',
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric'
+                                                            }) :
+                                                            (decisionGoal.requestedNewDeadline as any).toDate?.().toLocaleDateString('en-US', {
+                                                                weekday: 'short',
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric'
+                                                            }) || 'Updated'
+                                                        ) : 'Updated'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-green-700 font-medium">Current Progress:</span>
+                                                <span className="text-green-900">{decisionGoal.progress}%</span>
+                                            </div>
+                                        </div>
+                                        <p className="text-green-700 text-sm mt-3 italic">
+                                            💪 You've got this! Make the most of this extra time.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    /* Rejected */
+                                    <div className="p-4 bg-orange-100 border-2 border-orange-300 rounded-lg">
+                                        <p className="text-orange-900 font-semibold mb-3">
+                                            Your extension request was not approved.
+                                        </p>
+                                        {decisionGoal.extensionRejectionReason && (
+                                            <div className="mb-3">
+                                                <p className="text-orange-700 font-medium text-sm mb-1">Manager's Feedback:</p>
+                                                <div className="p-3 bg-white border border-orange-200 rounded">
+                                                    <p className="text-orange-900 text-sm italic">
+                                                        "{decisionGoal.extensionRejectionReason}"
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-orange-700 font-medium">Days Overdue:</span>
+                                                <span className="text-orange-900 font-bold">{decisionGoal.daysOverdue || 0} days</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-orange-700 font-medium">Current Progress:</span>
+                                                <span className="text-orange-900">{decisionGoal.progress}%</span>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded">
+                                            <p className="text-orange-800 text-xs">
+                                                💡 <strong>Next Steps:</strong> Please prioritize this goal. You can request another extension if circumstances change significantly.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Acknowledgment Button */}
+                                <div className="pt-2">
+                                    <Button
+                                        onClick={handleAcknowledgeDecision}
+                                        disabled={submitting}
+                                        className={`w-full ${decisionGoal.extensionApproved
+                                            ? 'bg-green-600 hover:bg-green-700'
+                                            : 'bg-orange-600 hover:bg-orange-700'
+                                            } text-white text-lg py-6`}
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <Loader className="mr-2 h-5 w-5 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="mr-2 h-5 w-5" />
+                                                Okay, I Understand
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Completion Celebration Modal */}
+                {showCompletionCelebration && completedGoalInfo && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-md border-4 border-green-400 bg-gradient-to-br from-green-50 to-blue-50">
+                            <CardContent className="pt-12 pb-12">
+                                <div className="text-center space-y-6">
+                                    {/* Trophy Icon */}
+                                    <div className="flex justify-center">
+                                        <div className="relative">
+                                            <CheckCircle className="h-24 w-24 text-green-600 animate-bounce" />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <span className="text-4xl">🎉</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Title */}
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-green-900 mb-2">
+                                            🏆 Goal Achieved!
+                                        </h2>
+                                        <p className="text-xl font-semibold text-gray-800">
+                                            {completedGoalInfo.title}
+                                        </p>
+                                    </div>
+
+                                    {/* Stats */}
+                                    <div className="bg-white rounded-lg p-4 border-2 border-green-200">
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <p className="text-gray-600">Completed On</p>
+                                                <p className="font-semibold text-green-800">
+                                                    {completedGoalInfo.completedDate}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-600">Status</p>
+                                                <p className="font-semibold text-green-800">
+                                                    {completedGoalInfo.daysEarly > 0
+                                                        ? `${completedGoalInfo.daysEarly} day${completedGoalInfo.daysEarly !== 1 ? 's' : ''} early! ✨`
+                                                        : completedGoalInfo.daysEarly < 0
+                                                            ? `${Math.abs(completedGoalInfo.daysEarly)} day${Math.abs(completedGoalInfo.daysEarly) !== 1 ? 's' : ''} late`
+                                                            : 'On time! 🎯'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Motivational Message */}
+                                    <div className="p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded-lg">
+                                        <p className="text-lg font-medium text-green-900">
+                                            🎊 Excellent work!
+                                        </p>
+                                        <p className="text-sm text-gray-700 mt-1">
+                                            Your manager has been notified of this achievement.
+                                        </p>
+                                    </div>
+
+                                    {/* Close Button */}
+                                    <Button
+                                        onClick={() => {
+                                            setShowCompletionCelebration(false);
+                                            setCompletedGoalInfo(null);
+                                        }}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white text-lg py-6"
+                                    >
+                                        <CheckCircle className="mr-2 h-5 w-5" />
+                                        Awesome! Continue
                                     </Button>
                                 </div>
                             </CardContent>

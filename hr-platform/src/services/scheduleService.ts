@@ -69,15 +69,15 @@ export interface IScheduleService {
     createSchedule(schedule: Omit<WorkSchedule, 'id'>): Promise<WorkSchedule>;
     updateSchedule(id: string, schedule: Partial<WorkSchedule>): Promise<WorkSchedule>;
     deleteSchedule(id: string): Promise<void>;
-    
+
     // Bulk operations
     createBulkSchedules(schedules: Omit<WorkSchedule, 'id'>[]): Promise<WorkSchedule[]>;
     assignScheduleToMultipleEmployees(employeeIds: string[], template: Partial<WorkSchedule>): Promise<WorkSchedule[]>;
-    
+
     // Templates
     getShiftTemplates(): Promise<ShiftTemplate[]>;
     createShiftTemplate(template: Omit<ShiftTemplate, 'id'>): Promise<ShiftTemplate>;
-    
+
     // Real-time
     subscribeToSchedules(callback: (schedules: WorkSchedule[]) => void, employeeId?: string): Unsubscribe;
 }
@@ -94,7 +94,7 @@ export class FirebaseScheduleService implements IScheduleService {
         try {
             const schedulesRef = collection(this.db, 'schedules');
             let q = query(schedulesRef, orderBy('createdAt', 'desc'));
-            
+
             if (employeeId && activeOnly) {
                 q = query(
                     schedulesRef,
@@ -106,7 +106,7 @@ export class FirebaseScheduleService implements IScheduleService {
             } else if (activeOnly) {
                 q = query(schedulesRef, where('isActive', '==', true));
             }
-            
+
             const snapshot = await getDocs(q);
             return snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -129,9 +129,9 @@ export class FirebaseScheduleService implements IScheduleService {
         try {
             const docRef = doc(this.db, 'schedules', id);
             const docSnap = await getDoc(docRef);
-            
+
             if (!docSnap.exists()) return null;
-            
+
             const data = docSnap.data();
             return {
                 id: docSnap.id,
@@ -149,31 +149,61 @@ export class FirebaseScheduleService implements IScheduleService {
 
     async createSchedule(schedule: Omit<WorkSchedule, 'id'>): Promise<WorkSchedule> {
         const schedulesRef = collection(this.db, 'schedules');
-        const docRef = await addDoc(schedulesRef, {
+
+        // Prepare data, excluding undefined fields
+        const scheduleData: any = {
             ...schedule,
             startDate: schedule.startDate instanceof Date ? Timestamp.fromDate(schedule.startDate) : schedule.startDate,
-            endDate: schedule.endDate instanceof Date ? Timestamp.fromDate(schedule.endDate as Date) : schedule.endDate,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-        });
-        
+        };
+
+        // Only include endDate if it's defined
+        if (schedule.endDate) {
+            scheduleData.endDate = schedule.endDate instanceof Date ? Timestamp.fromDate(schedule.endDate as Date) : schedule.endDate;
+        }
+
+        const docRef = await addDoc(schedulesRef, scheduleData);
+
+        console.log('✅ Schedule document created with ID:', docRef.id);
         return { id: docRef.id, ...schedule };
     }
 
     async updateSchedule(id: string, schedule: Partial<WorkSchedule>): Promise<WorkSchedule> {
         const docRef = doc(this.db, 'schedules', id);
+
+        // Build updates object, excluding undefined values
         const updates: any = {
-            ...schedule,
             updatedAt: serverTimestamp(),
         };
-        
+
+        // Only include defined fields
+        if (schedule.employeeId !== undefined) updates.employeeId = schedule.employeeId;
+        if (schedule.employeeName !== undefined) updates.employeeName = schedule.employeeName;
+        if (schedule.department !== undefined) updates.department = schedule.department;
+        if (schedule.shiftType !== undefined) updates.shiftType = schedule.shiftType;
+        if (schedule.workDays !== undefined) updates.workDays = schedule.workDays;
+        if (schedule.workHours !== undefined) updates.workHours = schedule.workHours;
+        if (schedule.breakDuration !== undefined) updates.breakDuration = schedule.breakDuration;
+        if (schedule.location !== undefined) updates.location = schedule.location;
+        if (schedule.shiftStartTime !== undefined) updates.shiftStartTime = schedule.shiftStartTime;
+        if (schedule.shiftEndTime !== undefined) updates.shiftEndTime = schedule.shiftEndTime;
+        if (schedule.isActive !== undefined) updates.isActive = schedule.isActive;
+        if (schedule.notes !== undefined) updates.notes = schedule.notes;
+        if (schedule.createdBy !== undefined) updates.createdBy = schedule.createdBy;
+
+        // Handle Date fields - convert to Timestamp if defined
         if (schedule.startDate instanceof Date) {
             updates.startDate = Timestamp.fromDate(schedule.startDate);
         }
-        if (schedule.endDate instanceof Date) {
+
+        // Only include endDate if it's explicitly provided and is a Date
+        if (schedule.endDate && schedule.endDate instanceof Date) {
             updates.endDate = Timestamp.fromDate(schedule.endDate);
         }
-        
+
+        console.log('🔄 Updating schedule with data:', updates);
+
         await updateDoc(docRef, updates);
         const updated = await this.getScheduleById(id);
         if (!updated) throw new Error('Schedule not found after update');
@@ -191,17 +221,26 @@ export class FirebaseScheduleService implements IScheduleService {
 
         for (const schedule of schedules) {
             const docRef = doc(schedulesRef);
-            batch.set(docRef, {
+
+            // Prepare data, excluding undefined fields
+            const scheduleData: any = {
                 ...schedule,
                 startDate: schedule.startDate instanceof Date ? Timestamp.fromDate(schedule.startDate) : schedule.startDate,
-                endDate: schedule.endDate instanceof Date ? Timestamp.fromDate(schedule.endDate as Date) : schedule.endDate,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-            });
+            };
+
+            // Only include endDate if it's defined
+            if (schedule.endDate) {
+                scheduleData.endDate = schedule.endDate instanceof Date ? Timestamp.fromDate(schedule.endDate as Date) : schedule.endDate;
+            }
+
+            batch.set(docRef, scheduleData);
             createdSchedules.push({ id: docRef.id, ...schedule });
         }
 
         await batch.commit();
+        console.log('✅ Bulk schedules committed to Firebase:', createdSchedules.length);
         return createdSchedules;
     }
 
@@ -209,21 +248,29 @@ export class FirebaseScheduleService implements IScheduleService {
         employeeIds: string[],
         template: Partial<WorkSchedule>
     ): Promise<WorkSchedule[]> {
-        const schedules = employeeIds.map(empId => ({
-            employeeId: empId,
-            employeeName: template.employeeName || '',
-            shiftType: template.shiftType || 'morning',
-            workDays: template.workDays || [1, 2, 3, 4, 5],
-            workHours: template.workHours || 8,
-            breakDuration: template.breakDuration || 60,
-            startDate: template.startDate || new Date(),
-            endDate: template.endDate,
-            location: template.location,
-            shiftStartTime: template.shiftStartTime,
-            shiftEndTime: template.shiftEndTime,
-            isActive: true,
-            createdAt: new Date(),
-        } as Omit<WorkSchedule, 'id'>));
+        const schedules = employeeIds.map(empId => {
+            const scheduleData: any = {
+                employeeId: empId,
+                employeeName: template.employeeName || '',
+                shiftType: template.shiftType || 'morning',
+                workDays: template.workDays || [1, 2, 3, 4, 5],
+                workHours: template.workHours || 8,
+                breakDuration: template.breakDuration || 60,
+                startDate: template.startDate || new Date(),
+                location: template.location,
+                shiftStartTime: template.shiftStartTime,
+                shiftEndTime: template.shiftEndTime,
+                isActive: true,
+                createdAt: new Date(),
+            };
+
+            // Only include endDate if it's defined
+            if (template.endDate) {
+                scheduleData.endDate = template.endDate;
+            }
+
+            return scheduleData as Omit<WorkSchedule, 'id'>;
+        });
 
         return this.createBulkSchedules(schedules);
     }
@@ -248,7 +295,7 @@ export class FirebaseScheduleService implements IScheduleService {
     subscribeToSchedules(callback: (schedules: WorkSchedule[]) => void, employeeId?: string): Unsubscribe {
         const schedulesRef = collection(this.db, 'schedules');
         let q = query(schedulesRef, orderBy('createdAt', 'desc'));
-        
+
         if (employeeId) {
             q = query(
                 schedulesRef,
@@ -256,7 +303,7 @@ export class FirebaseScheduleService implements IScheduleService {
                 orderBy('createdAt', 'desc')
             );
         }
-        
+
         return onSnapshot(q, (snapshot) => {
             const schedules = snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -347,14 +394,14 @@ export class MockScheduleService implements IScheduleService {
 
     async getSchedules(employeeId?: string, activeOnly: boolean = false): Promise<WorkSchedule[]> {
         let filtered = this.schedules;
-        
+
         if (employeeId) {
             filtered = filtered.filter(s => s.employeeId === employeeId);
         }
         if (activeOnly) {
             filtered = filtered.filter(s => s.isActive);
         }
-        
+
         return filtered;
     }
 
@@ -376,7 +423,7 @@ export class MockScheduleService implements IScheduleService {
     async updateSchedule(id: string, schedule: Partial<WorkSchedule>): Promise<WorkSchedule> {
         const index = this.schedules.findIndex(s => s.id === id);
         if (index === -1) throw new Error('Schedule not found');
-        
+
         this.schedules[index] = {
             ...this.schedules[index],
             ...schedule,
@@ -438,7 +485,7 @@ export class MockScheduleService implements IScheduleService {
             ? this.schedules.filter(s => s.employeeId === employeeId)
             : this.schedules;
         callback(schedules);
-        return () => {};
+        return () => { };
     }
 }
 

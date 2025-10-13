@@ -5,13 +5,13 @@ import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Analytics, getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC6ovwlhX4Mr8WpHoS045wLxHA7t8fRXPI",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hris-system-baa22.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hris-system-baa22",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hris-system-baa22.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "563898942372",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:563898942372:web:8c5ebae1dfaf072858b731",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-1DJP5DJX92"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDio-l28vF8L7tTuLObt5bmFkT7eirS2vk",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hrplatform-3ab86.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hrplatform-3ab86",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hrplatform-3ab86.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "910172248990",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:910172248990:web:c3e6cb4fd45a0ab54aff53",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-TKHGV38DKE"
 };
 
 let app: FirebaseApp;

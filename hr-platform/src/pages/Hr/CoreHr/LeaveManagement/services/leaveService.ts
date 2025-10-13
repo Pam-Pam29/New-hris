@@ -92,12 +92,20 @@ class FirebaseLeaveRequestService {
 
   async getAll(): Promise<LeaveRequest[]> {
     try {
-      const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
+      // Removed orderBy to avoid index requirements (matches real-time hook behavior)
+      const q = query(collection(db, this.collectionName));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      const requests = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as LeaveRequest));
+
+      // Sort in memory instead of using Firestore orderBy
+      return requests.sort((a, b) => {
+        const dateA = new Date(a.submittedDate || a.submittedAt || 0).getTime();
+        const dateB = new Date(b.submittedDate || b.submittedAt || 0).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
     } catch (error) {
       console.error('Error fetching leave requests:', error);
       throw error;
@@ -161,14 +169,23 @@ class FirebaseLeaveRequestService {
   }
 
   subscribe(callback: (requests: LeaveRequest[]) => void): () => void {
-    const q = query(collection(db, this.collectionName), orderBy('submittedDate', 'desc'));
+    // Removed orderBy to avoid index requirements
+    const q = query(collection(db, this.collectionName));
 
     return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
       const requests = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as LeaveRequest));
-      callback(requests);
+
+      // Sort in memory
+      const sortedRequests = requests.sort((a, b) => {
+        const dateA = new Date(a.submittedDate || a.submittedAt || 0).getTime();
+        const dateB = new Date(b.submittedDate || b.submittedAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      callback(sortedRequests);
     }, (error) => {
       console.error('Error in leave requests subscription:', error);
     });

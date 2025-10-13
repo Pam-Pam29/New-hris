@@ -33,17 +33,25 @@ import { format } from 'date-fns';
 import { leaveService, LeaveRequest, LeaveType, LeaveBalance } from '../services/leaveService';
 import { useLeaveRequests, useLeaveTypes } from '../../../hooks/useRealTimeSync';
 import { normalizeLeaveStatus, formatLeaveDateRange, getStatusDisplayInfo } from '../../../types/leaveManagement';
+import { LeaveSyncService } from '../../../services/leaveSyncService';
+import { useCompany } from '../../../context/CompanyContext';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function LeaveManagement() {
-    // Get employee ID from localStorage or use a default for testing
+    const { companyId } = useCompany();
+    const { currentEmployee } = useAuth();
+
+    // Get employee ID from auth context
     const [employeeId] = useState(() => {
-        const savedEmployeeId = localStorage.getItem('currentEmployeeId');
-        return savedEmployeeId || 'EMP123456ABC'; // Fallback for testing
+        return currentEmployee?.employeeId || localStorage.getItem('currentEmployeeId') || 'EMP123456ABC';
     });
     const [employeeName, setEmployeeName] = useState<string>('');
     const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+
+    // Initialize sync service
+    const leaveSyncService = new LeaveSyncService();
 
     // Form state
     const [showRequestForm, setShowRequestForm] = useState(false);
@@ -52,16 +60,14 @@ export default function LeaveManagement() {
     const [endDate, setEndDate] = useState<Date>();
     const [reason, setReason] = useState('');
 
-    // Use real-time sync for leave data (get all requests, filter client-side)
-    const { data: allLeaveRequests, loading: requestsLoading } = useLeaveRequests();
-    const { data: leaveTypes, loading: typesLoading } = useLeaveTypes();
+    // Use real-time sync for leave data (filtered by company and employee)
+    const { data: allLeaveRequests, loading: requestsLoading } = useLeaveRequests(employeeId, companyId || undefined);
+    const { data: leaveTypes, loading: typesLoading } = useLeaveTypes(companyId || undefined);
     const loading = requestsLoading || typesLoading;
 
-    // Filter requests for this employee
+    // Filter requests for this employee (double-check client-side)
     const leaveRequests = (allLeaveRequests as LeaveRequest[])?.filter((request: LeaveRequest) =>
-        request.employeeId === employeeId ||
-        request.employeeId === 'EMP123456ABC' || // Fallback for test data
-        request.employeeId === 'sync-test-employee-001' // Fallback for sync test data
+        request.employeeId === employeeId
     ) || [];
 
 
@@ -70,7 +76,7 @@ export default function LeaveManagement() {
         const loadEmployeeName = async () => {
             try {
                 const { getComprehensiveDataFlowService } = await import('../../../services/comprehensiveDataFlowService');
-                const dataFlowService = getComprehensiveDataFlowService();
+                const dataFlowService = await getComprehensiveDataFlowService();
                 const profile = await dataFlowService.getEmployeeProfile(employeeId);
                 if (profile) {
                     const fullName = `${profile.personalInfo.firstName} ${profile.personalInfo.lastName}`;
@@ -118,9 +124,12 @@ export default function LeaveManagement() {
 
             const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-            const success = await leaveService.submitLeaveRequest({
+            // ✅ Use leaveSyncService for real-time sync
+            console.log('📝 Submitting leave request via sync service...');
+            const requestId = await leaveSyncService.submitLeaveRequest({
                 employeeId,
-                employeeName: employeeName || 'Unknown Employee',
+                employeeName: employeeName || currentEmployee?.firstName + ' ' + currentEmployee?.lastName || 'Unknown Employee',
+                companyId: companyId || '', // ✅ Include companyId for multi-tenancy
                 leaveTypeId: selectedLeaveType,
                 leaveTypeName: selectedType.name,
                 startDate,
@@ -129,22 +138,19 @@ export default function LeaveManagement() {
                 reason
             });
 
-            if (success) {
-                setShowRequestForm(false);
-                setSelectedLeaveType('');
-                setStartDate(undefined);
-                setEndDate(undefined);
-                setReason('');
-                await loadLeaveBalances(); // Reload balances (requests update via real-time sync)
+            console.log('✅ Leave request submitted successfully:', requestId);
+            setShowRequestForm(false);
+            setSelectedLeaveType('');
+            setStartDate(undefined);
+            setEndDate(undefined);
+            setReason('');
+            await loadLeaveBalances(); // Reload balances (requests update via real-time sync)
 
-                // Show success message
-                setError(''); // Clear any previous errors
-            } else {
-                setError('Failed to submit leave request');
-            }
+            // Show success message
+            setError(''); // Clear any previous errors
         } catch (err) {
             setError('Failed to submit leave request');
-            console.error(err);
+            console.error('❌ Error submitting leave request:', err);
         } finally {
             setSubmitting(false);
         }
@@ -152,26 +158,27 @@ export default function LeaveManagement() {
 
     const handleCancelRequest = async (requestId: string) => {
         try {
-            const success = await leaveService.cancelLeaveRequest(requestId);
-            if (success) {
-                await loadLeaveBalances(); // Reload balances (requests update via real-time sync)
-            }
+            // ✅ Use leaveSyncService for real-time sync
+            console.log('🚫 Cancelling leave request via sync service...');
+            await leaveSyncService.cancelLeaveRequest(requestId);
+            console.log('✅ Leave request cancelled successfully');
+            await loadLeaveBalances(); // Reload balances (requests update via real-time sync)
         } catch (err) {
-            console.error('Failed to cancel request:', err);
+            console.error('❌ Failed to cancel request:', err);
         }
     };
 
     const getStatusBadge = (status: string) => {
         const statusInfo = getStatusDisplayInfo(status);
         const normalizedStatus = normalizeLeaveStatus(status);
-        
+
         const iconMap = {
             pending: Clock,
             approved: CheckCircle,
             rejected: XCircle,
             cancelled: AlertCircle
         };
-        
+
         const Icon = iconMap[normalizedStatus];
 
         return (
@@ -230,7 +237,7 @@ export default function LeaveManagement() {
                             Leave Balances
                         </TabsTrigger>
                         <TabsTrigger value="history">
-                            History ({leaveRequests.length})
+                            History ({leaveRequests.filter(req => normalizeLeaveStatus(req.status) !== 'pending').length})
                         </TabsTrigger>
                     </TabsList>
 
@@ -309,9 +316,9 @@ export default function LeaveManagement() {
                                 const usedDays = leaveRequests
                                     .filter(req => req.leaveTypeId === type.id && normalizeLeaveStatus(req.status) === 'approved')
                                     .reduce((sum, req) => sum + req.totalDays, 0);
-                                
+
                                 const remainingDays = type.maxDays - usedDays;
-                                
+
                                 return (
                                     <Card key={type.id}>
                                         <CardHeader className="pb-4">
@@ -342,31 +349,48 @@ export default function LeaveManagement() {
                         </div>
                     </TabsContent>
 
-                    {/* History */}
+                    {/* History - Only show approved, rejected, or cancelled requests */}
                     <TabsContent value="history" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {leaveRequests.map(request => (
-                                <Card key={request.id}>
-                                    <CardHeader className="pb-3">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-lg">{request.leaveTypeName}</CardTitle>
-                                            {getStatusBadge(request.status)}
+                        {leaveRequests.filter(req => normalizeLeaveStatus(req.status) !== 'pending').length === 0 ? (
+                            <Card className="border-dashed border-2 border-gray-300">
+                                <CardContent className="pt-12 pb-12">
+                                    <div className="text-center space-y-4">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+                                            <Clock className="h-8 w-8 text-gray-400" />
                                         </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-2">
-                                            <p className="text-sm text-muted-foreground">
-                                                {formatDateRange(request.startDate, request.endDate)}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {request.totalDays} day{request.totalDays !== 1 ? 's' : ''}
-                                            </p>
-                                            <p className="text-sm">{request.reason}</p>
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-900">No History</h3>
+                                            <p className="text-gray-500">You don't have any processed leave requests yet.</p>
+                                            <p className="text-sm text-gray-400 mt-2">Approved, rejected, or cancelled requests will appear here.</p>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {leaveRequests.filter(req => normalizeLeaveStatus(req.status) !== 'pending').map(request => (
+                                    <Card key={request.id}>
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="text-lg">{request.leaveTypeName}</CardTitle>
+                                                {getStatusBadge(request.status)}
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-2">
+                                                <p className="text-sm text-muted-foreground">
+                                                    {formatDateRange(request.startDate, request.endDate)}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {request.totalDays} day{request.totalDays !== 1 ? 's' : ''}
+                                                </p>
+                                                <p className="text-sm">{request.reason}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
                     </TabsContent>
                 </Tabs>
 

@@ -37,11 +37,35 @@ export interface PerformanceGoal {
     unit: 'percentage' | 'number' | 'hours';
     startDate: Date;
     endDate: Date;
-    status: 'not_started' | 'in_progress' | 'completed' | 'cancelled';
+    status: 'not_started' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';
     progress: number;
     priority: 'low' | 'medium' | 'high';
     createdAt: Date;
     updatedAt: Date;
+
+    // Overdue tracking
+    daysOverdue?: number;
+    overdueNotificationSent?: boolean;
+    managerNotificationSent?: boolean;
+    hrNotificationSent?: boolean;
+
+    // Extension request
+    extensionRequested?: boolean;
+    extensionRequestDate?: Date;
+    extensionRequestReason?: string;
+    requestedNewDeadline?: Date;
+    extensionApproved?: boolean;
+    extensionApprovedBy?: string;
+    extensionApprovedDate?: Date;
+    extensionRejectionReason?: string;
+    extensionDecisionAcknowledged?: boolean; // Employee clicked "Okay" on decision
+
+    // Completion tracking
+    completedDate?: Date;
+    daysToComplete?: number;
+    completedEarly?: boolean;
+    daysEarlyOrLate?: number; // Positive = early, Negative = late
+    completionCelebrationShown?: boolean;
 }
 
 export interface PerformanceReview {
@@ -122,9 +146,9 @@ export function getMeetingStatusInfo(status: string) {
 export function formatMeetingDate(date: any): string {
     try {
         if (!date) return 'N/A';
-        
+
         let parsedDate: Date;
-        
+
         if (date?.toDate && typeof date.toDate === 'function') {
             parsedDate = date.toDate();
         } else if (date instanceof Date) {

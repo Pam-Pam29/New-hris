@@ -3,12 +3,12 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "../ui/na
 import { Separator } from "../ui/separator";
 import { Avatar } from "../ui/avatar";
 import { Sun, Moon } from 'lucide-react';
-import { Users, Briefcase, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, Package } from 'lucide-react';
+import { Users, Briefcase, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, Package, CalendarCheck } from 'lucide-react';
 import { User } from 'lucide-react';
 import { Button } from "../ui/button";
 import { useTheme } from '../atoms/ThemeProvider';
 import { TypographyH2, TypographySmall, TypographyMuted } from '../ui/typography';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Popover } from '../ui/popover';
 
 const navStructure = [
@@ -23,6 +23,7 @@ const navStructure = [
     links: [
       { label: 'Leave Management', href: '/leave', icon: Calendar },
       { label: 'Performance Tracking', href: '/performance', icon: BarChart2 },
+      { label: 'Book Meeting with HR', href: '/book-meeting', icon: CalendarCheck },
       { label: 'Policy Documents', href: '/policies', icon: ClipboardList },
       { label: 'My Assets', href: '/assets', icon: Package },
       { label: 'Time Tracking', href: '/time', icon: Clock },
@@ -180,8 +181,8 @@ export function Sidebar() {
 function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; href: string; icon: any }; isActive: boolean; collapsed?: boolean }) {
   return (
     <NavigationMenuItem className="w-full">
-      <a
-        href={link.href}
+      <Link
+        to={link.href}
         className={
           `flex items-center gap-3 rounded-xl font-medium transition-all duration-200 group relative
           ${collapsed ? 'justify-center w-12 h-12 p-0' : 'px-4 py-3 text-sm w-full'}
@@ -205,7 +206,7 @@ function SidebarNavLink({ link, isActive, collapsed }: { link: { label: string; 
         {isActive && !collapsed && (
           <div className="absolute right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
         )}
-      </a>
+      </Link>
     </NavigationMenuItem>
   );
 }

@@ -3,6 +3,7 @@ import { Firestore } from 'firebase/firestore';
 
 export interface RecruitmentCandidate {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     name: string;
     email: string;
     phone: string;
@@ -13,17 +14,24 @@ export interface RecruitmentCandidate {
     skills: string[];
     experience: string;
     notes: string;
+    createdAt?: Date; // When candidate was added
+    updatedAt?: Date; // Last status change
 }
 
 export interface Interview {
     id: string;
+    companyId: string; // Multi-tenancy: Company ID
     candidateId: string;
-    interviewerId: string;
+    interviewerId: string; // Primary interviewer (for backward compatibility)
+    interviewers?: string[]; // Panel interview support (multiple interviewers)
     scheduledTime: Date;
     duration: number;
     type: 'phone' | 'video' | 'onsite';
+    meetingLink?: string; // Google Meet or other video call link
     feedback?: string;
     status: 'scheduled' | 'completed' | 'cancelled';
+    reminderSent?: boolean; // Track if reminder was sent
+    candidateNotified?: boolean; // Track if candidate was notified via email
 }
 
 export interface Offer {
@@ -80,16 +88,24 @@ export class FirebaseRecruitmentService implements IRecruitmentService {
     }
 
     async addCandidate(candidate: Omit<RecruitmentCandidate, 'id'>): Promise<string> {
-        const { collection, addDoc } = await import('firebase/firestore');
+        const { collection, addDoc, Timestamp } = await import('firebase/firestore');
         const candidatesRef = collection(this.db, 'recruitment_candidates');
-        const docRef = await addDoc(candidatesRef, candidate);
+        const now = Timestamp.now();
+        const docRef = await addDoc(candidatesRef, {
+            ...candidate,
+            createdAt: now,
+            updatedAt: now
+        });
         return docRef.id;
     }
 
     async updateCandidate(id: string, candidate: Partial<RecruitmentCandidate>): Promise<void> {
-        const { doc, updateDoc } = await import('firebase/firestore');
+        const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
         const candidateRef = doc(this.db, 'recruitment_candidates', id);
-        await updateDoc(candidateRef, candidate);
+        await updateDoc(candidateRef, {
+            ...candidate,
+            updatedAt: Timestamp.now()
+        });
     }
 
     async updateCandidateStatus(id: string, status: RecruitmentCandidate['status']): Promise<void> {

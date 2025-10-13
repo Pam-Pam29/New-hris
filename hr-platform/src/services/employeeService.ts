@@ -22,25 +22,60 @@ export class FirebaseEmployeeService implements IEmployeeService {
 
   async getEmployees(): Promise<Employee[]> {
     try {
-      const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
+      const { collection, getDocs, query } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
-      const q = query(employeesRef, orderBy('name'));
+      const q = query(employeesRef);
       const querySnapshot = await getDocs(q);
+
+      console.log(`📊 Found ${querySnapshot.docs.length} employees in Firebase`);
 
       return querySnapshot.docs.map((doc, index) => {
         const data = doc.data();
+
+        // Handle both old format (flat) and new format (nested personalInfo)
+        const name = data.name || `${data.personalInfo?.firstName || ''} ${data.personalInfo?.lastName || ''}`.trim();
+        const email = data.email || data.contactInfo?.workEmail || data.contactInfo?.personalEmail || '';
+        const phone = data.phone || data.contactInfo?.workPhone || data.contactInfo?.personalPhone || '';
+        const department = data.department || data.workInfo?.department || '';
+        const hireDate = data.hireDate || data.workInfo?.hireDate || '';
+        const position = data.role || data.workInfo?.position || '';
+        const employmentType = data.employmentType || data.workInfo?.employmentType || '';
+
+        const dateOfBirth = data.dateOfBirth || data.personalInfo?.dateOfBirth || data.dob;
+
+        // Normalize hire date to string format
+        let normalizedHireDate = '';
+        if (hireDate) {
+          if (typeof hireDate === 'object' && hireDate.toDate) {
+            normalizedHireDate = hireDate.toDate().toISOString();
+          } else if (typeof hireDate === 'object' && hireDate.seconds) {
+            normalizedHireDate = new Date(hireDate.seconds * 1000).toISOString();
+          } else if (typeof hireDate === 'string') {
+            normalizedHireDate = hireDate;
+          }
+        }
+
         return {
           id: this.hashStringToNumber(doc.id) + index,
           firebaseId: doc.id, // Keep the original Firebase ID for operations
-          name: data.name,
-          role: data.role,
-          department: data.department,
-          employmentType: data.employmentType,
-          status: data.status,
-          email: data.email || '', // Provide default value if email is undefined
-          phone: data.phone || '', // Provide default value if phone is undefined
-          address: data.address || '', // Provide default value if address is undefined
-          hireDate: data.hireDate || '', // Provide default value if hireDate is undefined
+          employeeId: data.employeeId || doc.id,
+          companyId: data.companyId, // ← Multi-tenancy: Company ID
+          name: name || 'Unknown',
+          role: position,
+          department: department,
+          employmentType: employmentType,
+          status: data.status || data.profileStatus?.status || 'active',
+          email: email,
+          phone: phone,
+          address: data.address || data.contactInfo?.address?.street || '',
+          hireDate: normalizedHireDate,
+          dob: dateOfBirth ? (typeof dateOfBirth === 'string' ? dateOfBirth : dateOfBirth.toISOString?.() || '') : '',
+          dateStarted: normalizedHireDate,
+          personalInfo: data.personalInfo,
+          contactInfo: data.contactInfo,
+          bankingInfo: data.bankingInfo,
+          skills: data.skills,
+          emergencyContacts: data.emergencyContacts || (data.contactInfo?.emergencyContacts ? [data.contactInfo.emergencyContacts] : []),
         } as Employee;
       });
     } catch (error) {

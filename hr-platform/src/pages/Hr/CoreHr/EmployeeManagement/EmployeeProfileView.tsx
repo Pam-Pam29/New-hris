@@ -236,11 +236,17 @@ export default function EmployeeProfileView() {
         return formatted;
     };
 
-    const formatCurrency = (amount: number, currency: string = 'USD') => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency
-        }).format(amount);
+    const formatCurrency = (amount: number, currency: string = 'NGN') => {
+        if (currency === 'NGN') {
+            return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        } else if (currency === 'USD') {
+            return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        } else {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currency
+            }).format(amount);
+        }
     };
 
     const getStatusColor = (status: string) => {

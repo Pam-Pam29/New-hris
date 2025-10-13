@@ -64,8 +64,14 @@ class ContractService {
     async downloadContract(employeeId: string): Promise<Blob> {
         try {
             const contract = await this.getEmployeeContract(employeeId);
-            if (!contract || !contract.documentUrl) {
-                throw new Error('Contract document not found');
+            if (!contract) {
+                throw new Error('Contract not found');
+            }
+
+            // If no document URL exists, generate a PDF with contract details
+            if (!contract.documentUrl) {
+                console.log('📄 [Contract] No document URL found, generating contract PDF');
+                return await this.generateContractPDF(contract);
             }
 
             // If it's a Firebase Storage URL, download from Storage
@@ -86,6 +92,67 @@ class ContractService {
             console.error('Error downloading contract:', error);
             throw error;
         }
+    }
+
+    // Generate contract PDF when no document exists
+    private async generateContractPDF(contract: ContractData): Promise<Blob> {
+        // Create a well-formatted contract document
+        const contractText = `
+═══════════════════════════════════════════════════════════════════════════════
+                                EMPLOYMENT CONTRACT
+═══════════════════════════════════════════════════════════════════════════════
+
+EMPLOYEE DETAILS:
+────────────────
+Employee ID: ${contract.employeeId}
+Position: ${contract.position}
+Department: ${contract.department}
+Effective Date: ${contract.effectiveDate.toLocaleDateString()}
+
+TERMS AND CONDITIONS:
+────────────────────
+1. Salary: ${contract.terms.currency} ${contract.terms.salary.toLocaleString()} per month
+2. Working Hours: ${contract.terms.workingHours}
+3. Probation Period: ${contract.terms.probationPeriod} months
+4. Employment Type: Full-time
+
+BENEFITS PACKAGE:
+────────────────
+${contract.terms.benefits.map((benefit, index) => `${index + 1}. ${benefit}`).join('\n')}
+
+CONTRACT STATUS:
+───────────────
+Status: ${contract.status.toUpperCase()}
+Generated: ${new Date().toLocaleDateString()}
+
+SIGNATURE SECTION:
+─────────────────
+By signing below, I acknowledge that I have read, understood, and agree to the 
+terms and conditions outlined in this employment contract.
+
+Employee Signature: _________________________    Date: _______________
+
+Print Name: _________________________________
+
+Employee ID: ${contract.employeeId}
+
+───────────────────────────────────────────────────────────────────────────────
+HR APPROVAL:
+────────────
+HR Signature: _______________________________    Date: _______________
+
+Print Name: _________________________________
+
+Department: ${contract.department}
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPORTANT: This is your employment contract. Please review carefully.
+Print this document, sign it, and upload the signed copy during onboarding.
+═══════════════════════════════════════════════════════════════════════════════
+        `.trim();
+
+        // Convert text to blob with proper MIME type
+        return new Blob([contractText], { type: 'text/plain; charset=utf-8' });
     }
 
     // Get upload validation rules

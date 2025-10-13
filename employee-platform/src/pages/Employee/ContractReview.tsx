@@ -59,17 +59,28 @@ const ContractReviewForm: React.FC<ContractReviewProps> = ({
 
         setIsDownloading(true);
         try {
+            console.log('📄 [Contract] Starting contract download for:', employeeId);
             const contractBlob = await contractService.downloadContract(employeeId);
+
+            if (!contractBlob || contractBlob.size === 0) {
+                throw new Error('Contract document is empty');
+            }
+
+            console.log('📄 [Contract] Contract blob created, size:', contractBlob.size);
+
             const url = window.URL.createObjectURL(contractBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Employment_Contract_${employeeId}.pdf`;
+            link.download = `Employment_Contract_${employeeId}.txt`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
+
+            console.log('✅ [Contract] Contract downloaded successfully');
         } catch (error) {
-            onError('Unable to download contract');
+            console.error('❌ [Contract] Download error:', error);
+            onError(`Unable to download contract: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setIsDownloading(false);
         }
@@ -231,7 +242,7 @@ const ContractReviewForm: React.FC<ContractReviewProps> = ({
                                     <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                                     <p className="text-gray-600 mb-4">Contract Document Preview</p>
                                     <p className="text-sm text-gray-500">
-                                        Click "Download Contract" to view the full document
+                                        Click "Download Contract" to get your employment contract (.txt file)
                                     </p>
                                 </div>
                             </div>
@@ -263,8 +274,14 @@ const ContractReviewForm: React.FC<ContractReviewProps> = ({
                     <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                            <strong>Next Step:</strong> Please download, print, and sign this contract.
-                            You'll need to upload the signed copy in the next step.
+                            <strong>Next Step:</strong> Please download, print, and sign this contract in the signature section.
+                            <br />
+                            <strong>Instructions:</strong>
+                            <br />• Download the contract document
+                            <br />• Print it out
+                            <br />• Sign in the "Employee Signature" section
+                            <br />• Scan or take a photo of the signed contract
+                            <br />• Upload the signed copy in the next step
                         </AlertDescription>
                     </Alert>
 

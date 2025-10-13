@@ -38,8 +38,11 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../../../../config/firebase';
 import { useLeaveRequests, useLeaveTypes } from '../../../../hooks/useRealTimeSync';
 import { normalizeLeaveStatus, formatLeaveDateRange, formatLeaveDate, getStatusDisplayInfo } from '../../../../types/leaveManagement';
+import { LeaveSyncService } from '../../../../services/leaveSyncService';
+import { useCompany } from '../../../../context/CompanyContext';
 
 export default function HRLeaveManagement() {
+  const { companyId, company } = useCompany();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
@@ -47,6 +50,9 @@ export default function HRLeaveManagement() {
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
   const [approvalComments, setApprovalComments] = useState('');
+
+  // Initialize sync service
+  const leaveSyncService = new LeaveSyncService();
 
   // Leave type form state
   const [leaveTypeForm, setLeaveTypeForm] = useState({
@@ -60,14 +66,24 @@ export default function HRLeaveManagement() {
   });
   const [editingLeaveType, setEditingLeaveType] = useState<string | null>(null);
 
-  // Use real-time sync for leave data
-  const { data: leaveRequests, loading: requestsLoading } = useLeaveRequests();
-  const { data: leaveTypes, loading: typesLoading } = useLeaveTypes();
+  // Use real-time sync for leave data (filtered by company)
+  const { data: leaveRequests, loading: requestsLoading } = useLeaveRequests(undefined, companyId || undefined);
+  const { data: leaveTypes, loading: typesLoading } = useLeaveTypes(companyId || undefined);
   const loading = requestsLoading || typesLoading;
 
   // Type the real-time sync data properly
   const typedLeaveRequests = (leaveRequests as LeaveRequest[]) || [];
   const typedLeaveTypes = (leaveTypes as LeaveType[]) || [];
+
+  // Auto-clear error messages after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Use unified date formatting functions
   const formatDateRange = formatLeaveDateRange;
@@ -79,17 +95,19 @@ export default function HRLeaveManagement() {
 
     setSubmitting(true);
     try {
-      console.log('🔄 Approving leave request:', selectedRequest.id);
-      await leaveRequestService.approve(
+      console.log('🔄 Approving leave request via sync service:', selectedRequest.id);
+      // ✅ Use leaveSyncService for real-time sync with notifications
+      await leaveSyncService.approveLeaveRequest(
         selectedRequest.id,
-        'HR Manager' // This would come from auth context
+        'HR Manager', // This would come from auth context
+        approvalComments
       );
 
       setShowApprovalModal(false);
       setSelectedRequest(null);
       setApprovalComments('');
       // Real-time sync will automatically update the data
-      console.log('✅ Leave request approved - real-time sync will update the UI');
+      console.log('✅ Leave request approved - employee will be notified');
     } catch (err) {
       setError('Failed to approve leave request');
       console.error('❌ Approval error:', err);
@@ -103,17 +121,19 @@ export default function HRLeaveManagement() {
 
     setSubmitting(true);
     try {
-      console.log('🔄 Rejecting leave request:', selectedRequest.id);
-      await leaveRequestService.reject(
+      console.log('🔄 Rejecting leave request via sync service:', selectedRequest.id);
+      // ✅ Use leaveSyncService for real-time sync with notifications
+      await leaveSyncService.rejectLeaveRequest(
         selectedRequest.id,
-        'HR Manager' // This would come from auth context
+        'HR Manager', // This would come from auth context
+        approvalComments
       );
 
       setShowApprovalModal(false);
       setSelectedRequest(null);
       setApprovalComments('');
       // Real-time sync will automatically update the data
-      console.log('✅ Leave request rejected - real-time sync will update the UI');
+      console.log('✅ Leave request rejected - employee will be notified');
     } catch (err) {
       setError('Failed to reject leave request');
       console.error('❌ Rejection error:', err);
@@ -129,6 +149,8 @@ export default function HRLeaveManagement() {
     }
 
     setSubmitting(true);
+    setError(''); // Clear any previous errors
+
     try {
       if (editingLeaveType) {
         // Update existing leave type
@@ -146,6 +168,7 @@ export default function HRLeaveManagement() {
         console.log('✅ Leave type created successfully');
       }
 
+      // Success - close modal and reset form
       setShowLeaveTypeModal(false);
       setEditingLeaveType(null);
       setLeaveTypeForm({
@@ -157,10 +180,13 @@ export default function HRLeaveManagement() {
         requiresApproval: true,
         color: '#3B82F6'
       });
-      await loadData();
-    } catch (err) {
-      setError(editingLeaveType ? 'Failed to update leave type' : 'Failed to create leave type');
-      console.error(err);
+      setError(''); // Clear any errors
+      // Real-time sync will automatically update the leave types list
+      console.log('✅ Leave type saved - real-time sync will update the UI');
+    } catch (err: any) {
+      const errorMessage = err?.message || 'An error occurred';
+      setError(editingLeaveType ? `Failed to update leave type: ${errorMessage}` : `Failed to create leave type: ${errorMessage}`);
+      console.error('❌ Leave type error:', err);
     } finally {
       setSubmitting(false);
     }
@@ -176,14 +202,14 @@ export default function HRLeaveManagement() {
   const getStatusBadge = (status: string) => {
     const statusInfo = getStatusDisplayInfo(status);
     const normalizedStatus = normalizeLeaveStatus(status);
-    
+
     const iconMap = {
       pending: Clock,
       approved: CheckCircle,
       rejected: XCircle,
       cancelled: XCircle
     };
-    
+
     const Icon = iconMap[normalizedStatus];
 
     return (
@@ -252,7 +278,7 @@ export default function HRLeaveManagement() {
               <Settings className="h-4 w-4" />
               <span>Manage Leave Types</span>
             </Button>
-            <Button 
+            <Button
               variant="outline"
               className="flex items-center space-x-2"
             >
@@ -653,8 +679,8 @@ export default function HRLeaveManagement() {
                       onChange={(e) => {
                         const maxDays = parseInt(e.target.value) || 0;
                         const calculatedAccrualRate = parseFloat((maxDays / 12).toFixed(2));
-                        setLeaveTypeForm(prev => ({ 
-                          ...prev, 
+                        setLeaveTypeForm(prev => ({
+                          ...prev,
                           maxDays,
                           accrualRate: calculatedAccrualRate
                         }));
@@ -727,6 +753,7 @@ export default function HRLeaveManagement() {
                     onClick={() => {
                       setShowLeaveTypeModal(false);
                       setEditingLeaveType(null);
+                      setError(''); // Clear any errors when closing
                       setLeaveTypeForm({
                         name: '',
                         description: '',

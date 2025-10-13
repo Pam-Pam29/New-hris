@@ -25,7 +25,8 @@ import {
   Award,
   Heart,
   Shield,
-  Star
+  Star,
+  FileText
 } from 'lucide-react';
 
 // Use the imported Employee type from types.ts
@@ -59,15 +60,20 @@ interface ViewEmployee extends Omit<Employee, 'personalInfo' | 'skills'> {
 
 // Import the comprehensive data flow service
 import { getComprehensiveDataFlowService } from '../../../../services/comprehensiveDataFlowService';
+import { useCompany } from '../../../../context/CompanyContext';
 
 export default function EmployeeDirectory() {
   const navigate = useNavigate();
+  const { companyId, company } = useCompany();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showContractDialog, setShowContractDialog] = useState(false);
+  const [pendingEmployeeData, setPendingEmployeeData] = useState<any>(null);
+  const [contractData, setContractData] = useState<any>(null);
   const [selectedViewEmployee, setSelectedViewEmployee] = useState<ViewEmployee | null>(null);
   const [dataFlowService, setDataFlowService] = useState<any>(null);
 
@@ -97,6 +103,11 @@ export default function EmployeeDirectory() {
 
   // Initialize employee service and load employees
   useEffect(() => {
+    if (!companyId) {
+      console.log('⏳ Employee Directory waiting for company...');
+      return;
+    }
+
     let unsubscribe: (() => void) | undefined;
 
     const setupService = async () => {
@@ -111,19 +122,19 @@ export default function EmployeeDirectory() {
         unsubscribe();
       }
     };
-  }, []); // Empty dependency array to run only once
+  }, [companyId]); // Re-run when company changes for multi-tenancy
 
   const initializeService = async () => {
     try {
       setLoading(true);
-      console.log('Initializing comprehensive data flow service...');
+      console.log(`🏢 Initializing Employee Directory for ${company?.displayName || 'company'}...`);
       const service = await getComprehensiveDataFlowService();
       console.log('Data flow service initialized:', service);
       setDataFlowService(service);
 
-      // Set up real-time subscription to all employees
+      // Set up real-time subscription to all employees (filtered by company)
       const unsubscribe = service.subscribeToAllEmployees((allEmployees) => {
-        console.log('Real-time employees update received:', allEmployees);
+        console.log(`📋 Real-time employees update for ${company?.displayName}:`, allEmployees.length);
 
         // Convert comprehensive profiles to simple Employee format for display
         const simpleEmployees = allEmployees.map((profile: any) => {
@@ -200,7 +211,7 @@ export default function EmployeeDirectory() {
         setEmployees(simpleEmployees);
         console.log('Employees updated:', simpleEmployees.length, 'employees');
         setLoading(false);
-      });
+      }, companyId); // ← Pass companyId for multi-tenancy filtering!
 
       // Store the unsubscribe function for cleanup
       return unsubscribe;
@@ -210,63 +221,147 @@ export default function EmployeeDirectory() {
     }
   };
 
+  // Auto-generate employee ID based on company name + sequential number
+  const generateEmployeeId = async (): Promise<string> => {
+    try {
+      // Get first 3 letters of company name (uppercase)
+      const companyPrefix = (company?.displayName || 'EMP')
+        .replace(/[^a-zA-Z]/g, '') // Remove non-letters
+        .substring(0, 3)
+        .toUpperCase();
+
+      // Get current employee count for this company
+      const employeeCount = employees.length;
+
+      // Generate sequential number (001, 002, etc.)
+      const sequentialNumber = String(employeeCount + 1).padStart(3, '0');
+
+      const generatedId = `${companyPrefix}${sequentialNumber}`;
+
+      console.log('✅ Generated Employee ID:', generatedId, {
+        companyName: company?.displayName,
+        prefix: companyPrefix,
+        currentCount: employeeCount,
+        newNumber: sequentialNumber
+      });
+
+      return generatedId;
+    } catch (error) {
+      console.error('Error generating employee ID:', error);
+      return `EMP${String(employees.length + 1).padStart(3, '0')}`;
+    }
+  };
+
+  // Create employment contract for new employee
+  const createEmployeeContract = async (employeeId: string, contractData: {
+    position: string;
+    department: string;
+    salary: number;
+    companyId: string;
+  }) => {
+    try {
+      console.log('📄 [HR] Creating contract for employee:', employeeId);
+
+      // Import Firebase functions
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('../../../../config/firebase');
+
+      const contractRef = doc(db, 'contracts', employeeId);
+
+      const contract = {
+        id: employeeId,
+        employeeId: employeeId,
+        position: contractData.position,
+        department: contractData.department,
+        effectiveDate: new Date(),
+        terms: {
+          salary: contractData.salary,
+          currency: 'NGN',
+          benefits: [
+            'Health Insurance',
+            'Annual Leave (21 days)',
+            'Sick Leave (10 days)',
+            'Maternity/Paternity Leave',
+            'Professional Development',
+            'Remote Work Allowance'
+          ],
+          workingHours: '40 hours per week, Monday to Friday',
+          probationPeriod: 3
+        },
+        documentUrl: '', // HR can upload actual contract document later
+        status: 'pending_review',
+        companyId: contractData.companyId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      await setDoc(contractRef, contract);
+      console.log('✅ [HR] Contract created for employee:', employeeId);
+
+    } catch (error) {
+      console.error('❌ [HR] Error creating contract:', error);
+    }
+  };
+
   const handleAddEmployee = async () => {
     try {
       console.log('handleAddEmployee called', { formData, dataFlowService });
       if (formData.name && formData.role && formData.department && dataFlowService) {
         console.log('Creating employee with data:', formData);
 
-        // Create a comprehensive profile using the data flow service
+        // Auto-generate employee ID
+        const generatedEmployeeId = await generateEmployeeId();
+
+        // Generate setup token for password setup link
+        const setupToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        const setupExpiry = new Date();
+        setupExpiry.setDate(setupExpiry.getDate() + 7); // 7 days to set password
+
+        // Store employee data for contract editing
         const [firstName, ...lastNameParts] = formData.name.split(' ');
         const lastName = lastNameParts.join(' ') || '';
 
-        const newProfile = await dataFlowService.updateEmployeeProfile(formData.email || `emp-${Date.now()}`, {
-          employeeId: formData.email || `emp-${Date.now()}`,
-          personalInfo: {
-            firstName: firstName,
-            lastName: lastName,
-            dateOfBirth: new Date()
-          },
-          contactInfo: {
-            personalEmail: formData.email || '',
-            workEmail: formData.email || '',
-            personalPhone: '',
-            workPhone: '',
-            address: {
-              street: '',
-              city: '',
-              state: '',
-              zipCode: '',
-              country: ''
-            },
-            emergencyContacts: []
-          },
-          workInfo: {
-            position: formData.role,
-            department: formData.department,
-            hireDate: new Date(),
-            employmentType: 'Full-time',
-            workLocation: 'Office',
-            workSchedule: '9-5',
-            salary: {
-              baseSalary: 0,
-              currency: 'USD',
-              payFrequency: 'Monthly'
-            }
-          },
-          profileStatus: {
-            completeness: 0,
-            lastUpdated: new Date(),
-            updatedBy: 'hr',
-            status: 'active'
-          }
-        });
+        const employeeData = {
+          employeeId: generatedEmployeeId,
+          setupToken,
+          setupExpiry,
+          firstName,
+          lastName,
+          email: formData.email || '',
+          role: formData.role,
+          department: formData.department,
+          companyId: companyId!
+        };
 
-        console.log('Employee profile created successfully:', newProfile);
+        // Create default contract data for editing
+        const defaultContract = {
+          employeeId: generatedEmployeeId,
+          position: formData.role,
+          department: formData.department,
+          effectiveDate: new Date(),
+          terms: {
+            salary: 500000, // Default salary in NGN
+            currency: 'NGN',
+            benefits: [
+              'Health Insurance',
+              'Annual Leave (21 days)',
+              'Sick Leave (10 days)',
+              'Maternity/Paternity Leave',
+              'Professional Development',
+              'Remote Work Allowance'
+            ],
+            workingHours: '40 hours per week, Monday to Friday',
+            probationPeriod: 3
+          },
+          status: 'pending_review'
+        };
 
-        // No need to refresh - real-time updates will handle this
+        // Store data and show contract editor
+        setPendingEmployeeData(employeeData);
+        setContractData(defaultContract);
         setShowAddDialog(false);
-        setFormData({ name: '', email: '', role: '', department: '' });
+        setShowContractDialog(true);
+
       } else {
         console.log('Missing required fields or service not available:', {
           name: formData.name,
@@ -315,13 +410,113 @@ export default function EmployeeDirectory() {
   const handleDeleteEmployee = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this employee?') && dataFlowService) {
       try {
-        // For now, we'll just remove from the local state
-        // In a real implementation, you'd call a delete method on the service
+        console.log('🗑️ Deleting employee from Firebase:', id);
+
+        // Delete from Firebase
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        const { getFirebaseDb } = await import('../../../../config/firebase');
+        const db = getFirebaseDb();
+
+        await deleteDoc(doc(db, 'employees', id));
+
+        console.log('✅ Employee deleted successfully from Firebase');
+
+        // Real-time sync will automatically update the UI, but we can also update local state
         setEmployees((prev: Employee[]) => prev.filter((emp: Employee) => emp.id.toString() !== id));
-        console.log('Employee deleted (local state only)');
       } catch (error) {
-        console.error('Error deleting employee:', error);
+        console.error('❌ Error deleting employee:', error);
+        alert('Failed to delete employee. Please try again.');
       }
+    }
+  };
+
+  // Handle contract editing completion
+  const handleContractComplete = async () => {
+    try {
+      if (!pendingEmployeeData || !contractData) return;
+
+      console.log('📄 [HR] Creating employee with edited contract');
+
+      // Create employee profile
+      const newProfile = await dataFlowService.updateEmployeeProfile(pendingEmployeeData.employeeId, {
+        companyId: pendingEmployeeData.companyId,
+        employeeId: pendingEmployeeData.employeeId,
+        personalInfo: {
+          firstName: pendingEmployeeData.firstName,
+          lastName: pendingEmployeeData.lastName,
+          dateOfBirth: new Date()
+        },
+        contactInfo: {
+          personalEmail: pendingEmployeeData.email,
+          workEmail: pendingEmployeeData.email,
+          personalPhone: '',
+          workPhone: '',
+          address: {
+            street: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: ''
+          },
+          emergencyContacts: []
+        },
+        workInfo: {
+          position: pendingEmployeeData.role,
+          department: pendingEmployeeData.department,
+          hireDate: new Date(),
+          employmentType: 'Full-time',
+          workLocation: 'Office',
+          workSchedule: '9-5',
+          salary: {
+            baseSalary: contractData.terms.salary,
+            currency: contractData.terms.currency,
+            payFrequency: 'Monthly'
+          }
+        },
+        auth: {
+          email: pendingEmployeeData.email,
+          passwordHash: null,
+          password: null,
+          setupToken: pendingEmployeeData.setupToken,
+          setupExpiry: pendingEmployeeData.setupExpiry,
+          isActive: true,
+          emailVerified: false,
+          lastLogin: null,
+          loginCount: 0
+        },
+        onboarding: {
+          status: 'not_started',
+          currentStep: 0,
+          completedSteps: [],
+          startedAt: new Date()
+        },
+        profileStatus: {
+          completeness: 0,
+          lastUpdated: new Date(),
+          updatedBy: 'hr',
+          status: 'active'
+        }
+      });
+
+      // Create contract with edited terms
+      await createEmployeeContract(pendingEmployeeData.employeeId, contractData);
+
+      // Generate setup link
+      const setupLink = `http://localhost:3002/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
+
+      // Show setup link to HR
+      alert(`✅ Employee created with custom contract!\n\n📧 Send this link to ${pendingEmployeeData.firstName} ${pendingEmployeeData.lastName}:\n\n${setupLink}\n\n⏰ Link expires in 7 days.`);
+
+      // Reset states
+      setShowContractDialog(false);
+      setPendingEmployeeData(null);
+      setContractData(null);
+      setFormData({ name: '', email: '', role: '', department: '' });
+
+      console.log('✅ Employee and contract created successfully');
+
+    } catch (error) {
+      console.error('❌ Error completing contract:', error);
     }
   };
 
@@ -499,17 +694,8 @@ export default function EmployeeDirectory() {
 
       const db = getFirebaseDb();
 
-      // Fetch data from all collections in parallel
-      const [
-        leaveRequestsSnapshot,
-        performanceGoalsSnapshot,
-        performanceReviewsSnapshot,
-        assetsSnapshot,
-        attendanceSnapshot,
-        timeTrackingSnapshot,
-        notificationsSnapshot,
-        policiesSnapshot
-      ] = await Promise.all([
+      // Fetch data from all collections in parallel (use allSettled to handle permission errors gracefully)
+      const results = await Promise.allSettled([
         // Leave Requests
         getDocs(query(
           collection(db, 'leaveRequests'),
@@ -565,6 +751,25 @@ export default function EmployeeDirectory() {
           limit(5)
         ))
       ]);
+
+      // Extract successful results and handle failed ones gracefully
+      const [
+        leaveRequestsSnapshot,
+        performanceGoalsSnapshot,
+        performanceReviewsSnapshot,
+        assetsSnapshot,
+        attendanceSnapshot,
+        timeTrackingSnapshot,
+        notificationsSnapshot,
+        policiesSnapshot
+      ] = results.map((result, index) => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          console.warn(`Failed to fetch data for query ${index}:`, result.reason);
+          return { docs: [] }; // Return empty result for failed queries
+        }
+      });
 
       // Process the data with timestamp formatting
       setEmployeeLeaveRequests(leaveRequestsSnapshot.docs.map(doc => {
@@ -1033,6 +1238,218 @@ export default function EmployeeDirectory() {
         </div>
       )}
 
+      {/* Contract Editor Dialog */}
+      {showContractDialog && pendingEmployeeData && contractData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="card-modern w-full max-w-4xl m-4 animate-slide-in max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Edit Employment Contract</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Review and customize the contract for {pendingEmployeeData.firstName} {pendingEmployeeData.lastName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowContractDialog(false);
+                    setPendingEmployeeData(null);
+                    setContractData(null);
+                  }}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium text-blue-900">Position</label>
+                    <input
+                      type="text"
+                      value={contractData.position}
+                      onChange={(e) => setContractData(prev => ({ ...prev, position: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-blue-900">Department</label>
+                    <input
+                      type="text"
+                      value={contractData.department}
+                      onChange={(e) => setContractData(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-blue-900">Effective Date</label>
+                    <input
+                      type="date"
+                      value={contractData.effectiveDate.toISOString().split('T')[0]}
+                      onChange={(e) => setContractData(prev => ({ ...prev, effectiveDate: new Date(e.target.value) }))}
+                      className="w-full mt-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-blue-900">Status</label>
+                    <select
+                      value={contractData.status}
+                      onChange={(e) => setContractData(prev => ({ ...prev, status: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="pending_review">Pending Review</option>
+                      <option value="draft">Draft</option>
+                      <option value="ready">Ready to Send</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Contract Terms */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Contract Terms</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground">Salary (NGN)</label>
+                      <input
+                        type="number"
+                        value={contractData.terms.salary}
+                        onChange={(e) => setContractData(prev => ({
+                          ...prev,
+                          terms: { ...prev.terms, salary: parseInt(e.target.value) || 0 }
+                        }))}
+                        className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground">Probation Period (months)</label>
+                      <input
+                        type="number"
+                        value={contractData.terms.probationPeriod}
+                        onChange={(e) => setContractData(prev => ({
+                          ...prev,
+                          terms: { ...prev.terms, probationPeriod: parseInt(e.target.value) || 3 }
+                        }))}
+                        className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground">Working Hours</label>
+                    <input
+                      type="text"
+                      value={contractData.terms.workingHours}
+                      onChange={(e) => setContractData(prev => ({
+                        ...prev,
+                        terms: { ...prev.terms, workingHours: e.target.value }
+                      }))}
+                      className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder="e.g., 40 hours per week, Monday to Friday"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground">Benefits</label>
+                    <div className="mt-2 space-y-2">
+                      {contractData.terms.benefits.map((benefit: string, index: number) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={benefit}
+                            onChange={(e) => {
+                              const newBenefits = [...contractData.terms.benefits];
+                              newBenefits[index] = e.target.value;
+                              setContractData(prev => ({
+                                ...prev,
+                                terms: { ...prev.terms, benefits: newBenefits }
+                              }));
+                            }}
+                            className="flex-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                          <button
+                            onClick={() => {
+                              const newBenefits = contractData.terms.benefits.filter((_: any, i: number) => i !== index);
+                              setContractData(prev => ({
+                                ...prev,
+                                terms: { ...prev.terms, benefits: newBenefits }
+                              }));
+                            }}
+                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setContractData(prev => ({
+                            ...prev,
+                            terms: { ...prev.terms, benefits: [...prev.terms.benefits, ''] }
+                          }));
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Add Benefit
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contract Preview */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Contract Preview</h3>
+                  <div className="p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
+                    <div className="text-sm space-y-2">
+                      <p><strong>Employee ID:</strong> {pendingEmployeeData.employeeId}</p>
+                      <p><strong>Position:</strong> {contractData.position}</p>
+                      <p><strong>Department:</strong> {contractData.department}</p>
+                      <p><strong>Effective Date:</strong> {contractData.effectiveDate.toLocaleDateString()}</p>
+                      <p><strong>Salary:</strong> NGN {contractData.terms.salary.toLocaleString()} per month</p>
+                      <p><strong>Working Hours:</strong> {contractData.terms.workingHours}</p>
+                      <p><strong>Probation Period:</strong> {contractData.terms.probationPeriod} months</p>
+                      <p><strong>Benefits:</strong></p>
+                      <ul className="list-disc list-inside ml-4">
+                        {contractData.terms.benefits.map((benefit: string, index: number) => (
+                          <li key={index}>{benefit}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6 pt-4 border-t border-border">
+                <button
+                  onClick={() => {
+                    setShowContractDialog(false);
+                    setPendingEmployeeData(null);
+                    setContractData(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-input rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleContractComplete}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+                >
+                  Create Employee & Send Contract
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Employee Dialog */}
       {showEditDialog && selectedEmployee && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
@@ -1192,17 +1609,61 @@ export default function EmployeeDirectory() {
               {/* Status */}
               <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-muted-foreground">Employee Status</label>
                     <p className="text-lg font-semibold">{selectedViewEmployee.status}</p>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${selectedViewEmployee.status === 'Active'
-                    ? 'bg-green-100 text-green-800 border border-green-200'
-                    : selectedViewEmployee.status === 'Inactive'
-                      ? 'bg-red-100 text-red-800 border border-red-200'
-                      : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                    }`}>
-                    {selectedViewEmployee.status}
+                  <div className="flex items-center gap-3">
+                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${selectedViewEmployee.status === 'Active' || selectedViewEmployee.status === 'active'
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : selectedViewEmployee.status === 'Inactive' || selectedViewEmployee.status === 'inactive'
+                        ? 'bg-red-100 text-red-800 border border-red-200'
+                        : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                      }`}>
+                      {selectedViewEmployee.status}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newStatus = (selectedViewEmployee.status === 'Active' || selectedViewEmployee.status === 'active') ? 'Inactive' : 'Active';
+                        try {
+                          if (dataFlowService) {
+                            console.log(`🔄 Changing employee ${selectedViewEmployee.id} status to ${newStatus}`);
+
+                            // Update employee status in Firebase
+                            await dataFlowService.updateEmployeeProfile(selectedViewEmployee.id, {
+                              status: newStatus
+                            });
+
+                            // Update the popup view state
+                            setSelectedViewEmployee({
+                              ...selectedViewEmployee,
+                              status: newStatus
+                            });
+
+                            // Update ONLY this employee in the local list (don't refresh all)
+                            setEmployees(prevEmployees =>
+                              prevEmployees.map(emp =>
+                                emp.id === selectedViewEmployee.id
+                                  ? { ...emp, status: newStatus }
+                                  : emp  // Keep other employees unchanged
+                              )
+                            );
+
+                            console.log(`✅ Employee ${selectedViewEmployee.name} status updated to ${newStatus}`);
+                            alert(`Employee status changed to ${newStatus}`);
+                          }
+                        } catch (error) {
+                          console.error('❌ Error updating status:', error);
+                          alert('Failed to update employee status');
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${(selectedViewEmployee.status === 'Active' || selectedViewEmployee.status === 'active')
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
+                        : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
+                        }`}
+                    >
+                      {(selectedViewEmployee.status === 'Active' || selectedViewEmployee.status === 'active') ? 'Mark as Inactive' : 'Mark as Active'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1260,22 +1721,36 @@ export default function EmployeeDirectory() {
                     Personal Details
                   </h3>
                   <div className="space-y-3">
-                    {selectedViewEmployee.gender && (
+                    {(selectedViewEmployee.personalInfo?.firstName || selectedViewEmployee.personalInfo?.lastName) && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Full Name</label>
+                        <p className="text-sm">
+                          {selectedViewEmployee.personalInfo?.firstName} {selectedViewEmployee.personalInfo?.middleName} {selectedViewEmployee.personalInfo?.lastName}
+                        </p>
+                      </div>
+                    )}
+                    {(selectedViewEmployee.gender || selectedViewEmployee.personalInfo?.gender) && (
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Gender</label>
-                        <p className="text-sm capitalize">{selectedViewEmployee.gender}</p>
+                        <p className="text-sm capitalize">{selectedViewEmployee.personalInfo?.gender || selectedViewEmployee.gender}</p>
                       </div>
                     )}
-                    {selectedViewEmployee.dob && (
+                    {(selectedViewEmployee.dob || selectedViewEmployee.personalInfo?.dateOfBirth) && (
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
-                        <p className="text-sm">{selectedViewEmployee.dob}</p>
+                        <p className="text-sm">{selectedViewEmployee.personalInfo?.dateOfBirth || selectedViewEmployee.dob}</p>
                       </div>
                     )}
-                    {selectedViewEmployee.nationalId && (
+                    {(selectedViewEmployee.personalInfo?.nationality) && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">National ID</label>
-                        <p className="text-sm font-mono">{selectedViewEmployee.nationalId}</p>
+                        <label className="text-sm font-medium text-muted-foreground">Nationality</label>
+                        <p className="text-sm">{selectedViewEmployee.personalInfo?.nationality}</p>
+                      </div>
+                    )}
+                    {(selectedViewEmployee.personalInfo?.maritalStatus) && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Marital Status</label>
+                        <p className="text-sm capitalize">{selectedViewEmployee.personalInfo?.maritalStatus}</p>
                       </div>
                     )}
                   </div>

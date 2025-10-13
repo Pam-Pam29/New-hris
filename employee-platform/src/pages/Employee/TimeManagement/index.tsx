@@ -42,11 +42,14 @@ import { TimeEntry as LocalTimeEntry, GeoLocation, TimeAdjustment, Schedule } fr
 import { getTimeTrackingService, TimeEntry as FirebaseTimeEntry } from '../../../services/timeTrackingService';
 import { getTimeNotificationService, TimeNotification } from '../../../services/timeNotificationService';
 import { getScheduleService, WorkSchedule as FirebaseSchedule, getShortDayName } from '../../../services/scheduleService';
+import { getComprehensiveDataFlowService } from '../../../services/comprehensiveDataFlowService';
+import { getOfficeLocationService, calculateDistance, formatDistance } from '../../../services/officeLocationService';
 
 export default function TimeManagement() {
-    // Employee info - TODO: Get from actual auth context
-    const employeeId = 'emp-001';
-    const employeeName = 'John Doe';
+    // Employee info - Load from profile
+    const employeeId = 'EMP001'; // Updated to match Firebase profile ID
+    const [employeeName, setEmployeeName] = useState('Loading...');
+    const [employeeProfile, setEmployeeProfile] = useState<any>(null);
 
     const [timeEntries, setTimeEntries] = useState<FirebaseTimeEntry[]>([]);
     const [schedule, setSchedule] = useState<FirebaseSchedule | null>(null);
@@ -74,6 +77,45 @@ export default function TimeManagement() {
     const [breakStartTime, setBreakStartTime] = useState<Date | null>(null);
     const [totalBreakTime, setTotalBreakTime] = useState(0); // in minutes
     const [todayEntry, setTodayEntry] = useState<FirebaseTimeEntry | null>(null);
+
+    // Load employee profile to get real name
+    useEffect(() => {
+        const loadEmployeeProfile = async () => {
+            try {
+                const dataFlowService = await getComprehensiveDataFlowService();
+                const profile = await dataFlowService.getEmployeeProfile(employeeId);
+                console.log('📋 Full employee profile:', profile);
+
+                if (profile) {
+                    setEmployeeProfile(profile);
+
+                    // Build full name from firstName and lastName
+                    const firstName = profile.personalInfo?.firstName || '';
+                    const lastName = profile.personalInfo?.lastName || '';
+                    const fullName = `${firstName} ${lastName}`.trim();
+
+                    const name = fullName ||
+                        profile.name ||
+                        profile.fullName ||
+                        profile.displayName ||
+                        `Employee ${employeeId}`;
+
+                    setEmployeeName(name);
+                    console.log('👤 Employee name loaded:', name);
+                    console.log('📋 Profile data:', {
+                        firstName,
+                        lastName,
+                        fullName,
+                        employeeId: profile.employeeId || profile.id
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error loading employee profile:', error);
+                setEmployeeName(`Employee ${employeeId}`);
+            }
+        };
+        loadEmployeeProfile();
+    }, [employeeId]);
 
     // Set up real-time subscriptions
     useEffect(() => {
@@ -173,13 +215,141 @@ export default function TimeManagement() {
             }
 
             navigator.geolocation.getCurrentPosition(
-                (position) => {
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+
+                    // Start with basic location
                     const location: GeoLocation = {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
+                        latitude: lat,
+                        longitude: lon,
                         accuracy: position.coords.accuracy,
                         timestamp: new Date()
                     };
+
+                    // Try to reverse geocode to get address using OpenStreetMap
+                    try {
+                        console.log('📍 Reverse geocoding coordinates:', lat, lon);
+
+                        // Use CORS proxy for localhost development
+                        const isDevelopment = window.location.hostname === 'localhost' ||
+                            window.location.hostname === '127.0.0.1';
+
+                        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=19&addressdetails=1`;
+
+                        // Use AllOrigins CORS proxy for localhost
+                        const proxyUrl = isDevelopment
+                            ? `https://api.allorigins.win/raw?url=${encodeURIComponent(nominatimUrl)}`
+                            : nominatimUrl;
+
+                        console.log('🌐 Using geocoding URL:', isDevelopment ? 'via AllOrigins proxy' : 'direct');
+
+                        const response = await fetch(proxyUrl);
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('📋 Full geocoding data:', data);
+                            console.log('🗺️ Complete address object:', data.address);
+
+                            if (data.address) {
+                                // Build precise address from components (prioritize closest details)
+                                const addr = data.address;
+                                const parts = [];
+
+                                // Log ALL available fields to see what we have
+                                console.log('📍 ALL address fields:', Object.keys(addr));
+                                console.log('🏢 Available data:', {
+                                    amenity: addr.amenity,
+                                    shop: addr.shop,
+                                    building: addr.building,
+                                    house_number: addr.house_number,
+                                    house_name: addr.house_name,
+                                    road: addr.road,
+                                    pedestrian: addr.pedestrian,
+                                    footway: addr.footway,
+                                    neighbourhood: addr.neighbourhood,
+                                    suburb: addr.suburb,
+                                    quarter: addr.quarter,
+                                    residential: addr.residential,
+                                    industrial: addr.industrial,
+                                    commercial: addr.commercial,
+                                    retail: addr.retail,
+                                    office: addr.office,
+                                    county: addr.county,
+                                    state_district: addr.state_district,
+                                    city: addr.city,
+                                    town: addr.town,
+                                    village: addr.village
+                                });
+
+                                // CLOSEST DETAILS FIRST - Building/House/Shop/Office
+                                if (addr.office) parts.push(addr.office);
+                                if (addr.amenity) parts.push(addr.amenity);
+                                if (addr.shop) parts.push(addr.shop);
+                                if (addr.building) parts.push(addr.building);
+                                if (addr.house_name) parts.push(addr.house_name);
+
+                                // Street address
+                                if (addr.house_number && addr.road) {
+                                    parts.push(`${addr.house_number} ${addr.road}`);
+                                } else {
+                                    if (addr.house_number) parts.push(`No. ${addr.house_number}`);
+                                    if (addr.road) parts.push(addr.road);
+                                    else if (addr.pedestrian) parts.push(addr.pedestrian);
+                                    else if (addr.footway) parts.push(addr.footway);
+                                }
+
+                                // Area type
+                                if (addr.commercial) parts.push(`${addr.commercial} (Commercial)`);
+                                else if (addr.industrial) parts.push(`${addr.industrial} (Industrial)`);
+                                else if (addr.retail) parts.push(`${addr.retail} (Retail)`);
+                                else if (addr.residential) parts.push(addr.residential);
+
+                                // Immediate area
+                                if (addr.neighbourhood) parts.push(addr.neighbourhood);
+                                else if (addr.suburb) parts.push(addr.suburb);
+                                else if (addr.quarter) parts.push(addr.quarter);
+
+                                // District/County (for more context)
+                                if (addr.county) parts.push(addr.county);
+                                else if (addr.state_district) parts.push(addr.state_district);
+
+                                // City
+                                if (addr.city) parts.push(addr.city);
+                                else if (addr.town) parts.push(addr.town);
+                                else if (addr.village) parts.push(addr.village);
+
+                                // Country
+                                if (addr.country) parts.push(addr.country);
+
+                                if (parts.length > 0) {
+                                    location.address = parts.join(', ');
+                                    console.log('✅ Precise address obtained:', location.address);
+                                    console.log('📍 Final address parts:', parts);
+                                } else if (data.display_name) {
+                                    location.address = data.display_name;
+                                    console.log('✅ Standard address obtained:', data.display_name);
+                                } else {
+                                    location.address = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                                    console.log('⚠️ No address found, using coordinates');
+                                }
+                            } else if (data.display_name) {
+                                location.address = data.display_name;
+                                console.log('✅ Address obtained:', data.display_name);
+                            } else {
+                                location.address = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                                console.log('⚠️ No address found, using coordinates');
+                            }
+                        } else {
+                            location.address = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                            console.warn('⚠️ Geocoding failed, using coordinates');
+                        }
+                    } catch (error) {
+                        // If geocoding fails, use coordinates as address
+                        location.address = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                        console.warn('⚠️ Geocoding error:', error);
+                    }
+
                     resolve(location);
                 },
                 (error) => {
@@ -195,11 +365,11 @@ export default function TimeManagement() {
     };
 
     const handleClockIn = async () => {
-        // Check if already clocked in today
-        if (todayEntry) {
-            alert('You have already clocked in today! You can only clock in once per day.');
-            return;
-        }
+        // TEMPORARILY DISABLED FOR TESTING
+        // if (todayEntry) {
+        //     alert('You have already clocked in today! You can only clock in once per day.');
+        //     return;
+        // }
 
         setLoading(true);
         try {
@@ -208,6 +378,50 @@ export default function TimeManagement() {
 
             // Get GPS location
             const currentLocation = await getCurrentLocation();
+
+            // Calculate distance from office
+            try {
+                const officeService = await getOfficeLocationService();
+                const defaultOffice = await officeService.getDefaultOfficeLocation();
+
+                if (defaultOffice) {
+                    const distanceKm = calculateDistance(
+                        currentLocation.latitude,
+                        currentLocation.longitude,
+                        defaultOffice.latitude,
+                        defaultOffice.longitude
+                    );
+
+                    const distanceMeters = Math.round(distanceKm * 1000);
+                    const formattedDistance = formatDistance(distanceKm, defaultOffice.radius);
+                    const isAtOffice = distanceKm <= (defaultOffice.radius / 1000);
+
+                    // Add distance info to location
+                    (currentLocation as any).distanceFromOffice = distanceMeters;
+                    (currentLocation as any).distanceFormatted = formattedDistance;
+                    (currentLocation as any).isAtOffice = isAtOffice;
+                    (currentLocation as any).officeName = defaultOffice.name;
+
+                    console.log('📏 Distance from office:', {
+                        office: defaultOffice.name,
+                        distance: formattedDistance,
+                        distanceKm: distanceKm.toFixed(2),
+                        distanceMeters,
+                        isAtOffice
+                    });
+
+                    // Update address to include proximity
+                    if (currentLocation.address) {
+                        currentLocation.address = `${currentLocation.address} (${formattedDistance})`;
+                    } else {
+                        currentLocation.address = formattedDistance;
+                    }
+                } else {
+                    console.log('⚠️ No office location configured');
+                }
+            } catch (officeError) {
+                console.warn('⚠️ Could not calculate distance from office:', officeError);
+            }
 
             // Clock in with Firebase
             console.log('⏰ Clocking in...');
@@ -222,11 +436,11 @@ export default function TimeManagement() {
                 employeeId,
                 employeeName,
                 entry.id,
-                currentLocation.address
+                currentLocation.address || 'Location tracked'
             );
 
             console.log('✅ Clocked in successfully');
-            alert('Clocked in successfully!');
+            alert(`Clocked in successfully! ${(currentLocation as any).distanceFormatted || ''}`);
         } catch (error) {
             console.error('❌ Clock in failed:', error);
             alert('Unable to clock in. Please check your location services and try again.');
@@ -611,8 +825,8 @@ export default function TimeManagement() {
                     </Card>
                 )}
 
-                {/* Already Clocked In Today Message */}
-                {todayEntry && !currentEntry && (
+                {/* Already Clocked In Today Message - TEMPORARILY HIDDEN FOR TESTING */}
+                {false && todayEntry && !currentEntry && (
                     <Card className="border-blue-200 bg-blue-50">
                         <CardContent className="py-6">
                             <div className="text-center">
@@ -691,8 +905,8 @@ export default function TimeManagement() {
                     </TabsList>
 
                     <TabsContent value="timesheet" className="space-y-4">
-                        {/* Clock In/Out Controls */}
-                        {!currentEntry && !todayEntry && (
+                        {/* Clock In/Out Controls - TESTING MODE: Multiple clock-ins allowed */}
+                        {!currentEntry && (
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
@@ -700,7 +914,7 @@ export default function TimeManagement() {
                                         <span>Clock In/Out</span>
                                     </CardTitle>
                                     <CardDescription>
-                                        Start your work day (You can only clock in once per day)
+                                        Start your work day (TESTING: Multiple clock-ins allowed)
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
@@ -708,7 +922,7 @@ export default function TimeManagement() {
                                         <Button
                                             size="lg"
                                             onClick={handleClockIn}
-                                            disabled={loading || !!todayEntry}
+                                            disabled={loading}
                                             className="bg-green-600 hover:bg-green-700"
                                         >
                                             {loading ? (
@@ -889,11 +1103,10 @@ export default function TimeManagement() {
                                                     return (
                                                         <div
                                                             key={day}
-                                                            className={`p-3 rounded-lg text-center ${
-                                                                isWorkDay
-                                                                    ? 'bg-green-100 border-2 border-green-300'
-                                                                    : 'bg-gray-100 border border-gray-200'
-                                                            }`}
+                                                            className={`p-3 rounded-lg text-center ${isWorkDay
+                                                                ? 'bg-green-100 border-2 border-green-300'
+                                                                : 'bg-gray-100 border border-gray-200'
+                                                                }`}
                                                         >
                                                             <p className="text-xs font-medium text-muted-foreground mb-1">
                                                                 {dayName}

@@ -219,45 +219,34 @@ export default function ProfileManagement() {
 
         setLoading(true);
         try {
-            // Update Firebase
-            const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-            const { db } = await import('../../../config/firebase');
+            // ✅ Use employeeDashboardService for real-time sync
+            const { getEmployeeDashboardService } = await import('../services/employeeDashboardService');
+            const service = await getEmployeeDashboardService();
 
-            const employeeRef = doc(db, 'employees', employeeId);
-            const updateData: any = {
-                updatedAt: serverTimestamp()
-            };
+            const updateData: any = {};
 
             // Update profile based on section
             switch (section) {
                 case 'personal':
                     updateData.personalInfo = { ...profile.personalInfo, ...formData };
-                    setProfile(prev => prev ? ({
-                        ...prev,
-                        personalInfo: { ...prev.personalInfo, ...formData }
-                    }) : null);
                     break;
                 case 'contact':
                     updateData.contactInfo = { ...profile.contactInfo, ...formData };
-                    setProfile(prev => prev ? ({
-                        ...prev,
-                        contactInfo: { ...prev.contactInfo, ...formData }
-                    }) : null);
                     break;
                 case 'banking':
                     updateData.bankingInfo = { ...profile.bankingInfo, ...formData };
-                    setProfile(prev => prev ? ({
-                        ...prev,
-                        bankingInfo: { ...prev.bankingInfo, ...formData }
-                    }) : null);
                     break;
             }
 
-            await updateDoc(employeeRef, updateData);
+            console.log('📝 Updating profile via sync service:', updateData);
+            const updatedProfile = await service.updateEmployeeProfile(employeeId, updateData);
+
+            setProfile(updatedProfile);
             setEditing(null);
             setFormData({});
+            console.log('✅ Profile updated successfully');
         } catch (error) {
-            console.error('Error saving profile:', error);
+            console.error('❌ Error saving profile:', error);
         } finally {
             setLoading(false);
         }

@@ -1,31 +1,30 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import {
     Calendar,
     Clock,
     FileText,
     DollarSign,
-    Bell,
-    Settings,
     TrendingUp,
     CheckCircle,
     AlertCircle,
     User,
-    Phone,
-    Mail,
-    MapPin,
-    Star
+    Star,
+    Zap
 } from 'lucide-react';
 import { DashboardStats, EmployeeProfile, LeaveBalance, Notification } from './types';
-import { NotificationSystem } from '../../components/NotificationSystem';
-import { SimpleProfileManager } from '../../components/SimpleProfileManager';
-import FirebaseConnectionTest from '../../components/FirebaseConnectionTest';
-import RealTimeSyncDemo from '../../components/RealTimeSyncDemo';
 // Removed old component imports - now using imported pages instead
+
+// Firebase Services
+import { getEmployeeService } from '../../services/employeeService';
+import { getComprehensiveDataFlowService } from '../../services/comprehensiveDataFlowService';
+import { getTimeTrackingService, TimeEntry } from '../../services/timeTrackingService';
+import { getPayrollService } from '../../services/payrollService';
+import { useCompany } from '../../context/CompanyContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Mock data - replace with actual API calls
 const mockDashboardStats: DashboardStats = {
@@ -158,21 +157,254 @@ const mockNotifications: Notification[] = [
     }
 ];
 
+// Helper function to calculate profile completeness
+const calculateRealProfileCompleteness = async (profile: any): Promise<number> => {
+    try {
+        const dataFlowService = await getComprehensiveDataFlowService();
+        return (dataFlowService as any).calculateProfileCompleteness?.(profile) || 85;
+    } catch {
+        // Fallback calculation if service method not available
+        let completeness = 0;
+        const fields = [
+            profile?.personalInfo?.firstName,
+            profile?.personalInfo?.lastName,
+            profile?.personalInfo?.dateOfBirth,
+            profile?.contactInfo?.email,
+            profile?.contactInfo?.phone,
+            profile?.workInfo?.position,
+            profile?.workInfo?.department,
+            profile?.bankingInfo?.bankName,
+            profile?.skills?.length > 0,
+            profile?.contactInfo?.address?.city
+        ];
+        completeness = fields.filter(Boolean).length;
+        return Math.round((completeness / fields.length) * 100);
+    }
+};
+
 export default function EmployeeDashboard() {
-    const [stats] = useState<DashboardStats>(mockDashboardStats);
-    const [profile] = useState<EmployeeProfile>(mockEmployeeProfile);
-    const [leaveBalances] = useState<LeaveBalance[]>(mockLeaveBalances);
-    const [notifications] = useState<Notification[]>(mockNotifications);
+    const { currentEmployee } = useAuth(); // Get logged-in employee from auth context
+    const { companyId, company } = useCompany(); // Get company context for multi-tenancy
+    const [stats, setStats] = useState<DashboardStats>({
+        totalEmployees: 0,
+        activeEmployees: 0,
+        pendingRequests: 0,
+        upcomingEvents: 0,
+        recentActivities: []
+    });
+    const [profile, setProfile] = useState<EmployeeProfile | null>(mockEmployeeProfile); // Start with mock, update from Firebase
+    const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+    const [timeEntriesToday, setTimeEntriesToday] = useState<TimeEntry[]>([]);
+    const [recentPayslips, setRecentPayslips] = useState<any[]>([]);
+    const [isClockedIn, setIsClockedIn] = useState(false);
+    const [latestPayslipAmount, setLatestPayslipAmount] = useState<number>(0);
+    const [profileCompleteness, setProfileCompleteness] = useState<number>(0);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Get employee ID from authenticated user
+    const currentEmployeeId = currentEmployee?.employeeId || '';
+
+    console.log('👤 [Dashboard] Current employee:', currentEmployee?.firstName, currentEmployee?.lastName, '(' + currentEmployeeId + ')');
 
     useEffect(() => {
-        // Simulate API loading
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 1000);
+        const loadDashboardData = async () => {
+            // Wait for authentication and company to load
+            if (!currentEmployeeId) {
+                console.log('⏳ [Dashboard] Waiting for employee authentication...');
+                return;
+            }
 
-        return () => clearTimeout(timer);
-    }, []);
+            if (!companyId) {
+                console.log('⏳ [Dashboard] Waiting for company to load...');
+                return;
+            }
+
+            try {
+                setLoading(true);
+                setError(null);
+
+                console.log(`📊 [Dashboard] Loading dashboard for ${company?.displayName || 'company'}, employee:`, currentEmployeeId);
+
+                // Load all data in parallel for better performance
+                const dataFlowService = await getComprehensiveDataFlowService();
+                const timeService = await getTimeTrackingService();
+                const payrollService = await getPayrollService();
+
+                // Array to collect all activities
+                let allActivities: any[] = [];
+
+                // Load employee profile
+                try {
+                    const employeeProfile = await dataFlowService.getEmployeeProfile(currentEmployeeId);
+                    if (employeeProfile) {
+                        setProfile(employeeProfile as any);
+
+                        // Use stored profile completeness from profileStatus
+                        const storedCompleteness = (employeeProfile as any).profileStatus?.completeness;
+                        if (storedCompleteness) {
+                            setProfileCompleteness(storedCompleteness);
+                            console.log('✅ Loaded employee profile, completeness from profile:', storedCompleteness + '%');
+                        } else {
+                            // Fallback: calculate if not stored
+                            const completeness = await calculateRealProfileCompleteness(employeeProfile);
+                            setProfileCompleteness(completeness);
+                            console.log('✅ Loaded employee profile, calculated completeness:', completeness + '%');
+                        }
+                    }
+                } catch (err) {
+                    console.log('⚠️ Using mock profile data');
+                    // Use mock profile's stored completeness or calculate
+                    const storedCompleteness = (profile as any)?.profileStatus?.completeness;
+                    if (storedCompleteness) {
+                        setProfileCompleteness(storedCompleteness);
+                    } else {
+                        const completeness = await calculateRealProfileCompleteness(profile);
+                        setProfileCompleteness(completeness);
+                    }
+                }
+
+                // Load leave data (filtered by company for multi-tenancy)
+                try {
+                    const leaveTypes = await dataFlowService.getLeaveTypes();
+                    const leaveRequests = await dataFlowService.getLeaveRequests(currentEmployeeId, companyId || undefined);
+
+                    // Calculate real leave balances (match employee platform's LeaveBalance type)
+                    const balances: LeaveBalance[] = leaveTypes.map(type => {
+                        const usedDays = leaveRequests
+                            .filter(r => r.leaveTypeId === type.id && (r.status === 'approved'))
+                            .reduce((sum, r) => sum + r.totalDays, 0);
+
+                        const pendingDays = leaveRequests
+                            .filter(r => r.leaveTypeId === type.id && r.status === 'pending')
+                            .reduce((sum, r) => sum + r.totalDays, 0);
+
+                        const totalEntitlement = type.maxDays || 15;
+
+                        return {
+                            id: type.id,
+                            employeeId: currentEmployeeId,
+                            leaveTypeId: type.id,
+                            leaveTypeName: type.name,
+                            totalEntitlement: totalEntitlement,
+                            used: usedDays,
+                            pending: pendingDays,
+                            remaining: totalEntitlement - usedDays - pendingDays,
+                            accrued: totalEntitlement,
+                            year: new Date().getFullYear()
+                        };
+                    });
+                    setLeaveBalances(balances.length > 0 ? balances : mockLeaveBalances);
+                    console.log('✅ Loaded leave balances:', balances.length);
+
+                    // Build activities from leave requests
+                    const leaveActivities = leaveRequests.slice(0, 3).map(request => ({
+                        id: request.id,
+                        type: 'leave_request' as const,
+                        title: `Leave Request - ${request.status}`,
+                        description: `${request.leaveTypeName} (${request.totalDays} days)`,
+                        timestamp: request.submittedAt || new Date(),
+                        status: request.status.toLowerCase(),
+                        employeeId: currentEmployeeId
+                    }));
+                    allActivities = [...allActivities, ...leaveActivities];
+
+                    // Count pending requests
+                    const pendingCount = leaveRequests.filter(r => r.status === 'pending').length;
+
+                    setStats(prev => ({
+                        ...prev,
+                        pendingRequests: pendingCount
+                    }));
+
+                    console.log('✅ Loaded leave requests:', leaveRequests.length, 'pending:', pendingCount);
+                } catch (err) {
+                    console.error('⚠️ Error loading leave data, using fallback:', err);
+                    setLeaveBalances(mockLeaveBalances);
+                }
+
+                // Load time entries for today
+                try {
+                    const timeEntries = await timeService.getTimeEntries(currentEmployeeId);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    const todayEntries = timeEntries.filter(entry => {
+                        const entryDate = new Date(entry.clockIn);
+                        entryDate.setHours(0, 0, 0, 0);
+                        return entryDate.getTime() === today.getTime();
+                    });
+
+                    setTimeEntriesToday(todayEntries);
+
+                    // Check if currently clocked in
+                    const activeEntry = todayEntries.find(e => e.status === 'active');
+                    setIsClockedIn(!!activeEntry);
+                    console.log('✅ Loaded time entries for today:', todayEntries.length, 'Clocked in:', !!activeEntry);
+
+                    // Add time entries to activities
+                    const timeActivities = timeEntries.slice(0, 2).map(entry => ({
+                        id: entry.id,
+                        type: 'time_entry' as const,
+                        title: entry.status === 'active' ? 'Currently Clocked In' : 'Time Entry Completed',
+                        description: `${new Date(entry.clockIn).toLocaleTimeString()}${entry.clockOut ? ' - ' + new Date(entry.clockOut).toLocaleTimeString() : ' (In Progress)'}`,
+                        timestamp: new Date(entry.createdAt),
+                        status: entry.status === 'active' ? 'pending' : 'completed',
+                        employeeId: currentEmployeeId
+                    }));
+                    allActivities = [...allActivities, ...timeActivities];
+                } catch (err) {
+                    console.log('⚠️ No time entries found');
+                }
+
+                // Load recent payroll
+                try {
+                    const payrollRecords = await payrollService.getMyPayrollRecords(currentEmployeeId);
+                    setRecentPayslips(payrollRecords.slice(0, 3));
+
+                    // Get latest payslip amount
+                    if (payrollRecords.length > 0) {
+                        setLatestPayslipAmount(payrollRecords[0].netPay || 0);
+                    }
+                    console.log('✅ Loaded payroll records:', payrollRecords.length);
+
+                    // Add payroll to activities
+                    if (payrollRecords.length > 0) {
+                        const payrollActivity = {
+                            id: payrollRecords[0].id,
+                            type: 'document_upload' as const,
+                            title: 'New Payslip Available',
+                            description: `Net Pay: ₦${payrollRecords[0].netPay?.toLocaleString() || 0}`,
+                            timestamp: new Date(payrollRecords[0].createdAt),
+                            status: 'completed',
+                            employeeId: currentEmployeeId
+                        };
+                        allActivities = [...allActivities, payrollActivity];
+                    }
+                } catch (err) {
+                    console.log('⚠️ No payroll records found');
+                }
+
+                // Sort all activities by timestamp and update state
+                allActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                setStats(prev => ({
+                    ...prev,
+                    recentActivities: allActivities.slice(0, 5)
+                }));
+
+                setLoading(false);
+                console.log('✅ Dashboard data loaded successfully');
+                console.log('📋 Total activities:', allActivities.length);
+            } catch (err) {
+                console.error('❌ Error loading dashboard data:', err);
+                setError(null); // Don't show error, fallback to mock data
+                setLeaveBalances(mockLeaveBalances);
+                setLoading(false);
+            }
+        };
+
+        loadDashboardData();
+    }, [currentEmployeeId, companyId]); // Re-load when company changes for multi-tenancy
 
     const getActivityIcon = (type: string) => {
         switch (type) {
@@ -218,383 +450,160 @@ export default function EmployeeDashboard() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">
-                            Welcome back, {profile.personalInfo.firstName}!
+                            Welcome back, {profile?.personalInfo.firstName || 'User'}!
                         </h1>
                         <p className="text-muted-foreground mt-2">
                             Here's what's happening with your account today.
                         </p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                        <NotificationSystem employeeId="emp-001" />
-                        <Button variant="outline" size="sm">
-                            <Settings className="h-4 w-4 mr-2" />
-                            Settings
-                        </Button>
-                    </div>
+                    {/* Clock Status Indicator */}
+                    {isClockedIn && (
+                        <Badge className="bg-green-500 text-white px-4 py-2 text-sm flex items-center gap-2">
+                            <Clock className="h-4 w-4 animate-pulse" />
+                            Currently Clocked In
+                        </Badge>
+                    )}
                 </div>
 
-                {/* Firebase Connection Test */}
-                <FirebaseConnectionTest />
-
-                {/* Real-Time Sync Demo */}
-                <RealTimeSyncDemo />
-
                 {/* Quick Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Card>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="hover:shadow-lg transition-shadow border-l-4 border-l-primary">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Leave Balance</CardTitle>
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{leaveBalances[0]?.remaining || 0}</div>
-                            <p className="text-xs text-muted-foreground">
+                            <div className="text-3xl font-bold text-primary">
+                                {leaveBalances.reduce((sum, b) => sum + b.remaining, 0) || 0}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
                                 Days remaining this year
                             </p>
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="hover:shadow-lg transition-shadow border-l-4 border-l-warning">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
                             <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats.pendingRequests}</div>
-                            <p className="text-xs text-muted-foreground">
+                            <div className="text-3xl font-bold text-warning">{stats.pendingRequests}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
                                 Awaiting approval
                             </p>
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="hover:shadow-lg transition-shadow border-l-4 border-l-success">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
-                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <CardTitle className="text-sm font-medium">Profile Status</CardTitle>
+                            <CheckCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats.upcomingEvents}</div>
-                            <p className="text-xs text-muted-foreground">
-                                This week
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Performance Score</CardTitle>
-                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">4.2</div>
-                            <p className="text-xs text-muted-foreground">
-                                Out of 5.0
+                            <div className="text-3xl font-bold text-success">{profileCompleteness}%</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Profile complete
                             </p>
                         </CardContent>
                     </Card>
                 </div>
 
-                {/* Main Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Column - Profile & Quick Actions */}
-                    <div className="space-y-6">
-                        {/* Profile Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2">
-                                    <User className="h-5 w-5" />
-                                    <span>Profile Overview</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center space-x-4">
-                                    <Avatar className="h-16 w-16">
-                                        <AvatarImage src={profile.personalInfo.profilePhoto} />
-                                        <AvatarFallback>
-                                            {profile.personalInfo.firstName[0]}{profile.personalInfo.lastName[0]}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <h3 className="font-semibold">
-                                            {profile.personalInfo.firstName} {profile.personalInfo.lastName}
-                                        </h3>
-                                        <p className="text-sm text-muted-foreground">Software Engineer</p>
-                                        <p className="text-sm text-muted-foreground">Engineering Department</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center space-x-2 text-sm">
-                                        <Mail className="h-4 w-4 text-muted-foreground" />
-                                        <span>{profile.contactInfo.email}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2 text-sm">
-                                        <Phone className="h-4 w-4 text-muted-foreground" />
-                                        <span>{profile.contactInfo.phone}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2 text-sm">
-                                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                                        <span>{profile.contactInfo.address.city}, {profile.contactInfo.address.state}</span>
-                                    </div>
-                                </div>
-
-                                <Button className="w-full" variant="outline">
-                                    <User className="h-4 w-4 mr-2" />
-                                    Edit Profile
+                {/* Quick Actions */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Quick Actions</CardTitle>
+                        <CardDescription>Access your most common tasks</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <Link to="/time">
+                                <Button
+                                    variant="outline"
+                                    className="h-40 w-full flex flex-col items-center justify-center gap-4 hover:bg-accent hover:border-primary transition-all p-6"
+                                >
+                                    <Clock className="h-12 w-12 text-primary" />
+                                    <span className="text-base font-medium">Clock In/Out</span>
                                 </Button>
-                            </CardContent>
-                        </Card>
+                            </Link>
 
-                        {/* Leave Balances */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center space-x-2">
-                                    <Calendar className="h-5 w-5" />
-                                    <span>Leave Balances</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {leaveBalances.map((balance) => (
-                                    <div key={balance.id} className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm font-medium">{balance.leaveTypeName}</span>
-                                            <span className="text-sm text-muted-foreground">
-                                                {balance.remaining}/{balance.totalEntitlement}
+                            <Link to="/leave">
+                                <Button
+                                    variant="outline"
+                                    className="h-40 w-full flex flex-col items-center justify-center gap-4 hover:bg-accent hover:border-primary transition-all p-6"
+                                >
+                                    <Calendar className="h-12 w-12 text-primary" />
+                                    <span className="text-base font-medium">Request Leave</span>
+                                </Button>
+                            </Link>
+
+                            <Link to="/profile">
+                                <Button
+                                    variant="outline"
+                                    className="h-40 w-full flex flex-col items-center justify-center gap-4 hover:bg-accent hover:border-primary transition-all p-6"
+                                >
+                                    <User className="h-12 w-12 text-primary" />
+                                    <span className="text-base font-medium">My Profile</span>
+                                </Button>
+                            </Link>
+
+                            <Link to="/payroll">
+                                <Button
+                                    variant="outline"
+                                    className="h-40 w-full flex flex-col items-center justify-center gap-4 hover:bg-accent hover:border-primary transition-all p-6"
+                                >
+                                    <DollarSign className="h-12 w-12 text-primary" />
+                                    <span className="text-base font-medium">View Payslip</span>
+                                </Button>
+                            </Link>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Recent Activities */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Clock className="h-5 w-5" />
+                            Recent Activities
+                        </CardTitle>
+                        <CardDescription>
+                            Your latest updates and requests
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {stats.recentActivities.length > 0 ? (
+                            stats.recentActivities.map((activity, index) => (
+                                <div key={`${activity.type}-${activity.id}-${index}`} className="flex items-start gap-3 p-4 rounded-lg border hover:bg-muted/50 transition-colors">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        {getActivityIcon(activity.type)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-foreground">
+                                            {activity.title}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {activity.description}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <Badge className={getStatusColor(activity.status)}>
+                                                {activity.status}
+                                            </Badge>
+                                            <span className="text-xs text-muted-foreground">
+                                                {formatDate(activity.timestamp)}
                                             </span>
                                         </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div
-                                                className="bg-primary h-2 rounded-full"
-                                                style={{ width: `${(balance.remaining / balance.totalEntitlement) * 100}%` }}
-                                            ></div>
-                                        </div>
                                     </div>
-                                ))}
-                                <Button className="w-full" variant="outline" size="sm">
-                                    <Calendar className="h-4 w-4 mr-2" />
-                                    Request Leave
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Center Column - Main Dashboard */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <Tabs defaultValue="overview" className="space-y-4">
-                            <TabsList className="grid w-full grid-cols-6">
-                                <TabsTrigger value="overview">Overview</TabsTrigger>
-                                <TabsTrigger value="profile">Profile</TabsTrigger>
-                                <TabsTrigger value="leave">Leave</TabsTrigger>
-                                <TabsTrigger value="policies">Policies</TabsTrigger>
-                                <TabsTrigger value="performance">Performance</TabsTrigger>
-                                <TabsTrigger value="time">Time</TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="overview" className="space-y-4">
-                                {/* TEST CONTENT */}
-                                <div style={{ padding: '20px', border: '2px solid blue', backgroundColor: 'lightgreen' }}>
-                                    <h1>OVERVIEW TAB TEST</h1>
-                                    <p>This is in the Overview tab!</p>
                                 </div>
-
-                                {/* Recent Activities */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center space-x-2">
-                                            <Clock className="h-5 w-5" />
-                                            <span>Recent Activities</span>
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Your latest activities and updates
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {stats.recentActivities.map((activity) => (
-                                            <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg border">
-                                                <div className="flex-shrink-0">
-                                                    {getActivityIcon(activity.type)}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-foreground">
-                                                        {activity.title}
-                                                    </p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {activity.description}
-                                                    </p>
-                                                    <div className="flex items-center space-x-2 mt-2">
-                                                        <Badge className={getStatusColor(activity.status)}>
-                                                            {activity.status}
-                                                        </Badge>
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatDate(activity.timestamp)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-
-                                {/* Quick Actions */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Quick Actions</CardTitle>
-                                        <CardDescription>
-                                            Common tasks and shortcuts
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                                                <Clock className="h-6 w-6" />
-                                                <span className="text-xs">Clock In/Out</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                                                <Calendar className="h-6 w-6" />
-                                                <span className="text-xs">Request Leave</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                                                <FileText className="h-6 w-6" />
-                                                <span className="text-xs">Upload Document</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                                                <DollarSign className="h-6 w-6" />
-                                                <span className="text-xs">View Payslip</span>
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="profile" className="space-y-4">
-                                {console.log('Profile tab content is rendering!')}
-                                <div style={{ padding: '20px', border: '2px solid red', backgroundColor: 'yellow' }}>
-                                    <h1>PROFILE TAB TEST</h1>
-                                    <p>This should be visible!</p>
-                                    <button onClick={() => console.log('Simple button clicked!')}>
-                                        Click Me!
-                                    </button>
-                                </div>
-
-                                {/* Test EmployeeProfileManager with error boundary */}
-                                <div style={{ padding: '20px', border: '2px solid green', backgroundColor: 'lightblue' }}>
-                                    <h2>Testing EmployeeProfileManager:</h2>
-                                    <p>Console should show debug messages...</p>
-                                    <SimpleProfileManager employeeId="emp-001" mode="employee" />
-                                </div>
-                            </TabsContent>
-
-                            <TabsContent value="leave" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Leave Management</CardTitle>
-                                        <CardDescription>Access the full leave management system</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-muted-foreground mb-4">
-                                            Use the navigation menu to access the complete Leave Management system.
-                                        </p>
-                                        <Button asChild>
-                                            <a href="/leave">Go to Leave Management</a>
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="policies" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Policy Management</CardTitle>
-                                        <CardDescription>Access company policies and acknowledgments</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-muted-foreground mb-4">
-                                            Use the navigation menu to access the complete Policy Management system.
-                                        </p>
-                                        <Button asChild>
-                                            <a href="/policies">Go to Policy Management</a>
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="performance" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Performance Management</CardTitle>
-                                        <CardDescription>Track your performance goals and reviews</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-muted-foreground mb-4">
-                                            Use the navigation menu to access the complete Performance Management system.
-                                        </p>
-                                        <Button asChild>
-                                            <a href="/performance">Go to Performance Management</a>
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="time" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Time Management</CardTitle>
-                                        <CardDescription>
-                                            Track your work hours and attendance
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-center py-8">
-                                            <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                                            <p className="text-muted-foreground">Time management features coming soon</p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                        </Tabs>
-                    </div>
-                </div>
-
-                {/* Notifications Panel */}
-                {notifications.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center space-x-2">
-                                <Bell className="h-5 w-5" />
-                                <span>Notifications</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {notifications.map((notification) => (
-                                    <div key={notification.id} className="flex items-start space-x-3 p-3 rounded-lg border">
-                                        <div className={`flex-shrink-0 w-2 h-2 rounded-full mt-2 ${notification.read ? 'bg-gray-300' : 'bg-blue-500'
-                                            }`} />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-foreground">
-                                                {notification.title}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {notification.message}
-                                            </p>
-                                            <div className="flex items-center space-x-2 mt-2">
-                                                <span className="text-xs text-muted-foreground">
-                                                    {formatDate(notification.createdAt)}
-                                                </span>
-                                                {notification.actionUrl && (
-                                                    <Button variant="link" size="sm" className="h-auto p-0">
-                                                        {notification.actionText}
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                <p>No recent activities</p>
                             </div>
-                        </CardContent>
-                    </Card>
-                )}
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );

@@ -25,18 +25,20 @@ import {
 import { getScheduleService, WorkSchedule, ShiftTemplate, getShortDayName } from '../services/scheduleService';
 import { getEmployeeService } from '../services/employeeService';
 import { getTimeNotificationService } from '../services/timeNotificationService';
+import { getComprehensiveDataFlowService } from '../services/comprehensiveDataFlowService';
 
 export function ScheduleManager() {
     const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
     const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    
+
     // Dialog states
     const [showCreateDialog, setShowCreateDialog] = useState(false);
+    const [showEditDialog, setShowEditDialog] = useState(false);
     const [showBulkAssignDialog, setShowBulkAssignDialog] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState<WorkSchedule | null>(null);
-    
+
     // Form state
     const [scheduleForm, setScheduleForm] = useState({
         employeeId: '',
@@ -64,23 +66,91 @@ export function ScheduleManager() {
         setLoading(true);
         try {
             const scheduleService = await getScheduleService();
-            const employeeService = await getEmployeeService();
+            const dataFlowService = await getComprehensiveDataFlowService();
 
             const [allSchedules, shiftTemplates, allEmployees] = await Promise.all([
                 scheduleService.getSchedules(),
                 scheduleService.getShiftTemplates(),
-                employeeService.getEmployees()
+                dataFlowService.getAllEmployees()
             ]);
 
+            // Create default shift templates if none exist
+            let finalTemplates = shiftTemplates;
+            if (shiftTemplates.length === 0) {
+                console.log('📝 No shift templates found, creating defaults...');
+                const defaultTemplates = [
+                    {
+                        name: 'Morning Shift',
+                        shiftType: 'morning' as const,
+                        startTime: '09:00',
+                        endTime: '17:00',
+                        workHours: 8,
+                        breakDuration: 60,
+                        workDays: [1, 2, 3, 4, 5],
+                        description: 'Standard morning shift (9 AM - 5 PM)',
+                        isActive: true
+                    },
+                    {
+                        name: 'Afternoon Shift',
+                        shiftType: 'afternoon' as const,
+                        startTime: '13:00',
+                        endTime: '21:00',
+                        workHours: 8,
+                        breakDuration: 60,
+                        workDays: [1, 2, 3, 4, 5],
+                        description: 'Afternoon shift (1 PM - 9 PM)',
+                        isActive: true
+                    },
+                    {
+                        name: 'Night Shift',
+                        shiftType: 'night' as const,
+                        startTime: '21:00',
+                        endTime: '05:00',
+                        workHours: 8,
+                        breakDuration: 60,
+                        workDays: [0, 1, 2, 3, 4],
+                        description: 'Night shift (9 PM - 5 AM)',
+                        isActive: true
+                    },
+                    {
+                        name: 'Flexible Hours',
+                        shiftType: 'flexible' as const,
+                        startTime: '00:00',
+                        endTime: '00:00',
+                        workHours: 8,
+                        breakDuration: 60,
+                        workDays: [1, 2, 3, 4, 5],
+                        description: 'Flexible working hours',
+                        isActive: true
+                    }
+                ];
+
+                for (const template of defaultTemplates) {
+                    await scheduleService.createShiftTemplate(template);
+                }
+
+                finalTemplates = await scheduleService.getShiftTemplates();
+                console.log('✅ Created default shift templates');
+            }
+
+            // Transform employee data to include required fields
+            const employeesForSchedule = allEmployees.map(emp => ({
+                id: emp.employeeId || emp.id,
+                name: emp.personalInfo ? `${emp.personalInfo.firstName} ${emp.personalInfo.lastName}` : emp.name,
+                department: emp.workInfo?.department || emp.department || 'Not specified',
+                position: emp.workInfo?.jobTitle || emp.position || 'Employee'
+            }));
+
             setSchedules(allSchedules);
-            setTemplates(shiftTemplates);
-            setEmployees(allEmployees);
+            setTemplates(finalTemplates);
+            setEmployees(employeesForSchedule);
 
             console.log('📅 Schedule data loaded:', {
                 schedules: allSchedules.length,
-                templates: shiftTemplates.length,
-                employees: allEmployees.length
+                templates: finalTemplates.length,
+                employees: employeesForSchedule.length
             });
+            console.log('👥 Employees for scheduling:', employeesForSchedule);
         } catch (error) {
             console.error('Error loading schedule data:', error);
         } finally {
@@ -90,16 +160,21 @@ export function ScheduleManager() {
 
     const handleCreateSchedule = async () => {
         try {
+            console.log('🔄 Creating schedule with form data:', scheduleForm);
+
             const scheduleService = await getScheduleService();
             const notifService = await getTimeNotificationService();
 
             const selectedEmployee = employees.find(e => e.id.toString() === scheduleForm.employeeId);
             if (!selectedEmployee) {
+                console.error('❌ No employee selected');
                 alert('Please select an employee');
                 return;
             }
 
-            const schedule = await scheduleService.createSchedule({
+            console.log('👤 Selected employee:', selectedEmployee);
+
+            const scheduleData = {
                 employeeId: scheduleForm.employeeId,
                 employeeName: selectedEmployee.name,
                 department: selectedEmployee.department,
@@ -116,66 +191,102 @@ export function ScheduleManager() {
                 notes: scheduleForm.notes,
                 createdAt: new Date(),
                 createdBy: 'HR Manager'
-            });
+            };
+
+            console.log('📋 Schedule data to create:', scheduleData);
+
+            const schedule = await scheduleService.createSchedule(scheduleData);
+
+            console.log('✅ Schedule created in Firebase:', schedule);
 
             // Notify employee
-            await notifService.notifyScheduleUpdate(
-                scheduleForm.employeeId,
-                selectedEmployee.name,
-                schedule.id
-            );
+            try {
+                await notifService.notifyScheduleUpdate(
+                    scheduleForm.employeeId,
+                    selectedEmployee.name,
+                    schedule.id
+                );
+                console.log('✅ Employee notification sent');
+            } catch (notifError) {
+                console.warn('⚠️ Failed to send notification (schedule still created):', notifError);
+            }
 
             await loadData();
             setShowCreateDialog(false);
             alert('Schedule created successfully!');
 
-            console.log('✅ Schedule created:', schedule.id);
-        } catch (error) {
-            console.error('Error creating schedule:', error);
-            alert('Failed to create schedule. Please try again.');
+            console.log('✅ Schedule creation complete!');
+        } catch (error: any) {
+            console.error('❌ Error creating schedule:', error);
+            console.error('❌ Error details:', error.message);
+            alert(`Failed to create schedule: ${error.message || 'Please try again.'}`);
         }
     };
 
     const handleBulkAssign = async () => {
         if (selectedEmployeeIds.length === 0) {
+            console.error('❌ No employees selected for bulk assign');
             alert('Please select at least one employee');
             return;
         }
 
         try {
+            console.log('🔄 Bulk assigning to', selectedEmployeeIds.length, 'employees');
+            console.log('📋 Selected employee IDs:', selectedEmployeeIds);
+
             const scheduleService = await getScheduleService();
             const notifService = await getTimeNotificationService();
 
             const template = templates.find(t => t.id === bulkTemplate);
-            if (!template) return;
+            if (!template) {
+                console.error('❌ Template not found:', bulkTemplate);
+                alert('Please select a valid shift template');
+                return;
+            }
+
+            console.log('📝 Using template:', template);
 
             const employeeNames = employees
                 .filter(e => selectedEmployeeIds.includes(e.id.toString()))
                 .reduce((acc, e) => ({ ...acc, [e.id]: e.name }), {} as Record<string, string>);
 
+            console.log('👥 Employees to assign:', employeeNames);
+
+            const scheduleData = {
+                shiftType: template.shiftType,
+                workDays: template.workDays,
+                workHours: template.workHours,
+                breakDuration: template.breakDuration,
+                shiftStartTime: template.startTime,
+                shiftEndTime: template.endTime,
+                startDate: new Date(),
+                location: 'Office'
+            };
+
+            console.log('📋 Bulk schedule data:', scheduleData);
+
             const schedules = await scheduleService.assignScheduleToMultipleEmployees(
                 selectedEmployeeIds,
-                {
-                    shiftType: template.shiftType,
-                    workDays: template.workDays,
-                    workHours: template.workHours,
-                    breakDuration: template.breakDuration,
-                    shiftStartTime: template.startTime,
-                    shiftEndTime: template.endTime,
-                    startDate: new Date(),
-                    location: 'Office'
-                }
+                scheduleData
             );
 
+            console.log('✅ Schedules created:', schedules);
+
             // Notify all employees
+            console.log('📨 Sending notifications to', selectedEmployeeIds.length, 'employees...');
             for (const empId of selectedEmployeeIds) {
                 const schedule = schedules.find(s => s.employeeId === empId);
                 if (schedule) {
-                    await notifService.notifyScheduleUpdate(
-                        empId,
-                        employeeNames[empId] || '',
-                        schedule.id
-                    );
+                    try {
+                        await notifService.notifyScheduleUpdate(
+                            empId,
+                            employeeNames[empId] || '',
+                            schedule.id
+                        );
+                        console.log(`  ✅ Notified ${employeeNames[empId]}`);
+                    } catch (notifError) {
+                        console.warn(`  ⚠️ Failed to notify ${employeeNames[empId]}:`, notifError);
+                    }
                 }
             }
 
@@ -184,10 +295,108 @@ export function ScheduleManager() {
             setSelectedEmployeeIds([]);
             alert(`Successfully assigned schedules to ${selectedEmployeeIds.length} employees!`);
 
-            console.log('✅ Bulk schedules created:', schedules.length);
-        } catch (error) {
-            console.error('Error bulk assigning schedules:', error);
-            alert('Failed to assign schedules. Please try again.');
+            console.log('✅ Bulk assignment complete!');
+        } catch (error: any) {
+            console.error('❌ Error bulk assigning schedules:', error);
+            console.error('❌ Error details:', error.message);
+            alert(`Failed to assign schedules: ${error.message || 'Please try again.'}`);
+        }
+    };
+
+    const handleEditSchedule = (schedule: WorkSchedule) => {
+        console.log('✏️ Editing schedule:', schedule);
+        setSelectedSchedule(schedule);
+
+        // Pre-fill the form with existing schedule data
+        setScheduleForm({
+            employeeId: schedule.employeeId,
+            shiftType: schedule.shiftType,
+            startDate: schedule.startDate instanceof Date
+                ? schedule.startDate.toISOString().split('T')[0]
+                : new Date(schedule.startDate).toISOString().split('T')[0],
+            endDate: schedule.endDate
+                ? (schedule.endDate instanceof Date
+                    ? schedule.endDate.toISOString().split('T')[0]
+                    : new Date(schedule.endDate).toISOString().split('T')[0])
+                : '',
+            workDays: schedule.workDays,
+            workHours: schedule.workHours,
+            breakDuration: schedule.breakDuration,
+            location: schedule.location || 'Office',
+            shiftStartTime: schedule.shiftStartTime,
+            shiftEndTime: schedule.shiftEndTime,
+            notes: schedule.notes || ''
+        });
+
+        setShowEditDialog(true);
+    };
+
+    const handleUpdateSchedule = async () => {
+        if (!selectedSchedule) return;
+
+        try {
+            console.log('🔄 Updating schedule:', selectedSchedule.id);
+
+            const scheduleService = await getScheduleService();
+            const selectedEmployee = employees.find(e => e.id.toString() === scheduleForm.employeeId);
+
+            const scheduleData = {
+                employeeId: scheduleForm.employeeId,
+                employeeName: selectedEmployee?.name || selectedSchedule.employeeName,
+                department: selectedEmployee?.department || selectedSchedule.department,
+                shiftType: scheduleForm.shiftType,
+                startDate: new Date(scheduleForm.startDate),
+                endDate: scheduleForm.endDate ? new Date(scheduleForm.endDate) : undefined,
+                workDays: scheduleForm.workDays,
+                workHours: scheduleForm.workHours,
+                breakDuration: scheduleForm.breakDuration,
+                location: scheduleForm.location,
+                shiftStartTime: scheduleForm.shiftStartTime,
+                shiftEndTime: scheduleForm.shiftEndTime,
+                isActive: selectedSchedule.isActive,
+                notes: scheduleForm.notes
+            };
+
+            await scheduleService.updateSchedule(selectedSchedule.id, scheduleData);
+
+            // Notify employee
+            try {
+                const notifService = await getTimeNotificationService();
+                await notifService.notifyScheduleUpdate(
+                    scheduleForm.employeeId,
+                    selectedEmployee?.name || '',
+                    selectedSchedule.id
+                );
+            } catch (notifError) {
+                console.warn('⚠️ Failed to send notification:', notifError);
+            }
+
+            await loadData();
+            setShowEditDialog(false);
+            setSelectedSchedule(null);
+            alert('Schedule updated successfully!');
+            console.log('✅ Schedule updated!');
+        } catch (error: any) {
+            console.error('❌ Error updating schedule:', error);
+            alert(`Failed to update schedule: ${error.message || 'Please try again.'}`);
+        }
+    };
+
+    const handleDeleteSchedule = async (scheduleId: string) => {
+        if (!confirm('Are you sure you want to delete this schedule?')) {
+            return;
+        }
+
+        try {
+            console.log('🗑️ Deleting schedule:', scheduleId);
+            const scheduleService = await getScheduleService();
+            await scheduleService.deleteSchedule(scheduleId);
+            await loadData();
+            alert('Schedule deleted successfully!');
+            console.log('✅ Schedule deleted!');
+        } catch (error: any) {
+            console.error('❌ Error deleting schedule:', error);
+            alert(`Failed to delete schedule: ${error.message || 'Please try again.'}`);
         }
     };
 
@@ -308,6 +517,9 @@ export function ScheduleManager() {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h3 className="font-semibold">{schedule.employeeName}</h3>
+                                                <Badge variant="outline" className="text-xs">
+                                                    ID: {schedule.employeeId}
+                                                </Badge>
                                                 <Badge className={getShiftColor(schedule.shiftType)}>
                                                     {schedule.shiftType}
                                                 </Badge>
@@ -333,11 +545,19 @@ export function ScheduleManager() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button size="sm" variant="outline">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleEditSchedule(schedule)}
+                                        >
                                             <Edit className="h-4 w-4" />
                                         </Button>
-                                        <Button size="sm" variant="outline">
-                                            <Copy className="h-4 w-4" />
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleDeleteSchedule(schedule.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4 text-red-600" />
                                         </Button>
                                     </div>
                                 </div>
@@ -538,6 +758,197 @@ export function ScheduleManager() {
                 </DialogContent>
             </Dialog>
 
+            {/* Edit Schedule Dialog */}
+            <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Work Schedule</DialogTitle>
+                        <DialogDescription>
+                            Update the work schedule for {selectedSchedule?.employeeName}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Employee Selection (disabled) */}
+                        <div>
+                            <Label>Employee</Label>
+                            <Select
+                                value={scheduleForm.employeeId}
+                                disabled
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select employee" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {employees.map(emp => (
+                                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                                            {emp.name} - {emp.department}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Shift Type */}
+                        <div>
+                            <Label>Shift Type</Label>
+                            <Select
+                                value={scheduleForm.shiftType}
+                                onValueChange={(value: any) => {
+                                    const template = templates.find(t => t.shiftType === value);
+                                    if (template) {
+                                        setScheduleForm({
+                                            ...scheduleForm,
+                                            shiftType: value,
+                                            shiftStartTime: template.startTime,
+                                            shiftEndTime: template.endTime,
+                                            workHours: template.workHours,
+                                            breakDuration: template.breakDuration,
+                                            workDays: template.workDays
+                                        });
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="morning">Morning Shift (9 AM - 5 PM)</SelectItem>
+                                    <SelectItem value="afternoon">Afternoon Shift (1 PM - 9 PM)</SelectItem>
+                                    <SelectItem value="night">Night Shift (9 PM - 5 AM)</SelectItem>
+                                    <SelectItem value="flexible">Flexible Hours</SelectItem>
+                                    <SelectItem value="custom">Custom Schedule</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Date Range */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>Start Date</Label>
+                                <Input
+                                    type="date"
+                                    value={scheduleForm.startDate}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, startDate: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <Label>End Date (Optional)</Label>
+                                <Input
+                                    type="date"
+                                    value={scheduleForm.endDate}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, endDate: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Shift Times */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>Shift Start</Label>
+                                <Input
+                                    type="time"
+                                    value={scheduleForm.shiftStartTime}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, shiftStartTime: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <Label>Shift End</Label>
+                                <Input
+                                    type="time"
+                                    value={scheduleForm.shiftEndTime}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, shiftEndTime: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Work Hours & Break */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>Work Hours per Day</Label>
+                                <Input
+                                    type="number"
+                                    value={scheduleForm.workHours}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, workHours: parseInt(e.target.value) })}
+                                />
+                            </div>
+                            <div>
+                                <Label>Break Duration (minutes)</Label>
+                                <Input
+                                    type="number"
+                                    value={scheduleForm.breakDuration}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, breakDuration: parseInt(e.target.value) })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Work Days */}
+                        <div>
+                            <Label className="mb-2 block">Work Days</Label>
+                            <div className="flex gap-2">
+                                {[0, 1, 2, 3, 4, 5, 6].map(day => {
+                                    const dayName = getShortDayName(day);
+                                    const isSelected = scheduleForm.workDays.includes(day);
+                                    return (
+                                        <Button
+                                            key={day}
+                                            type="button"
+                                            size="sm"
+                                            variant={isSelected ? "default" : "outline"}
+                                            onClick={() => {
+                                                if (isSelected) {
+                                                    setScheduleForm({
+                                                        ...scheduleForm,
+                                                        workDays: scheduleForm.workDays.filter(d => d !== day)
+                                                    });
+                                                } else {
+                                                    setScheduleForm({
+                                                        ...scheduleForm,
+                                                        workDays: [...scheduleForm.workDays, day].sort()
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            {dayName}
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Location */}
+                        <div>
+                            <Label>Location</Label>
+                            <Input
+                                value={scheduleForm.location}
+                                onChange={(e) => setScheduleForm({ ...scheduleForm, location: e.target.value })}
+                                placeholder="Office, Remote, Hybrid, etc."
+                            />
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                            <Label>Notes (Optional)</Label>
+                            <Input
+                                value={scheduleForm.notes}
+                                onChange={(e) => setScheduleForm({ ...scheduleForm, notes: e.target.value })}
+                                placeholder="Any special notes about this schedule"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleUpdateSchedule}>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Update Schedule
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Bulk Assign Dialog */}
             <Dialog open={showBulkAssignDialog} onOpenChange={setShowBulkAssignDialog}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -575,11 +986,10 @@ export function ScheduleManager() {
                                 {employees.map(emp => (
                                     <div
                                         key={emp.id}
-                                        className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                                            selectedEmployeeIds.includes(emp.id.toString())
-                                                ? 'bg-blue-50 border-2 border-blue-200'
-                                                : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
-                                        }`}
+                                        className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedEmployeeIds.includes(emp.id.toString())
+                                            ? 'bg-blue-50 border-2 border-blue-200'
+                                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                                            }`}
                                         onClick={() => toggleEmployeeSelection(emp.id.toString())}
                                     >
                                         <div className="flex items-center justify-between">

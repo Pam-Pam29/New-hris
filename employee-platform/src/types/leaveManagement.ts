@@ -16,6 +16,7 @@ export interface LeaveType {
 
 export interface LeaveRequest {
     id: string;
+    companyId?: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName?: string;
     department?: string;
@@ -73,27 +74,27 @@ export function normalizeLeaveStatus(status: string | undefined): 'pending' | 'a
 export function getStatusDisplayInfo(status: string) {
     const normalizedStatus = normalizeLeaveStatus(status);
     const statusConfig = {
-        pending: { 
-            variant: 'secondary' as const, 
-            text: 'Pending', 
+        pending: {
+            variant: 'secondary' as const,
+            text: 'Pending',
             color: 'text-yellow-600',
             bgColor: 'bg-yellow-100'
         },
-        approved: { 
-            variant: 'default' as const, 
-            text: 'Approved', 
+        approved: {
+            variant: 'default' as const,
+            text: 'Approved',
             color: 'text-green-600',
             bgColor: 'bg-green-100'
         },
-        rejected: { 
-            variant: 'destructive' as const, 
-            text: 'Rejected', 
+        rejected: {
+            variant: 'destructive' as const,
+            text: 'Rejected',
             color: 'text-red-600',
             bgColor: 'bg-red-100'
         },
-        cancelled: { 
-            variant: 'outline' as const, 
-            text: 'Cancelled', 
+        cancelled: {
+            variant: 'outline' as const,
+            text: 'Cancelled',
             color: 'text-gray-600',
             bgColor: 'bg-gray-100'
         }
@@ -107,7 +108,7 @@ export function formatLeaveDateRange(startDate: any, endDate: any): string {
         // Handle Firebase Timestamp objects
         let start: Date;
         let end: Date;
-        
+
         if (startDate?.toDate && typeof startDate.toDate === 'function') {
             start = startDate.toDate();
         } else if (startDate instanceof Date) {
@@ -118,7 +119,7 @@ export function formatLeaveDateRange(startDate: any, endDate: any): string {
         } else {
             start = new Date(startDate);
         }
-        
+
         if (endDate?.toDate && typeof endDate.toDate === 'function') {
             end = endDate.toDate();
         } else if (endDate instanceof Date) {
@@ -159,10 +160,10 @@ export function formatLeaveDateRange(startDate: any, endDate: any): string {
 export function formatLeaveDate(date: any, formatString: string = 'MMM dd, yyyy'): string {
     try {
         if (!date) return 'N/A';
-        
+
         // Handle Firebase Timestamp objects
         let parsedDate: Date;
-        
+
         if (date?.toDate && typeof date.toDate === 'function') {
             parsedDate = date.toDate();
         } else if (date instanceof Date) {

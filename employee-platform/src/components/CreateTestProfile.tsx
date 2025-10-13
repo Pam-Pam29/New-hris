@@ -71,7 +71,7 @@ const CreateTestProfile: React.FC = () => {
                     workSchedule: '9-5',
                     salary: {
                         baseSalary: 50000,
-                        currency: 'USD',
+                        currency: 'NGN',
                         payFrequency: 'Monthly'
                     }
                 },
