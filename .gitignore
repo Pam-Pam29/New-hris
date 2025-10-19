@@ -70,3 +70,9 @@ pnpm-lock.yaml
 # Misc
 .eslintcache
 .parcel-cache
+
+# Test files with API keys
+test-email-now.js
+test-mailgun.js
+test-resend.js
+test-sendgrid.js
