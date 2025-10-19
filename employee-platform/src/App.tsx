@@ -17,6 +17,7 @@ import BookMeeting from './pages/Employee/BookMeeting';
 // Authentication components
 import LoginPage from './pages/Employee/LoginPage';
 import PasswordSetup from './pages/Employee/PasswordSetup';
+import EmployeeSetup from './pages/Employee/EmployeeSetup';
 // Testing components
 import CreateTestProfile from './components/CreateTestProfile';
 import FirebaseConnectionTest from './components/FirebaseConnectionTest';
@@ -101,8 +102,9 @@ export default function App() {
                     <Routes>
                         {/* Public Routes - No authentication required */}
                         <Route path="/login" element={<LoginPage />} />
-                        <Route path="/setup" element={<PasswordSetup />} />
-                        <Route path="/employee/setup" element={<PasswordSetup />} />
+                        <Route path="/setup" element={<EmployeeSetup />} />
+                        <Route path="/employee/setup" element={<EmployeeSetup />} />
+                        <Route path="/password-setup" element={<PasswordSetup />} />
 
                         {/* Onboarding Route - Requires authentication but NOT completion */}
                         <Route path="/onboarding" element={

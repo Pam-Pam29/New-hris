@@ -293,10 +293,10 @@ export default function CompanyOnboarding() {
             });
 
             // Show success message briefly before redirect
-            alert(`🎉 Welcome to your HRIS Platform!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n\nRedirecting to your dashboard...`);
+            alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n\nNext: Create your HR administrator account`);
 
-            // Navigate to dashboard
-            navigate('/dashboard');
+            // Navigate to signup page to create HR user
+            navigate('/signup');
 
         } catch (err: any) {
             console.error('Error completing onboarding:', err);

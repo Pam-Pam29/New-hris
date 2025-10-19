@@ -263,8 +263,8 @@ export default function EmployeeDirectory() {
       console.log('📄 [HR] Creating contract for employee:', employeeId);
 
       // Import Firebase functions
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      const { db } = await import('../../../../config/firebase');
+      const { doc, setDoc, serverTimestamp, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
 
       const contractRef = doc(db, 'contracts', employeeId);
 
@@ -502,18 +502,82 @@ export default function EmployeeDirectory() {
       await createEmployeeContract(pendingEmployeeData.employeeId, contractData);
 
       // Generate setup link
-      const setupLink = `http://localhost:3002/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
+      const setupLink = `http://localhost:3005/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
 
-      // Show setup link to HR
-      alert(`✅ Employee created with custom contract!\n\n📧 Send this link to ${pendingEmployeeData.firstName} ${pendingEmployeeData.lastName}:\n\n${setupLink}\n\n⏰ Link expires in 7 days.`);
+      // Send invitation email via Resend
+      try {
+        console.log('📧 [HR] Sending invitation email...');
 
-      // Reset states
-      setShowContractDialog(false);
-      setPendingEmployeeData(null);
-      setContractData(null);
+        // Send email via Resend API
+        const emailResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer re_dBNbY32R_GPehmLvH81P3kziyr9a4Nmed',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Your HRIS <onboarding@resend.dev>',
+            to: [pendingEmployeeData.email],
+            subject: `Welcome to ${company?.name || 'the Team'}! - Complete Your Account Setup`,
+            html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+    .info-box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+    .button { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎉 Welcome to ${company?.name || 'the Team'}!</h1>
+    </div>
+    <div class="content">
+      <p>Hi <strong>${pendingEmployeeData.firstName} ${pendingEmployeeData.lastName}</strong>,</p>
+      <p>Your employee account has been created! We're excited to have you on the team.</p>
+      <div class="info-box">
+        <p><strong>📧 Your Email:</strong> ${pendingEmployeeData.email}</p>
+        <p><strong>🆔 Employee ID:</strong> ${pendingEmployeeData.employeeId}</p>
+      </div>
+      <p>To get started, please complete your account setup by clicking the button below:</p>
+      <div style="text-align: center;">
+        <a href="${setupLink}" class="button">Complete Account Setup</a>
+      </div>
+      <p style="font-size: 12px; color: #6b7280;">Or copy this link: ${setupLink}</p>
+      <p><strong>Note:</strong> This invitation link is unique to you and will expire in 7 days.</p>
+      <p>Best regards,<br><strong>${company?.name || 'Your Company'} HR Team</strong></p>
+      <div class="footer">
+        <p>This is an automated message from ${company?.name || 'Your Company'} HRIS</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+            `
+          })
+        });
+
+        const emailResult = await emailResponse.json();
+
+        if (emailResponse.ok) {
+          console.log('✅ [HR] Invitation email sent!', emailResult);
+          alert(`✅ Employee created successfully!\n\n📧 Invitation email sent to: ${pendingEmployeeData.email}\n\nEmployee ID: ${pendingEmployeeData.employeeId}\nSetup Link: ${setupLink}\n\n⏰ Link expires in 7 days.`);
+        } else {
+          console.error('❌ [HR] Failed to send email:', emailResult);
+          alert(`✅ Employee created!\n\n⚠️ Email failed to send. Please send this link manually:\n\n${setupLink}\n\nSend to: ${pendingEmployeeData.email}`);
+        }
+      } catch (emailError) {
+        console.error('❌ [HR] Email error:', emailError);
+        alert(`✅ Employee created!\n\n⚠️ Email could not be sent. Please send this link manually:\n\n${setupLink}\n\nSend to: ${pendingEmployeeData.email}`);
+      }
+
       setFormData({ name: '', email: '', role: '', department: '' });
-
-      console.log('✅ Employee and contract created successfully');
 
     } catch (error) {
       console.error('❌ Error completing contract:', error);

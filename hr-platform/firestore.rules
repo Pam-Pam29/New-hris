@@ -155,71 +155,61 @@ service cloud.firestore {
     // Assets collection - Allow read/write for development
     match /assets/{assetId} {
       allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Asset Assignments - Allow read/write for development
     match /assetAssignments/{assignmentId} {
       allow read, write: if true; // Allow access for development
-    }
-    
-    // Asset Requests - Allow read/write for development
-    match /assetRequests/{requestId} {
-      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Maintenance Records - Allow read/write for development
     match /maintenanceRecords/{recordId} {
       allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Recruitment data - Allow read/write for development
     match /recruitment/{document=**} {
       allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Job postings - Allow read/write for development
     match /jobPostings/{document=**} {
       allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Payroll data - Allow read/write for development
     match /payroll/{document=**} {
       allow read, write: if true; // Allow access for development
-    }
-    
-    // Payroll records - Allow read/write for development
-    match /payroll_records/{recordId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // Financial requests - Allow read/write for development
-    match /financial_requests/{requestId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // Performance meetings - Allow read/write for development
-    match /performanceMeetings/{meetingId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // Employee dashboard data - Allow read/write for development
-    match /employeeDashboardData/{employeeId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // HR Availability - Allow read/write for development
-    match /hrAvailability/{slotId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // HR Settings - Allow HR to save booking page URL
-    match /hrSettings/{settingId} {
-      allow read, write: if true; // Allow access for development
-    }
-    
-    // Catch-all for any other collections during development
-    match /{document=**} {
-      allow read, write: if true; // Allow all access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
     }
     
     // Attendance Records - Allow read/write for development

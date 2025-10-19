@@ -4,14 +4,31 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Analytics, getAnalytics } from 'firebase/analytics';
 
+// Validate that all required environment variables are present
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ Missing required Firebase environment variables:', missingVars);
+  console.error('Please create a .env file with all required variables. See .env.example');
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDio-l28vF8L7tTuLObt5bmFkT7eirS2vk",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hrplatform-3ab86.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hrplatform-3ab86",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hrplatform-3ab86.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "910172248990",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:910172248990:web:c3e6cb4fd45a0ab54aff53",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-TKHGV38DKE"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 let app: FirebaseApp;
