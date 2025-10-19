@@ -1,0 +1,24 @@
+# HR Platform Environment Variables
+# Copy this content to: hr-platform/.env
+
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=AIzaSyC6ovwlhX4Mr8WpHoS045wLxHA7t8fRXPI
+VITE_FIREBASE_AUTH_DOMAIN=hris-system-baa22.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=hris-system-baa22
+VITE_FIREBASE_STORAGE_BUCKET=hris-system-baa22.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=563898942372
+VITE_FIREBASE_APP_ID=1:563898942372:web:8c5ebae1dfaf072858b731
+VITE_FIREBASE_MEASUREMENT_ID=G-1DJP5DJX92
+
+# Google Calendar API Configuration
+VITE_GOOGLE_CLIENT_ID=834186928439-hefqcon4htpnvoothipfcdoukk1792m4.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_SECRET=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
+VITE_GOOGLE_API_KEY=AIzaSyDx4YYHUSYli0ix7oRu9j2zmTVztOpn3Cw
+
+# Instructions:
+# 1. Create a file named ".env" in the hr-platform folder
+# 2. Copy all the content above into that file
+# 3. Save the file
+# 4. Restart the development server
+
+

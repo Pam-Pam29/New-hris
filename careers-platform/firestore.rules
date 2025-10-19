@@ -1,0 +1,304 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is HR or Admin
+    function isHROrAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'hr' || request.auth.token.role == 'admin');
+    }
+    
+    // Helper function to check if user owns the resource
+    function isOwner(employeeId) {
+      return isAuthenticated() && request.auth.uid == employeeId;
+    }
+    
+    // Helper function for company isolation
+    function belongsToCompany(companyId) {
+      return request.auth.token.companyId == companyId;
+    }
+    
+    // ==========================================
+    // COMPANIES - Read by all, write by admin only
+    // ==========================================
+    match /companies/{companyId} {
+      allow read: if true; // Public read for company info
+      allow write: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // EMPLOYEES - HR can manage, employees can read own
+    // ==========================================
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(employeeId) || isHROrAdmin());
+      allow write: if isHROrAdmin();
+    }
+    
+    match /employeeProfiles/{employeeId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(employeeId) || isHROrAdmin());
+      allow update: if isAuthenticated() && 
+        (isOwner(employeeId) || isHROrAdmin());
+      allow create, delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // LEAVE MANAGEMENT - Secure but functional
+    // ==========================================
+    match /leaveTypes/{typeId} {
+      allow read: if true; // All can read leave types
+      allow write: if isHROrAdmin();
+    }
+    
+    match /leaveBalances/{balanceId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow write: if isHROrAdmin();
+    }
+    
+    match /leaveRequests/{requestId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update: if isHROrAdmin(); // Only HR can approve/reject
+      allow delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // RECRUITMENT - Public read, HR write
+    // ==========================================
+    match /jobPostings/{jobId} {
+      allow read: if true; // Public job board
+      allow write: if isHROrAdmin();
+    }
+    
+    match /candidates/{candidateId} {
+      allow create: if true; // Public can apply
+      allow read: if isHROrAdmin(); // Only HR can see candidates
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    match /interviews/{interviewId} {
+      allow read, write: if isHROrAdmin();
+    }
+    
+    match /applications/{applicationId} {
+      allow create: if true; // Public can apply
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.applicantId || isHROrAdmin());
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // PAYROLL - Highly sensitive, HR only write
+    // ==========================================
+    match /payroll_records/{recordId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow write: if isHROrAdmin();
+    }
+    
+    match /financial_requests/{requestId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update: if isHROrAdmin();
+      allow delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // PERFORMANCE MANAGEMENT
+    // ==========================================
+    match /performanceGoals/{goalId} {
+      allow create: if isAuthenticated() && 
+        (isOwner(request.resource.data.employeeId) || isHROrAdmin());
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow delete: if isHROrAdmin();
+    }
+    
+    match /performanceReviews/{reviewId} {
+      allow create: if isHROrAdmin();
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || 
+         request.auth.uid == resource.data.reviewerId || 
+         isHROrAdmin());
+      allow update: if isHROrAdmin() || 
+        (isAuthenticated() && request.auth.uid == resource.data.reviewerId);
+      allow delete: if isHROrAdmin();
+    }
+    
+    match /performanceMeetings/{meetingId} {
+      allow read, write: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || 
+         request.auth.uid == resource.data.managerId ||
+         isHROrAdmin());
+    }
+    
+    // ==========================================
+    // POLICIES
+    // ==========================================
+    match /policies/{policyId} {
+      allow read: if isAuthenticated(); // All employees can read
+      allow write: if isHROrAdmin();
+    }
+    
+    match /policyAcknowledgments/{ackId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // ASSETS
+    // ==========================================
+    match /assets/{assetId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /assetAssignments/{assignmentId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow write: if isHROrAdmin();
+    }
+    
+    match /assetRequests/{requestId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    match /maintenanceRecords/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // TIME TRACKING
+    // ==========================================
+    match /timeEntries/{entryId} {
+      allow create: if isAuthenticated() && 
+        isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow update: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || isHROrAdmin());
+      allow delete: if isHROrAdmin();
+    }
+    
+    match /timeTracking/{document=**} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    match /timeAdjustmentRequests/{requestId} {
+      allow create: if isAuthenticated() && 
+        isOwner(request.resource.data.employeeId);
+      allow read: if isAuthenticated();
+      allow update: if isHROrAdmin();
+      allow delete: if isHROrAdmin();
+    }
+    
+    match /attendance/{document=**} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // SCHEDULES & MEETINGS
+    // ==========================================
+    match /schedules/{scheduleId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /workSchedules/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /shiftTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /meetingSchedules/{meetingId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || 
+         request.auth.uid == resource.data.managerId ||
+         isHROrAdmin());
+      allow update, delete: if isAuthenticated() && 
+        (isOwner(resource.data.employeeId) || 
+         request.auth.uid == resource.data.managerId ||
+         isHROrAdmin());
+    }
+    
+    // ==========================================
+    // NOTIFICATIONS
+    // ==========================================
+    match /notifications/{notificationId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || isHROrAdmin());
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || isHROrAdmin());
+    }
+    
+    match /timeNotifications/{notifId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow update, delete: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // ACTIVITY LOGS - Admin only
+    // ==========================================
+    match /activityLogs/{logId} {
+      allow read, write: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // HR SPECIFIC
+    // ==========================================
+    match /hrAvailability/{slotId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /hrSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+    
+    match /employeeDashboardData/{employeeId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(employeeId) || isHROrAdmin());
+      allow write: if isHROrAdmin();
+    }
+    
+    // ==========================================
+    // DEPARTMENTS - Read all, write HR only
+    // ==========================================
+    match /departments/{deptId} {
+      allow read: if true;
+      allow write: if isHROrAdmin();
+    }
+  }
+}
+

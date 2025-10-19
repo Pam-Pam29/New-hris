@@ -1,0 +1,19 @@
+{
+    "firestore": {
+        "rules": "firestore.rules.production"
+    },
+    "hosting": {
+        "public": "hr-platform/dist",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "rewrites": [
+            {
+                "source": "**",
+                "destination": "/index.html"
+            }
+        ]
+    }
+}

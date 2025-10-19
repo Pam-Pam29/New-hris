@@ -1,0 +1,279 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Employee Profiles - Employees can read/update their own profile, HR can read all
+    match /employeeProfiles/{employeeId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == employeeId || 
+         request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Leave Requests - Allow read/write for development, authenticate for production
+    match /leaveRequests/{requestId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow create: if request.auth != null && 
+      //   request.auth.uid == resource.data.employeeId;
+      // allow read: if request.auth != null && 
+      //   (request.auth.uid == resource.data.employeeId || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow update: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Leave Balances - Allow read/write for development, authenticate for production
+    match /leaveBalances/{balanceId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null && 
+      //   (request.auth.uid == resource.data.employeeId || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Leave Types - Allow read/write for development, authenticate for production
+    match /leaveTypes/{typeId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Policies - Allow read/write for development, authenticate for production
+    match /policies/{policyId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Policy Acknowledgments - Allow read/write for development, authenticate for production
+    match /policyAcknowledgments/{ackId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow create: if request.auth != null && 
+      //   request.auth.uid == resource.data.employeeId;
+      // allow read: if request.auth != null && 
+      //   (request.auth.uid == resource.data.employeeId || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Performance Goals - Allow read/write for development
+    match /performanceGoals/{goalId} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // Performance Reviews - Allow read/write for development
+    match /performanceReviews/{reviewId} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // Meeting Schedules - Allow read/write for development
+    match /meetingSchedules/{meetingId} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // Notifications - Allow read for development, write for HR/admin
+    match /notifications/{notificationId} {
+      allow read: if true; // Allow read access for development
+      allow create, update: if true; // Allow write access for development
+    }
+    
+    // Activity Logs - Read-only for HR and admins
+    match /activityLogs/{logId} {
+      allow read: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Employees collection - Allow read/write for development
+    match /employees/{employeeId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow write: if request.auth != null && 
+      //   (request.auth.uid == employeeId ||
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Assets collection - Allow read access for development, write for HR/admin
+    match /assets/{assetId} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Asset Assignments - Allow read access for development, write for HR/admin
+    match /assetAssignments/{assignmentId} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Maintenance Records - Allow read access for development, write for HR/admin
+    match /maintenanceRecords/{recordId} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Recruitment data - Allow read access for development, write for HR/admin
+    match /recruitment/{document=**} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Job postings - Allow read access for development, write for HR/admin
+    match /jobPostings/{document=**} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Payroll data - Allow read access for development, write for HR/admin
+    match /payroll/{document=**} {
+      allow read: if true; // Allow read access for development
+      allow write: if request.auth != null && 
+        (request.auth.token.role == 'hr' || 
+         request.auth.token.role == 'admin');
+    }
+    
+    // Attendance Records - Allow read/write for development
+    match /attendance/{document=**} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow create: if request.auth != null && 
+      //   request.auth.uid == resource.data.employeeId;
+      // allow read: if request.auth != null && 
+      //   (request.auth.uid == resource.data.employeeId || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow update: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Time Tracking - Allow read/write for development
+    match /timeTracking/{document=**} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow create: if request.auth != null && 
+      //   request.auth.uid == resource.data.employeeId;
+      // allow read: if request.auth != null && 
+      //   (request.auth.uid == resource.data.employeeId || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow update: if request.auth != null && 
+      //   (request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+    }
+    
+    // Time Entries - Allow read/write for development
+    match /timeEntries/{entryId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create: if request.auth != null && 
+      //   request.resource.data.employeeId == request.auth.uid;
+      // allow update: if request.auth != null && 
+      //   (resource.data.employeeId == request.auth.uid || 
+      //    request.auth.token.role == 'hr' || 
+      //    request.auth.token.role == 'admin');
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Time Adjustment Requests - Allow read/write for development
+    match /timeAdjustmentRequests/{requestId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create: if request.auth != null && 
+      //   request.resource.data.employeeId == request.auth.uid &&
+      //   request.resource.data.status == 'pending';
+      // allow update: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Time Notifications - Allow read/write for development
+    match /timeNotifications/{notifId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null &&
+      //   (resource.data.employeeId == request.auth.uid ||
+      //    resource.data.sentToHr == true);
+      // allow create: if request.auth != null;
+      // allow update: if request.auth != null;
+      // allow delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Schedules - Allow read/write for development
+    match /schedules/{scheduleId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if request.auth != null;
+      // allow create, update, delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Work Schedules - Allow read/write for development
+    match /workSchedules/{document=**} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // Shift Templates - Allow read/write for development
+    match /shiftTemplates/{templateId} {
+      allow read, write: if true; // Allow access for development
+      // Production rules (commented out for development):
+      // allow read: if true;
+      // allow create, update, delete: if request.auth.token.role == 'hr' || 
+      //   request.auth.token.role == 'admin';
+    }
+    
+    // Performance Meetings - Allow read/write for development
+    match /performanceMeetings/{meetingId} {
+      allow read, write: if true; // Allow access for development
+    }
+    
+    // HR Availability - Allow read for employees, write for HR only
+    match /hrAvailability/{slotId} {
+      allow read: if true; // Employees can see HR availability
+      allow write: if false; // Only HR can modify availability (via HR platform)
+    }
+    
+    // HR Unavailability - Allow read for employees
+    match /hrUnavailability/{slotId} {
+      allow read: if true; // Employees can see blocked times
+      allow write: if false; // Only HR can modify
+    }
+    
+    // HR Settings - Allow read for booking page URL
+    match /hrSettings/{settingId} {
+      allow read: if true; // Employees can see booking page URL
+      allow write: if false; // Only admin/HR can modify via console/script
+    }
+  }
+}

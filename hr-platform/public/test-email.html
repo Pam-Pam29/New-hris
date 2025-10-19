@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Test - HRIS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background: #059669;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+        }
+
+        .error {
+            background: #fef2f2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>📧 HRIS Email Test Suite</h1>
+        <p>Test your Resend email integration with different templates:</p>
+
+        <div style="margin: 30px 0;">
+            <button onclick="sendTestEmail()">1. Send Test Email</button>
+            <button onclick="sendLeaveApproved()">2. Test Leave Approved</button>
+            <button onclick="sendLeaveRejected()">3. Test Leave Rejected</button>
+            <button onclick="sendMeetingScheduled()">4. Test Meeting Scheduled</button>
+            <button onclick="sendInterviewInvite()">5. Test Interview Invitation</button>
+            <button onclick="sendPayslip()">6. Test Payslip Available</button>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const RESEND_API_KEY = 're_dBNbY32R_GPehmLvH81P3kziyr9a4Nmed';
+        const TO_EMAIL = 'v.fakunle@alustudent.com';
+        const FROM = 'Your HRIS <onboarding@resend.dev>';
+
+        async function sendResendEmail(subject, html) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="info">⏳ Sending email...</div>';
+
+            try {
+                const response = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${RESEND_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from: FROM,
+                        to: [TO_EMAIL],
+                        subject: subject,
+                        html: html
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+            <div class="success">
+              <h3>✅ Email Sent Successfully!</h3>
+              <p><strong>Email ID:</strong> ${data.id}</p>
+              <p><strong>Subject:</strong> ${subject}</p>
+              <p><strong>To:</strong> ${TO_EMAIL}</p>
+              <p>📧 <strong>Check your inbox now!</strong></p>
+            </div>
+          `;
+                    console.log('✅ Email sent:', data);
+                } else {
+                    resultDiv.innerHTML = `
+            <div class="error">
+              <h3>❌ Failed to Send</h3>
+              <p>${JSON.stringify(data, null, 2)}</p>
+            </div>
+          `;
+                    console.error('❌ Failed:', data);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+          <div class="error">
+            <h3>❌ Error</h3>
+            <p>${error.message}</p>
+          </div>
+        `;
+                console.error('❌ Error:', error);
+            }
+        }
+
+        function sendTestEmail() {
+            sendResendEmail(
+                '✅ Test Email - HRIS System',
+                '<h1>✅ It Works!</h1><p>Your HRIS email system is live!</p><p>All 19 templates ready!</p>'
+            );
+        }
+
+        function sendLeaveApproved() {
+            const html = `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>✅ Leave Request Approved!</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
+            <p>Hi <strong>Test User</strong>,</p>
+            <div style="background: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0; font-size: 18px;"><strong>Your leave has been approved!</strong></p>
+            </div>
+            <p><strong>Leave Type:</strong> Annual Leave</p>
+            <p><strong>Dates:</strong> Dec 20-30, 2025 (10 days)</p>
+            <p>Have a great time off!</p>
+          </div>
+        </div>
+      `;
+            sendResendEmail('✅ Leave Request Approved - Test Company', html);
+        }
+
+        function sendLeaveRejected() {
+            const html = `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
+          <div style="background: #f59e0b; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>Leave Request Update</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 30px;">
+            <p>Hi <strong>Test User</strong>,</p>
+            <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Reason:</strong> Team coverage needed during requested dates.</p>
+            </div>
+            <p>Please consider alternative dates.</p>
+          </div>
+        </div>
+      `;
+            sendResendEmail('Leave Request - Action Required', html);
+        }
+
+        function sendMeetingScheduled() {
+            const html = `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
+          <div style="background: #3b82f6; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>📅 Meeting Scheduled</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 30px;">
+            <h3>Q4 Performance Review</h3>
+            <p><strong>Date:</strong> December 15, 2025</p>
+            <p><strong>Time:</strong> 2:00 PM</p>
+            <p><strong>Duration:</strong> 60 minutes</p>
+            <p>See you at the meeting!</p>
+          </div>
+        </div>
+      `;
+            sendResendEmail('📅 Meeting Scheduled: Q4 Performance Review', html);
+        }
+
+        function sendInterviewInvite() {
+            const html = `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
+          <div style="background: #8b5cf6; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>🎉 Interview Invitation</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 30px;">
+            <p>Dear <strong>Test Candidate</strong>,</p>
+            <p>We'd like to invite you for an interview!</p>
+            <p><strong>Position:</strong> Software Engineer</p>
+            <p><strong>Date:</strong> December 20, 2025</p>
+            <p><strong>Time:</strong> 10:00 AM</p>
+            <p>We look forward to meeting you!</p>
+          </div>
+        </div>
+      `;
+            sendResendEmail('Interview Invitation - Software Engineer', html);
+        }
+
+        function sendPayslip() {
+            const html = `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
+          <div style="background: #10b981; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>💰 Payslip Ready</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 30px;">
+            <p>Hi <strong>Test User</strong>,</p>
+            <p>Your payslip for <strong>December 2025</strong> is ready!</p>
+            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Gross Pay:</strong> $5,000.00</p>
+              <p><strong>Net Pay:</strong> <span style="font-size: 24px; color: #10b981; font-weight: bold;">$4,200.00</span></p>
+              <p><strong>Payment Date:</strong> December 31, 2025</p>
+            </div>
+          </div>
+        </div>
+      `;
+            sendResendEmail('💰 Your Payslip is Ready - December 2025', html);
+        }
+    </script>
+</body>
+
+</html>
