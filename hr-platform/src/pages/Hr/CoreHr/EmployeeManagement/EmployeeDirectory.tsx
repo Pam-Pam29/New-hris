@@ -78,6 +78,7 @@ export default function EmployeeDirectory() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showContractDialog, setShowContractDialog] = useState(false);
+  const [showSetupLinkDialog, setShowSetupLinkDialog] = useState(false);
   const [pendingEmployeeData, setPendingEmployeeData] = useState<any>(null);
   const [contractData, setContractData] = useState<any>(null);
   const [setupLink, setSetupLink] = useState<string | null>(null);
@@ -690,8 +691,20 @@ export default function EmployeeDirectory() {
         // Generate setup link
         const newSetupLink = `https://hris-employee-platform-1l6vdan9g-pam-pam29s-projects.vercel.app/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
 
-        // Always show the setup link in the dialog
+        // Store setup link and show in separate dialog
         setSetupLink(newSetupLink);
+
+        // Show setup link dialog (keep pendingEmployeeData for email display)
+        setShowSetupLinkDialog(true);
+
+        // Close contract dialog
+        setShowContractDialog(false);
+        setContractData(null);
+        
+        // Clear pendingEmployeeData after a short delay to allow the new dialog to render
+        setTimeout(() => {
+          setPendingEmployeeData(null);
+        }, 100);
 
         // Try to send automated email invitation
         console.log('📧 [HR] Sending automated employee invitation email...');
@@ -706,14 +719,9 @@ export default function EmployeeDirectory() {
 
         if (emailResult.success) {
           console.log('✅ [HR] Employee invitation email sent successfully');
-          // Don't show alert - keep dialog open with setup link visible
         } else {
           console.warn('⚠️ [HR] Email sending failed:', emailResult.error);
-          // Setup link is already shown, just log the error
         }
-        
-        // Keep dialog open so user can copy the setup link
-        return;
       } else {
         console.log('📄 [HR] Contract saved as pending - employee is inactive until contract is ready to send');
         alert(`✅ Employee created successfully!\n\n📄 Contract Status: ${contractData.status}\n\n👤 Employee Status: Inactive\n\n💡 The employee will become active and receive setup instructions when you mark the contract as "Ready to Send".`);
@@ -1738,6 +1746,76 @@ export default function EmployeeDirectory() {
                 >
                   {pendingEmployeeData ? 'Create Employee & Send Contract' : 'Update Contract Status'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup Link Dialog */}
+      {showSetupLinkDialog && setupLink && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="card-modern w-full max-w-2xl m-4 animate-slide-in">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/10 rounded-lg">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Employee Created Successfully!</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Setup link generated</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSetupLinkDialog(false);
+                    setSetupLink(null);
+                  }}
+                  className="p-2 hover:bg-muted/50 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2">📧 Employee Setup Link</h3>
+                  <p className="text-xs text-blue-700 mb-3">Copy this link and send it to the employee to complete their setup:</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={setupLink}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-blue-300 rounded bg-white text-sm font-mono"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(setupLink);
+                        alert('✅ Link copied to clipboard!');
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  {pendingEmployeeData && (
+                    <p className="text-xs text-blue-600 mt-2">Send to: {pendingEmployeeData.email}</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-6 pt-4 border-t border-border">
+                  <button
+                    onClick={() => {
+                      setShowSetupLinkDialog(false);
+                      setSetupLink(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-200"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             </div>
           </div>
