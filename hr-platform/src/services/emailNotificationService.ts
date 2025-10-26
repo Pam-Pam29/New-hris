@@ -110,24 +110,29 @@ This is an automated message. Please do not reply to this email.
     }
 
     /**
-     * Send email (simulation - replace with actual email service)
+     * Send email using the primary Vercel email service
      */
     static async sendEmail(email: EmailTemplate): Promise<boolean> {
         try {
-            // TODO: Implement actual email sending (SendGrid, AWS SES, etc.)
-            console.log('\n📧 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('📧 EMAIL WOULD BE SENT:');
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log(`To: ${email.to}`);
-            console.log(`Subject: ${email.subject}`);
-            console.log('\nBody:');
-            console.log(email.body);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+            // Import the primary email service
+            const { vercelEmailService } = await import('./vercelEmailService');
 
-            // Simulate success
-            return true;
+            // Send email using the primary service
+            const result = await vercelEmailService.sendEmail({
+                to: email.to,
+                subject: email.subject,
+                html: email.body // Convert body to HTML
+            });
+
+            if (result.success) {
+                console.log('✅ [Recruitment Email] Email sent successfully via primary service');
+                return true;
+            } else {
+                console.error('❌ [Recruitment Email] Failed to send email:', result.error);
+                return false;
+            }
         } catch (error) {
-            console.error('Failed to send email:', error);
+            console.error('❌ [Recruitment Email] Error sending email:', error);
             return false;
         }
     }
@@ -181,6 +186,10 @@ ${companyName} HR Team
         };
     }
 }
+
+
+
+
 
 
 

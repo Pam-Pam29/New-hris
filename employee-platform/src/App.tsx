@@ -18,6 +18,9 @@ import BookMeeting from './pages/Employee/BookMeeting';
 import LoginPage from './pages/Employee/LoginPage';
 import PasswordSetup from './pages/Employee/PasswordSetup';
 import EmployeeSetup from './pages/Employee/EmployeeSetup';
+import EmployeeOnboardingSignup from './pages/Employee/Auth/EmployeeOnboardingSignup';
+import EmployeeOnboardingSignin from './pages/Employee/Auth/EmployeeOnboardingSignin';
+import EmployeeSignup from './pages/Employee/EmployeeSignup';
 // Testing components
 import CreateTestProfile from './components/CreateTestProfile';
 import FirebaseConnectionTest from './components/FirebaseConnectionTest';
@@ -103,8 +106,15 @@ export default function App() {
                         {/* Public Routes - No authentication required */}
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/setup" element={<EmployeeSetup />} />
-                        <Route path="/employee/setup" element={<EmployeeSetup />} />
+                        <Route path="/employee/setup" element={<EmployeeSignup />} />
                         <Route path="/password-setup" element={<PasswordSetup />} />
+
+                        {/* Employee Onboarding Auth Routes - No authentication required */}
+                        <Route path="/employee-onboarding-signup" element={<EmployeeOnboardingSignup />} />
+                        <Route path="/employee-onboarding-signin" element={<EmployeeOnboardingSignin />} />
+
+                        {/* Employee Signup Route - No authentication required (only for setup links) */}
+                        <Route path="/employee-signup" element={<Navigate to="/login" replace />} />
 
                         {/* Onboarding Route - Requires authentication but NOT completion */}
                         <Route path="/onboarding" element={

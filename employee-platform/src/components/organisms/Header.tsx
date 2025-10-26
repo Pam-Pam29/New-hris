@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Plane, Settings, Menu, LogOut, Sun, Moon } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTheme } from '../atoms/ThemeProvider';
+import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   title?: string;
@@ -12,12 +13,10 @@ interface HeaderProps {
   callToAction?: React.ReactNode;
 }
 
-// Stub user for now
-const user = { name: 'Jane Doe', email: 'jane.doe@example.com' };
-
 export function Header({ title, subtitle, showUserInfo = true, actions, callToAction }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { currentEmployee } = useAuth();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -52,11 +51,18 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
                 {callToAction}
               </div>
             )}
-            {showUserInfo && user && (
+            {showUserInfo && currentEmployee && (
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-foreground">{user.name}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {currentEmployee.firstName && currentEmployee.lastName
+                      ? `${currentEmployee.firstName} ${currentEmployee.lastName}`
+                      : 'Employee'
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {currentEmployee.email || 'employee@company.com'}
+                  </p>
                 </div>
                 <Avatar />
                 <Button variant="outline" size="sm" className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border" onClick={toggleTheme} aria-label="Toggle theme">
@@ -88,12 +94,19 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
         {mobileMenuOpen && (
           <div className="md:hidden bg-background border-t border-border py-4 px-2 rounded-b-xl shadow-lg dark:shadow-accent/10 z-50">
             {actions && <div className="mb-4">{actions}</div>}
-            {showUserInfo && user && (
+            {showUserInfo && currentEmployee && (
               <div className="flex items-center space-x-3 mb-4">
                 <Avatar className="border border-border dark:border-accent/30" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">{user.name}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {currentEmployee.firstName && currentEmployee.lastName
+                      ? `${currentEmployee.firstName} ${currentEmployee.lastName}`
+                      : 'Employee'
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {currentEmployee.email || 'employee@company.com'}
+                  </p>
                 </div>
               </div>
             )}

@@ -435,3 +435,7 @@ You now have a complete, professional authentication flow:
 
 **Next:** Enable Email/Password in Firebase Console and test the flow!
 
+
+
+
+

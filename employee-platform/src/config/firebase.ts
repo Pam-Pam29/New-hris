@@ -38,6 +38,18 @@ let storage: FirebaseStorage;
 let analytics: Analytics | null = null;
 let firebaseInitialized = false;
 
+// Initialize auth immediately to prevent undefined errors
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+  firebaseInitialized = true;
+} catch (error) {
+  console.warn('⚠️ Firebase initialization failed:', error);
+  firebaseInitialized = false;
+}
+
 // Promise to track Firebase initialization
 let firebaseInitPromise: Promise<boolean> | null = null;
 
@@ -49,6 +61,11 @@ const initializeFirebase = async (): Promise<boolean> => {
 
   firebaseInitPromise = (async () => {
     try {
+      // If already initialized, return success
+      if (firebaseInitialized) {
+        return true;
+      }
+
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);

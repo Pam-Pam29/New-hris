@@ -424,15 +424,26 @@ export interface Deduction {
 export interface FinancialRequest {
     id: string;
     employeeId: string;
+    employeeName?: string;
     requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
     amount: number;
     reason: string;
-    status: 'pending' | 'approved' | 'rejected' | 'paid';
+    status: 'pending' | 'approved' | 'rejected' | 'paid' | 'recovering' | 'completed';
     attachments?: string[];
     approvedBy?: string;
     approvedAt?: Date;
+    rejectionReason?: string;
     paidAt?: Date;
     repaymentSchedule?: RepaymentSchedule[];
+    repaymentType?: 'full' | 'installments';
+    repaymentMethod?: 'salary_deduction' | 'bank_transfer' | 'cash' | 'mobile_money';
+    installmentMonths?: number;
+    installmentAmount?: number;
+    amountRecovered?: number;
+    remainingBalance?: number;
+    recoveryStartDate?: Date;
+    recoveryCompleteDate?: Date;
+    linkedPayrollIds?: string[];
     createdAt: Date;
     updatedAt: Date;
 }

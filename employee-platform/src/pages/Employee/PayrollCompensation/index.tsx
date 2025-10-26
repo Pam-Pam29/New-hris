@@ -43,8 +43,8 @@ import {
     Laptop,
     XCircle
 } from 'lucide-react';
-import { PayrollRecord, PayPeriod, Allowance, Deduction, FinancialRequest, BenefitsEnrollment, Beneficiary } from '../types';
-import { getPayrollService } from '../../../services/payrollService';
+import { PayrollRecord, PayPeriod, Allowance, Deduction, BenefitsEnrollment, Beneficiary } from '../types';
+import { getPayrollService, FinancialRequest } from '../../../services/payrollService';
 
 // Mock data - REPLACED WITH FIREBASE (keeping for reference only)
 const mockPayrollRecords: any[] = [
@@ -188,6 +188,7 @@ const mockFinancialRequests: FinancialRequest[] = [
     {
         id: 'fr-001',
         employeeId: 'emp-001',
+        employeeName: 'John Doe',
         requestType: 'advance',
         amount: 1000.00,
         reason: 'Emergency medical expenses',
@@ -201,6 +202,7 @@ const mockFinancialRequests: FinancialRequest[] = [
     {
         id: 'fr-002',
         employeeId: 'emp-001',
+        employeeName: 'John Doe',
         requestType: 'reimbursement',
         amount: 250.00,
         reason: 'Business travel expenses',
@@ -271,7 +273,7 @@ export default function PayrollCompensation() {
     const [showRequestDetails, setShowRequestDetails] = useState(false);
 
     // Get current employee ID from auth context
-    const currentEmployeeId = currentEmployee?.employeeId || 'emp-001';
+    const currentEmployeeId = currentEmployee?.employeeId || '';
 
     // Load payroll data from Firebase
     useEffect(() => {

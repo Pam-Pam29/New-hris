@@ -19,7 +19,11 @@ import {
     Globe,
     Clock,
     Briefcase,
-    AlertTriangle
+    AlertTriangle,
+    Settings,
+    Mail,
+    Shield,
+    Bell
 } from 'lucide-react';
 import { useCompany } from '../../context/CompanyContext';
 import { getCompanyService } from '../../services/companyService';
@@ -55,6 +59,32 @@ interface OnboardingData {
         name: string;
         days: number;
     }>;
+
+    // Step 6: HR Team Setup
+    hrTeam: Array<{
+        firstName: string;
+        lastName: string;
+        email: string;
+        role: string;
+        department: string;
+    }>;
+
+    // Step 7: System Configuration
+    emailTemplates: {
+        welcomeEmail: string;
+        onboardingEmail: string;
+        reminderEmail: string;
+    };
+    notifications: {
+        emailNotifications: boolean;
+        smsNotifications: boolean;
+        pushNotifications: boolean;
+    };
+    security: {
+        twoFactorAuth: boolean;
+        passwordPolicy: string;
+        sessionTimeout: number;
+    };
 }
 
 const STEPS = [
@@ -64,7 +94,9 @@ const STEPS = [
     { id: 4, title: 'Branding', icon: Palette },
     { id: 5, title: 'Departments', icon: Users },
     { id: 6, title: 'Leave Policies', icon: Calendar },
-    { id: 7, title: 'Complete', icon: CheckCircle }
+    { id: 7, title: 'HR Team Setup', icon: Briefcase },
+    { id: 8, title: 'System Config', icon: Settings },
+    { id: 9, title: 'Complete', icon: CheckCircle }
 ];
 
 const INDUSTRIES = [
@@ -128,7 +160,23 @@ export default function CompanyOnboarding() {
             { name: 'Annual Leave', days: 20 },
             { name: 'Sick Leave', days: 10 },
             { name: 'Personal Leave', days: 5 }
-        ]
+        ],
+        hrTeam: [],
+        emailTemplates: {
+            welcomeEmail: 'Welcome to {companyName}! We\'re excited to have you on board.',
+            onboardingEmail: 'Your onboarding process is ready. Please complete the required steps.',
+            reminderEmail: 'Reminder: Please complete your onboarding tasks.'
+        },
+        notifications: {
+            emailNotifications: true,
+            smsNotifications: false,
+            pushNotifications: true
+        },
+        security: {
+            twoFactorAuth: false,
+            passwordPolicy: 'medium',
+            sessionTimeout: 8
+        }
     });
 
     const handleNext = () => {
@@ -148,10 +196,23 @@ export default function CompanyOnboarding() {
         setError('');
 
         try {
+            // Check if user is authenticated
+            const { getAuth } = await import('firebase/auth');
+            const auth = getAuth();
+            const currentUser = auth.currentUser;
+
+            if (!currentUser) {
+                console.log('⚠️ User not authenticated, redirecting to login...');
+                alert('Please log in to complete the onboarding process.');
+                navigate('/');
+                return;
+            }
+
+            console.log('✅ User authenticated:', currentUser.email);
+            console.log('💾 Starting onboarding save process...');
+
             const companyService = await getCompanyService();
             const db = getFirebaseDb();
-
-            console.log('💾 Starting onboarding save process...');
 
             // Step 0: Create or get company
             let companyId: string;
@@ -200,26 +261,32 @@ export default function CompanyOnboarding() {
             // Step 1: Update company with ALL onboarding data
             const cleanDepartments = formData.departments.filter(d => d.trim() !== '');
 
-            await companyService.updateCompany(companyId, {
-                displayName: formData.displayName,
-                domain: formData.domain,
-                address: `${formData.address}, ${formData.city}, ${formData.country}`,
-                phone: formData.phone,
-                email: formData.email,
-                website: formData.website,
-                primaryColor: formData.primaryColor,
-                secondaryColor: formData.secondaryColor,
-                settings: {
-                    industry: formData.industry,
-                    companySize: formData.companySize,
-                    timezone: formData.timezone,
-                    careersSlug: formData.domain,
-                    allowPublicApplications: true,
-                    departments: cleanDepartments, // ← Save departments in settings
-                    onboardingCompleted: true,
-                    onboardingCompletedAt: new Date().toISOString()
-                }
-            });
+            try {
+                await companyService.updateCompany(companyId, {
+                    displayName: formData.displayName,
+                    domain: formData.domain,
+                    address: `${formData.address}, ${formData.city}, ${formData.country}`,
+                    phone: formData.phone,
+                    email: formData.email,
+                    website: formData.website,
+                    primaryColor: formData.primaryColor,
+                    secondaryColor: formData.secondaryColor,
+                    settings: {
+                        industry: formData.industry,
+                        companySize: formData.companySize,
+                        timezone: formData.timezone,
+                        careersSlug: formData.domain,
+                        allowPublicApplications: true,
+                        departments: cleanDepartments, // ← Save departments in settings
+                        onboardingCompleted: true,
+                        onboardingCompletedAt: new Date().toISOString()
+                    }
+                });
+                console.log('✅ Company profile updated successfully');
+            } catch (updateError) {
+                console.warn('⚠️ Company update failed, continuing with other data:', updateError);
+                // Continue with other operations even if company update fails
+            }
             console.log('✅ Company profile updated with all data:', {
                 name: formData.displayName,
                 domain: formData.domain,
@@ -252,7 +319,42 @@ export default function CompanyOnboarding() {
             }
             console.log(`✅ Created ${leaveTypesCreated} leave types`);
 
-            // Step 3: Create department documents for this company
+            // Step 3: Create HR team members
+            const hrTeamRef = collection(db, 'hrTeam');
+            let hrTeamCreated = 0;
+
+            for (const member of formData.hrTeam) {
+                if (member.firstName && member.lastName && member.email) {
+                    await addDoc(hrTeamRef, {
+                        companyId: companyId,
+                        firstName: member.firstName,
+                        lastName: member.lastName,
+                        email: member.email,
+                        role: member.role,
+                        department: member.department,
+                        status: 'pending', // Pending invitation
+                        invitedAt: Timestamp.now(),
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now()
+                    });
+                    hrTeamCreated++;
+                }
+            }
+            console.log(`✅ Created ${hrTeamCreated} HR team members`);
+
+            // Step 4: Create system configuration
+            const systemConfigRef = collection(db, 'systemConfig');
+            await addDoc(systemConfigRef, {
+                companyId: companyId,
+                emailTemplates: formData.emailTemplates,
+                notifications: formData.notifications,
+                security: formData.security,
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now()
+            });
+            console.log(`✅ Created system configuration`);
+
+            // Step 5: Create department documents for this company
             const departmentsRef = collection(db, 'departments');
             let departmentsCreated = 0;
 
@@ -289,11 +391,12 @@ export default function CompanyOnboarding() {
                 primaryColor: formData.primaryColor,
                 secondaryColor: formData.secondaryColor,
                 departmentsCreated: departmentsCreated,
-                leaveTypesCreated: leaveTypesCreated
+                leaveTypesCreated: leaveTypesCreated,
+                hrTeamCreated: hrTeamCreated
             });
 
             // Show success message briefly before redirect
-            alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n\nNext: Create your HR administrator account`);
+            alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nNext: Create your HR administrator account`);
 
             // Navigate to signup page to create HR user
             navigate('/signup');
@@ -362,6 +465,26 @@ export default function CompanyOnboarding() {
                 );
 
             case 7:
+                return (
+                    <HrTeamStep
+                        formData={formData}
+                        setFormData={setFormData}
+                        onNext={handleNext}
+                        onBack={handleBack}
+                    />
+                );
+
+            case 8:
+                return (
+                    <SystemConfigStep
+                        formData={formData}
+                        setFormData={setFormData}
+                        onNext={handleNext}
+                        onBack={handleBack}
+                    />
+                );
+
+            case 9:
                 return (
                     <CompleteStep
                         formData={formData}
@@ -984,6 +1107,331 @@ function LeaveTypesStep({
     );
 }
 
+function HrTeamStep({
+    formData,
+    setFormData,
+    onNext,
+    onBack
+}: {
+    formData: OnboardingData;
+    setFormData: (data: OnboardingData) => void;
+    onNext: () => void;
+    onBack: () => void;
+}) {
+    const addHrMember = () => {
+        setFormData({
+            ...formData,
+            hrTeam: [...formData.hrTeam, { firstName: '', lastName: '', email: '', role: '', department: '' }]
+        });
+    };
+
+    const removeHrMember = (index: number) => {
+        const newTeam = formData.hrTeam.filter((_, i) => i !== index);
+        setFormData({ ...formData, hrTeam: newTeam });
+    };
+
+    const updateHrMember = (index: number, field: string, value: string) => {
+        const newTeam = [...formData.hrTeam];
+        newTeam[index] = { ...newTeam[index], [field]: value };
+        setFormData({ ...formData, hrTeam: newTeam });
+    };
+
+    return (
+        <Card className="border-2 shadow-xl">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
+                        <Briefcase className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-2xl">HR Team Setup</CardTitle>
+                        <CardDescription>Add additional HR team members</CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-8 space-y-6">
+                <p className="text-sm text-gray-600">
+                    Add other HR team members who will have access to the platform. You can add more later.
+                </p>
+
+                <div className="space-y-4">
+                    {formData.hrTeam.map((member, index) => (
+                        <div key={index} className="p-4 border rounded-lg space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-medium">HR Member {index + 1}</h4>
+                                {formData.hrTeam.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => removeHrMember(index)}
+                                        className="hover:bg-red-50 hover:text-red-600"
+                                    >
+                                        Remove
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor={`firstName-${index}`}>First Name</Label>
+                                    <Input
+                                        id={`firstName-${index}`}
+                                        value={member.firstName}
+                                        onChange={(e) => updateHrMember(index, 'firstName', e.target.value)}
+                                        placeholder="John"
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor={`lastName-${index}`}>Last Name</Label>
+                                    <Input
+                                        id={`lastName-${index}`}
+                                        value={member.lastName}
+                                        onChange={(e) => updateHrMember(index, 'lastName', e.target.value)}
+                                        placeholder="Doe"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <Label htmlFor={`email-${index}`}>Email Address</Label>
+                                <Input
+                                    id={`email-${index}`}
+                                    type="email"
+                                    value={member.email}
+                                    onChange={(e) => updateHrMember(index, 'email', e.target.value)}
+                                    placeholder="john.doe@company.com"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor={`role-${index}`}>Role</Label>
+                                    <select
+                                        id={`role-${index}`}
+                                        className="w-full p-2 border rounded-md"
+                                        value={member.role}
+                                        onChange={(e) => updateHrMember(index, 'role', e.target.value)}
+                                    >
+                                        <option value="">Select role...</option>
+                                        <option value="HR Manager">HR Manager</option>
+                                        <option value="HR Specialist">HR Specialist</option>
+                                        <option value="Recruiter">Recruiter</option>
+                                        <option value="HR Assistant">HR Assistant</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <Label htmlFor={`department-${index}`}>Department</Label>
+                                    <select
+                                        id={`department-${index}`}
+                                        className="w-full p-2 border rounded-md"
+                                        value={member.department}
+                                        onChange={(e) => updateHrMember(index, 'department', e.target.value)}
+                                    >
+                                        <option value="">Select department...</option>
+                                        {formData.departments.map((dept) => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <Button onClick={addHrMember} variant="outline" className="w-full">
+                    + Add HR Team Member
+                </Button>
+
+                <div className="flex justify-between pt-6 border-t">
+                    <Button onClick={onBack} variant="outline">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                    <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700">
+                        Continue
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function SystemConfigStep({
+    formData,
+    setFormData,
+    onNext,
+    onBack
+}: {
+    formData: OnboardingData;
+    setFormData: (data: OnboardingData) => void;
+    onNext: () => void;
+    onBack: () => void;
+}) {
+    return (
+        <Card className="border-2 shadow-xl">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                        <Settings className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-2xl">System Configuration</CardTitle>
+                        <CardDescription>Configure your platform settings</CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-8 space-y-8">
+                {/* Email Templates */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-blue-600" />
+                        Email Templates
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                            <Label htmlFor="welcomeEmail">Welcome Email Template</Label>
+                            <Textarea
+                                id="welcomeEmail"
+                                value={formData.emailTemplates.welcomeEmail}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    emailTemplates: { ...formData.emailTemplates, welcomeEmail: e.target.value }
+                                })}
+                                placeholder="Welcome to {companyName}! We're excited to have you on board."
+                                rows={3}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="onboardingEmail">Onboarding Email Template</Label>
+                            <Textarea
+                                id="onboardingEmail"
+                                value={formData.emailTemplates.onboardingEmail}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    emailTemplates: { ...formData.emailTemplates, onboardingEmail: e.target.value }
+                                })}
+                                placeholder="Your onboarding process is ready. Please complete the required steps."
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Notifications */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-green-600" />
+                        Notification Preferences
+                    </h3>
+                    <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="emailNotifications"
+                                checked={formData.notifications.emailNotifications}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    notifications: { ...formData.notifications, emailNotifications: e.target.checked }
+                                })}
+                                className="rounded"
+                            />
+                            <Label htmlFor="emailNotifications">Email Notifications</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="smsNotifications"
+                                checked={formData.notifications.smsNotifications}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    notifications: { ...formData.notifications, smsNotifications: e.target.checked }
+                                })}
+                                className="rounded"
+                            />
+                            <Label htmlFor="smsNotifications">SMS Notifications</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="pushNotifications"
+                                checked={formData.notifications.pushNotifications}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    notifications: { ...formData.notifications, pushNotifications: e.target.checked }
+                                })}
+                                className="rounded"
+                            />
+                            <Label htmlFor="pushNotifications">Push Notifications</Label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Security */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-red-600" />
+                        Security Settings
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="twoFactorAuth"
+                                checked={formData.security.twoFactorAuth}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    security: { ...formData.security, twoFactorAuth: e.target.checked }
+                                })}
+                                className="rounded"
+                            />
+                            <Label htmlFor="twoFactorAuth">Enable Two-Factor Authentication</Label>
+                        </div>
+                        <div>
+                            <Label htmlFor="passwordPolicy">Password Policy</Label>
+                            <select
+                                id="passwordPolicy"
+                                className="w-full p-2 border rounded-md"
+                                value={formData.security.passwordPolicy}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    security: { ...formData.security, passwordPolicy: e.target.value }
+                                })}
+                            >
+                                <option value="low">Low (6+ characters)</option>
+                                <option value="medium">Medium (8+ characters, mixed case)</option>
+                                <option value="high">High (12+ characters, special chars)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <Label htmlFor="sessionTimeout">Session Timeout (hours)</Label>
+                            <Input
+                                id="sessionTimeout"
+                                type="number"
+                                value={formData.security.sessionTimeout}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    security: { ...formData.security, sessionTimeout: parseInt(e.target.value) || 8 }
+                                })}
+                                min="1"
+                                max="24"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-between pt-6 border-t">
+                    <Button onClick={onBack} variant="outline">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                    <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700">
+                        Continue
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 function CompleteStep({
     formData,
     onComplete,
@@ -1138,4 +1586,3 @@ function CompleteStep({
         </Card>
     );
 }
-

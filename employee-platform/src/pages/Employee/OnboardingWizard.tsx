@@ -19,20 +19,30 @@ import {
     Mail,
     Shield,
     BookOpen,
-    PartyPopper
+    PartyPopper,
+    Play,
+    Laptop,
+    Users,
+    Camera,
+    GraduationCap,
+    Briefcase
 } from 'lucide-react';
 import {
     onboardingService,
     OnboardingStep,
     OnboardingProgress
 } from './services/onboardingService';
+import WelcomeVideo from './WelcomeVideo';
 import ContractReview from './ContractReview';
 import ContractUpload from './ContractUpload';
 import PersonalInfoForm from './PersonalInfoForm';
+import PersonalInfoExtended from './PersonalInfoExtended';
 import EmergencyContactsForm from './EmergencyContactsForm';
 import BankingInfoForm from './BankingInfoForm';
 import DocumentUploadForm from './DocumentUploadForm';
+import EquipmentAccess from './EquipmentAccess';
 import WorkEmailSetup from './WorkEmailSetup';
+import TeamIntroduction from './TeamIntroduction';
 import PolicyAcknowledgment from './PolicyAcknowledgment';
 import SystemTraining from './SystemTraining';
 import OnboardingCompletion from './OnboardingCompletion';
@@ -55,6 +65,12 @@ const OnboardingWizard: React.FC = () => {
         icon: React.ComponentType<any>;
         component: React.ComponentType<any>;
     }> = {
+        welcome_video: {
+            title: 'Welcome Video',
+            description: 'Watch our company introduction',
+            icon: Play,
+            component: WelcomeVideo
+        },
         contract_review: {
             title: 'Review Your Contract',
             description: 'Review your employment contract terms',
@@ -72,6 +88,12 @@ const OnboardingWizard: React.FC = () => {
             description: 'Provide your personal details',
             icon: User,
             component: PersonalInfoForm
+        },
+        personal_info_extended: {
+            title: 'Extended Profile',
+            description: 'Complete your professional profile',
+            icon: Camera,
+            component: PersonalInfoExtended
         },
         emergency_contacts: {
             title: 'Emergency Contacts',
@@ -91,11 +113,23 @@ const OnboardingWizard: React.FC = () => {
             icon: Upload,
             component: DocumentUploadForm
         },
+        equipment_access: {
+            title: 'Equipment & Access',
+            description: 'Set up your workspace and access',
+            icon: Laptop,
+            component: EquipmentAccess
+        },
         work_email_setup: {
             title: 'Work Email Setup',
             description: 'Your company email address',
             icon: Mail,
             component: WorkEmailSetup
+        },
+        team_introduction: {
+            title: 'Meet Your Team',
+            description: 'Get to know your colleagues and schedule',
+            icon: Users,
+            component: TeamIntroduction
         },
         policy_acknowledgment: {
             title: 'Company Policies',

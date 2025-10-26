@@ -2,6 +2,9 @@
     "firestore": {
         "rules": "firestore.rules.production"
     },
+    "storage": {
+        "rules": "storage.rules"
+    },
     "hosting": {
         "public": "hr-platform/dist",
         "ignore": [

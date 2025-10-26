@@ -1,6 +1,6 @@
 import { Avatar } from '../ui/avatar';
 import { Button } from '../ui/button';
-import { Plane, Settings, Menu, LogOut, Sun, Moon } from 'lucide-react';
+import { Plane, Settings, Menu, Sun, Moon } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTheme } from '../atoms/ThemeProvider';
 
@@ -19,11 +19,6 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  };
 
   return (
     <header className="bg-background border-b border-border shadow-sm">
@@ -62,9 +57,6 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
                 <Button variant="outline" size="sm" className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border" onClick={toggleTheme} aria-label="Toggle theme">
                   {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
                 </Button>
-                <Button variant="outline" size="sm" className="hover:bg-destructive/10 dark:hover:bg-destructive/20" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 text-destructive dark:text-destructive" />
-                </Button>
                 <Button variant="outline" size="sm" className="hover:bg-accent/50 dark:hover:bg-accent/30">
                   <Settings className="w-4 h-4" />
                 </Button>
@@ -102,9 +94,6 @@ export function Header({ title, subtitle, showUserInfo = true, actions, callToAc
             </Button>
             <Button variant="outline" size="sm" className="w-full mb-2 hover:bg-accent/50 dark:hover:bg-accent/30">
               <Settings className="w-4 h-4 mr-2" /> Settings
-            </Button>
-            <Button variant="outline" size="sm" className="w-full hover:bg-destructive/10 dark:hover:bg-destructive/20" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2 text-destructive dark:text-destructive" /> Logout
             </Button>
           </div>
         )}

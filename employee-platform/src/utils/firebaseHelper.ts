@@ -12,7 +12,7 @@ export async function testFirebaseConnection(): Promise<boolean> {
         const { collection, query, getDocs, limit } = await import('firebase/firestore');
         const testQuery = query(collection(db, 'employees'), limit(1));
         await getDocs(testQuery);
-        
+
         console.log('✅ Firebase connection test successful');
         return true;
     } catch (error) {
@@ -25,25 +25,25 @@ export async function testFirebaseConnection(): Promise<boolean> {
 export async function forceFirebaseInit(): Promise<boolean> {
     try {
         console.log('🔄 Forcing Firebase initialization...');
-        
+
         // Re-import Firebase modules
         const { initializeApp } = await import('firebase/app');
         const { getFirestore } = await import('firebase/firestore');
-        
+
         const firebaseConfig = {
-            apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC6ovwlhX4Mr8WpHoS045wLxHA7t8fRXPI",
-            authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hris-system-baa22.firebaseapp.com",
-            projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hris-system-baa22",
-            storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hris-system-baa22.firebasestorage.app",
-            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "563898942372",
-            appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:563898942372:web:8c5ebae1dfaf072858b731",
-            measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-1DJP5DJX92"
+            apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+            authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+            projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+            storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+            appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+            measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || ""
         };
-        
+
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const newDb = getFirestore(app);
-        
+
         console.log('✅ Firebase re-initialized successfully');
         return true;
     } catch (error) {

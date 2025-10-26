@@ -3,15 +3,13 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "../ui/na
 import { Separator } from "../ui/separator";
 import { Avatar } from "../ui/avatar";
 import { Sun, Moon } from 'lucide-react';
-import { Users, Briefcase, FileText, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { Users, Briefcase, FileText, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { User } from 'lucide-react';
 import { Button } from "../ui/button";
 import { useTheme } from '../atoms/ThemeProvider';
 import { TypographyH2, TypographySmall, TypographyMuted } from '../ui/typography';
 import { useLocation } from 'react-router-dom';
-import { Popover } from '../ui/popover';
 import { useCompany } from '../../context/CompanyContext';
-import { getCompanyService, Company } from '../../services/companyService';
 
 const navStructure = [
   {
@@ -52,102 +50,32 @@ export function Sidebar() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
-  const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loadingCompanies, setLoadingCompanies] = useState(true);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  };
+  const [collapsed, setCollapsed] = useState(false);
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
 
-  // Load companies from Firebase
-  useEffect(() => {
-    const loadCompanies = async () => {
-      try {
-        const companyService = await getCompanyService();
-        const allCompanies = await companyService.getActiveCompanies();
-        setCompanies(allCompanies);
-        console.log('📋 Loaded companies for switcher:', allCompanies.length);
-      } catch (error) {
-        console.error('Error loading companies:', error);
-      } finally {
-        setLoadingCompanies(false);
-      }
-    };
-    loadCompanies();
-  }, []);
-
-  // Handle company switch
-  const handleCompanySwitch = (selectedCompany: Company) => {
-    console.log('🔄 Switching to company:', selectedCompany.displayName);
-    setCompany(selectedCompany);
-    localStorage.setItem('companyId', selectedCompany.id);
-    setCompanyPopoverOpen(false);
-
-    // Show success message
-    console.log(`✅ Switched to ${selectedCompany.displayName}. All data will now be filtered for this company.`);
-  };
+  // Companies are now isolated per user account - no company switcher needed
 
   return (
     <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-72'} bg-card border-r border-border/50 flex flex-col text-foreground transition-all duration-300 shadow-soft animate-slide-in`}>
-      {/* Company Switcher and Collapse Toggle */}
+      {/* Company Display and Collapse Toggle */}
       <div className={`flex items-center gap-3 px-4 py-6 border-b border-border/50 mb-2 ${collapsed ? 'justify-center' : ''}`}>
-        <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
-          <Popover.Trigger asChild>
-            <button
-              className={`flex items-center gap-3 focus:outline-none ${collapsed ? 'p-2' : 'p-3'} bg-gradient-to-r from-primary/10 to-secondary/10 hover:from-primary/20 hover:to-secondary/20 rounded-xl transition-all duration-200 group`}
-              aria-label="Switch company"
-              onClick={() => setCompanyPopoverOpen((o) => !o)}
-            >
-              <Building2 className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
-              {!collapsed && (
-                <>
-                  <div className="flex flex-col items-start">
-                    <span className="font-bold text-lg text-gradient">
-                      {company?.displayName || 'Loading...'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">HRIS System</span>
-                  </div>
-                  {companies.length > 1 && (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
-                  )}
-                </>
-              )}
-            </button>
-          </Popover.Trigger>
-          <Popover.Content align="start" className="w-64 p-2 glass-effect">
-            {loadingCompanies ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                Loading companies...
-              </div>
-            ) : companies.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                No companies available
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {companies.map((comp) => (
-                  <li key={comp.id}>
-                    <button
-                      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group ${companyId === comp.id ? 'bg-primary/10 text-primary font-semibold' : ''}`}
-                      onClick={() => handleCompanySwitch(comp)}
-                    >
-                      <Building2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                      <div className="flex flex-col items-start flex-1">
-                        <span className="text-sm">{comp.displayName}</span>
-                        {comp.domain && (
-                          <span className="text-xs text-muted-foreground">{comp.domain}</span>
-                        )}
-                      </div>
-                      {companyId === comp.id && (
-                        <CheckCircle className="w-4 h-4 text-primary" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Popover.Content>
-        </Popover>
+        <div className={`flex items-center gap-3 ${collapsed ? 'p-2' : 'p-3'} bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl`}>
+          <Building2 className="w-6 h-6 text-primary" />
+          {!collapsed && (
+            <div className="flex flex-col items-start">
+              <span className="font-bold text-lg text-gradient">
+                {company?.displayName || 'Loading...'}
+              </span>
+              <span className="text-xs text-muted-foreground">HRIS System</span>
+            </div>
+          )}
+        </div>
         <button
           className="p-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -190,6 +118,7 @@ export function Sidebar() {
               <SidebarNavLink link={{ label: 'Help', href: '/help', icon: HelpCircle }} isActive={location.pathname === '/help'} collapsed={collapsed} />
               <SidebarNavLink link={{ label: 'Support', href: '/support', icon: LifeBuoy }} isActive={location.pathname === '/support'} collapsed={collapsed} />
               <SidebarNavLink link={{ label: 'Settings', href: '/settings', icon: Settings }} isActive={location.pathname === '/settings'} collapsed={collapsed} />
+              <SidebarNavLink link={{ label: 'HR Availability', href: '/hr/settings/availability', icon: Clock }} isActive={location.pathname === '/hr/settings/availability'} collapsed={collapsed} />
             </ul>
           </div>
         </div>
@@ -203,22 +132,34 @@ export function Sidebar() {
             </Avatar>
             {!collapsed && (
               <div className="flex-1">
-                <TypographySmall className="font-medium">Jane Doe</TypographySmall>
-                <TypographyMuted className="dark:text-muted-foreground">HR Manager</TypographyMuted>
+                <TypographySmall className="font-medium">HR Manager</TypographySmall>
+                <TypographyMuted className="dark:text-muted-foreground">hr@acme.com</TypographyMuted>
               </div>
             )}
           </div>
-          {mounted && (
+          <div className={`flex gap-2 ${collapsed ? 'flex-col' : ''}`}>
+            {mounted && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border"
+                aria-label="Toggle dark mode"
+                onClick={toggleTheme}
+              >
+                {theme === "dark" ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="icon"
-              className="bg-accent/50 dark:bg-accent/30 hover:bg-accent/80 dark:hover:bg-accent/50 border-border"
-              aria-label="Toggle dark mode"
-              onClick={toggleTheme}
+              className="hover:bg-destructive/10 dark:hover:bg-destructive/20 border-border"
+              aria-label="Logout"
+              onClick={handleLogout}
+              title="Logout"
             >
-              {theme === "dark" ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+              <LogOut className="w-5 h-5 text-destructive dark:text-destructive" />
             </Button>
-          )}
+          </div>
         </div>
       </div>
     </aside>

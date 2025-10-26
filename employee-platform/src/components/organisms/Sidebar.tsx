@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "../ui/navigation-menu";
 import { Separator } from "../ui/separator";
 import { Avatar } from "../ui/avatar";
 import { Sun, Moon } from 'lucide-react';
-import { Users, Briefcase, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, ChevronDown, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, Package, CalendarCheck } from 'lucide-react';
+import { Users, Briefcase, BarChart2, Clock, Calendar, Wallet, DollarSign, Gift, Shield, Percent, UserPlus, ClipboardList, BookOpen, LayoutDashboard, Building2, LifeBuoy, HelpCircle, Settings, ChevronLeft, ChevronRight, Package, CalendarCheck } from 'lucide-react';
 import { User } from 'lucide-react';
 import { Button } from "../ui/button";
 import { useTheme } from '../atoms/ThemeProvider';
 import { TypographyH2, TypographySmall, TypographyMuted } from '../ui/typography';
 import { useLocation, Link } from 'react-router-dom';
-import { Popover } from '../ui/popover';
+import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 
 const navStructure = [
   {
@@ -44,62 +45,32 @@ const navStructure = [
   },
 ];
 
-const mockCompanies = [
-  { name: 'Acme Corp', icon: Building2 },
-  { name: 'Beta Inc', icon: Briefcase },
-  { name: 'Gamma LLC', icon: Shield },
-];
-
 export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState(mockCompanies[0]);
-  const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
+  const { currentEmployee } = useAuth();
+  const { company, companyId } = useCompany();
 
   const dashboardLink = { label: 'My Dashboard', href: '/dashboard', icon: LayoutDashboard };
 
   return (
     <aside className={`min-h-screen ${collapsed ? 'w-16' : 'w-72'} bg-card border-r border-border/50 flex flex-col text-foreground transition-all duration-300 shadow-soft animate-slide-in`}>
-      {/* Company Switcher and Collapse Toggle */}
+      {/* Company Display and Collapse Toggle */}
       <div className={`flex items-center gap-3 px-4 py-6 border-b border-border/50 mb-2 ${collapsed ? 'justify-center' : ''}`}>
-        <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
-          <Popover.Trigger asChild>
-            <button
-              className={`flex items-center gap-3 focus:outline-none ${collapsed ? 'p-2' : 'p-3'} bg-gradient-to-r from-primary/10 to-secondary/10 hover:from-primary/20 hover:to-secondary/20 rounded-xl transition-all duration-200 group`}
-              aria-label="Switch company"
-              onClick={() => setCompanyPopoverOpen((o) => !o)}
-            >
-              <selectedCompany.icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
-              {!collapsed && (
-                <>
-                  <div className="flex flex-col items-start">
-                    <span className="font-bold text-lg text-gradient">{selectedCompany.name}</span>
-                    <span className="text-xs text-muted-foreground">HRIS System</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
-                </>
-              )}
-            </button>
-          </Popover.Trigger>
-          <Popover.Content align="start" className="w-56 p-2 glass-effect">
-            <ul className="flex flex-col gap-1">
-              {mockCompanies.map((company) => (
-                <li key={company.name}>
-                  <button
-                    className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group ${selectedCompany.name === company.name ? 'bg-primary/10 text-primary font-semibold' : ''}`}
-                    onClick={() => { setSelectedCompany(company); setCompanyPopoverOpen(false); }}
-                  >
-                    <company.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span>{company.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Popover.Content>
-        </Popover>
+        <div className={`flex items-center gap-3 ${collapsed ? 'p-2' : 'p-3'} bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl`}>
+          <Building2 className="w-6 h-6 text-primary" />
+          {!collapsed && (
+            <div className="flex flex-col items-start">
+              <span className="font-bold text-lg text-gradient">
+                {company?.displayName || 'Loading...'}
+              </span>
+              <span className="text-xs text-muted-foreground">Employee Portal</span>
+            </div>
+          )}
+        </div>
         <button
           className="p-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -155,8 +126,15 @@ export function Sidebar() {
             </Avatar>
             {!collapsed && (
               <div className="flex-1">
-                <TypographySmall className="font-medium">Jane Doe</TypographySmall>
-                <TypographyMuted className="dark:text-muted-foreground">HR Manager</TypographyMuted>
+                <TypographySmall className="font-medium">
+                  {currentEmployee?.personalInfo?.firstName && currentEmployee?.personalInfo?.lastName
+                    ? `${currentEmployee.personalInfo.firstName} ${currentEmployee.personalInfo.lastName}`
+                    : 'Employee'
+                  }
+                </TypographySmall>
+                <TypographyMuted className="dark:text-muted-foreground">
+                  {currentEmployee?.workInfo?.position || 'Employee'}
+                </TypographyMuted>
               </div>
             )}
           </div>

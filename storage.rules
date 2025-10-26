@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for HRIS Document Management
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is HR (simplified for development)
+    function isHR() {
+      return isAuthenticated();
+    }
+    
+    // Helper function to check file size (max 10MB)
+    function isValidSize() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10MB
+    }
+    
+    // Helper function to check file type (documents only)
+    function isValidFileType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+             request.resource.contentType.matches('application/vnd.ms-excel') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+             request.resource.contentType.matches('text/plain') ||
+             request.resource.contentType.matches('text/csv');
+    }
+    
+    // ==========================================
+    // COMPANY DOCUMENTS
+    // Companies/{companyId}/documents/...
+    // HR can upload/delete, all employees can read
+    // ==========================================
+    match /companies/{companyId}/documents/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isHR() && isValidSize() && isValidFileType();
+      allow delete: if isHR();
+    }
+    
+    // ==========================================
+    // EMPLOYEE DOCUMENTS
+    // Companies/{companyId}/employees/{employeeId}/...
+    // HR can upload/delete/read, employee can upload/read own
+    // ==========================================
+    match /companies/{companyId}/employees/{employeeId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize() && isValidFileType();
+      allow delete: if isHR();
+    }
+    
+    // ==========================================
+    // TEMPORARY UPLOADS
+    // temp/{userId}/...
+    // User can only access their own temp files
+    // ==========================================
+    match /temp/{userId}/{allPaths=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ==========================================
+    // PUBLIC ASSETS (Company logos, etc.)
+    // public/{allPaths}
+    // Anyone can read, only HR can write
+    // ==========================================
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isHR() && isValidSize() && isValidFileType();
+      allow delete: if isHR();
+    }
+  }
+}
+
+
+

@@ -54,6 +54,7 @@ import {
 } from '../../../services/payrollService';
 import { getComprehensiveDataFlowService } from '../../../services/comprehensiveDataFlowService';
 import { Employee } from '../CoreHr/EmployeeManagement/types';
+import { vercelEmailService } from '../../../services/vercelEmailService';
 
 // Use the singleton from service
 const getPayrollService = getPayrollServiceImport;
@@ -814,6 +815,21 @@ export default function Payroll() {
         deptData[dept].average = deptData[dept].total / deptData[dept].count;
       });
       setDepartmentData(deptData);
+
+      // Send payslip available email notification
+      const emailResult = await vercelEmailService.sendPayslipAvailable({
+        employeeName: payrollForm.employeeName,
+        email: 'employee@company.com', // This should come from employee data
+        payPeriod: `${payrollForm.payPeriod.startDate} to ${payrollForm.payPeriod.endDate}`,
+        companyName: 'Your Company'
+      });
+
+      if (emailResult.success) {
+        console.log('✅ Payslip available email sent successfully');
+      } else {
+        console.warn('⚠️ Failed to send payslip available email:', emailResult.error);
+        // Don't throw error - email failure shouldn't break the payroll creation process
+      }
 
       // Close dialog and reset form
       setAddPayrollOpen(false);

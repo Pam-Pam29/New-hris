@@ -31,6 +31,7 @@ import { format } from 'date-fns';
 import { getPolicyService, Policy, PolicyAcknowledgment } from './services/policyService';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebaseDb } from '../../../../config/firebase';
+import { vercelEmailService } from '../../../../services/vercelEmailService';
 
 export default function HRPolicyManagement() {
   const [policies, setPolicies] = useState<Policy[]>([]);
@@ -219,6 +220,22 @@ export default function HRPolicyManagement() {
       });
 
       if (success) {
+        // Send new policy email notification to all employees
+        const emailResult = await vercelEmailService.sendNewPolicy({
+          employeeName: 'All Employees',
+          email: 'all-employees@company.com', // This should be a distribution list or sent to all employees
+          policyTitle: policyForm.title,
+          policyDescription: policyForm.content.substring(0, 200) + '...', // First 200 characters
+          companyName: 'Your Company'
+        });
+
+        if (emailResult.success) {
+          console.log('✅ New policy email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send new policy email:', emailResult.error);
+          // Don't throw error - email failure shouldn't break the policy creation process
+        }
+
         setShowCreateModal(false);
         resetForm();
         await loadData();
@@ -717,8 +734,8 @@ export default function HRPolicyManagement() {
                       type="button"
                       onClick={() => setInputMethod('type')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'type'
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
                         }`}
                     >
                       <Type className="h-5 w-5" />
@@ -728,8 +745,8 @@ export default function HRPolicyManagement() {
                       type="button"
                       onClick={() => setInputMethod('upload')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'upload'
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
                         }`}
                     >
                       <Upload className="h-5 w-5" />

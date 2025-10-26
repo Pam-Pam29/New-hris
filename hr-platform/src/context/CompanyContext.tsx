@@ -37,17 +37,9 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
                         localStorage.removeItem('companyId');
                     }
                 } else {
-                    console.log('ℹ️ No company ID in localStorage - will use default or first company');
-
-                    // For development: Load first active company
-                    const companyService = await getCompanyService();
-                    const companies = await companyService.getActiveCompanies();
-
-                    if (companies.length > 0) {
-                        setCompany(companies[0]);
-                        localStorage.setItem('companyId', companies[0].id);
-                        console.log('✅ Auto-loaded first company:', companies[0].displayName);
-                    }
+                    console.log('ℹ️ No company ID in localStorage - user needs to sign up or login');
+                    // Don't auto-load any company - each user should have their own company
+                    setCompany(null);
                 }
             } catch (error) {
                 console.error('Error loading company:', error);
@@ -57,6 +49,29 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
         };
 
         loadCompany();
+
+        // Listen for localStorage changes to refresh company context
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'companyId') {
+                console.log('🔄 Company ID changed in localStorage, reloading company context...');
+                loadCompany();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+        // Also listen for custom events (for same-tab changes)
+        const handleCustomStorageChange = () => {
+            console.log('🔄 Company ID changed via custom event, reloading company context...');
+            loadCompany();
+        };
+
+        window.addEventListener('companyIdChanged', handleCustomStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            window.removeEventListener('companyIdChanged', handleCustomStorageChange);
+        };
     }, []);
 
     return (
@@ -80,6 +95,10 @@ export const useCompany = () => {
     }
     return context;
 };
+
+
+
+
 
 
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -22,6 +23,7 @@ interface HrAuthGuardProps {
 }
 
 export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
+    const navigate = useNavigate();
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [email, setEmail] = useState<string>('');
@@ -34,7 +36,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     // Check if current path should bypass authentication
     const isPublicRoute = () => {
         const path = window.location.pathname;
-        return path === '/signup' || path === '/onboarding' || path === '/data-cleanup';
+        return path === '/signup' || path === '/hr-signup' || path === '/onboarding' || path === '/data-cleanup';
     };
 
     // Check authentication state on mount
@@ -194,12 +196,12 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                             <div className="text-sm text-center text-gray-500 mt-4">
                                 <p>
                                     Don't have an account?{' '}
-                                    <a
-                                        href="/signup"
+                                    <button
+                                        onClick={() => navigate('/hr-signup')}
                                         className="text-blue-600 hover:underline font-medium"
                                     >
                                         Sign up here
-                                    </a>
+                                    </button>
                                 </p>
                                 <p className="mt-2 text-xs">
                                     Need help? Contact your system administrator.

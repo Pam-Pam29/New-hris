@@ -3,6 +3,7 @@ import { getServiceConfig, initializeFirebase } from '@/config/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { Asset, AssetAssignment, MaintenanceRecord, AssetRequest, StarterKit } from '../types';
 import { isFirebaseConfigured } from '@/config/firebase';
+import { vercelEmailService } from '../../../../../services/vercelEmailService';
 
 export interface IAssetService {
   // Asset Management
@@ -468,6 +469,26 @@ export class FirebaseAssetService implements IAssetService {
       }
 
       console.log(`📊 Starter kit assignment complete: ${assignedCount} assets assigned, ${missingAssets.length} missing`);
+
+      // Send email notification if assets were assigned
+      if (assignedCount > 0) {
+        const emailResult = await vercelEmailService.sendAssetAssigned({
+          employeeName: employeeName,
+          email: 'employee@company.com', // This should come from employee data
+          assetName: `${assignedCount} asset${assignedCount > 1 ? 's' : ''} assigned`,
+          assetType: 'Starter Kit',
+          serialNumber: 'Multiple',
+          assignedDate: new Date().toISOString(),
+          companyName: 'Your Company'
+        });
+
+        if (emailResult.success) {
+          console.log('✅ Asset assignment email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send asset assignment email:', emailResult.error);
+          // Don't throw error - email failure shouldn't break the assignment process
+        }
+      }
 
       return {
         success: assignedCount > 0,

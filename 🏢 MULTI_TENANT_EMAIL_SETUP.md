@@ -507,3 +507,7 @@ await emailService.sendTestEmail('your-email@gmail.com');
 **Your HRIS supports unlimited companies with isolated, branded email communication!** 🏢📧
 
 
+
+
+
+

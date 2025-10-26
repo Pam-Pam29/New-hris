@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { db, auth } from '../config/firebase';
 
 interface CurrentEmployee {
     id: string;
@@ -90,49 +91,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
-            console.log('🔐 [Auth] Attempting login for:', email);
+            console.log('🔐 [Auth] Attempting Firebase Auth login for:', email);
 
-            // Find employee by email
-            const employeesRef = collection(db, 'employees');
-            const q = query(employeesRef, where('contactInfo.workEmail', '==', email));
-            const snapshot = await getDocs(q);
+            // Declare variables outside the try-catch block
+            let employeeDoc: any;
+            let employeeData: any;
 
-            if (snapshot.empty) {
-                console.log('❌ [Auth] Email not found:', email);
-                return { success: false, error: 'Email not found. Please check your email or contact HR.' };
+            // Try Firebase Authentication first
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log('✅ [Auth] Firebase Auth successful:', userCredential.user.uid);
+
+                // Find employee by Firebase UID or email
+                const employeesRef = collection(db, 'employees');
+                let q = query(employeesRef, where('auth.firebaseUid', '==', userCredential.user.uid));
+                let snapshot = await getDocs(q);
+
+                // If not found by UID, try by email
+                if (snapshot.empty) {
+                    q = query(employeesRef, where('contactInfo.workEmail', '==', email));
+                    snapshot = await getDocs(q);
+                }
+
+                if (snapshot.empty) {
+                    console.log('❌ [Auth] Employee record not found for Firebase user');
+                    return { success: false, error: 'Employee record not found. Please contact HR.' };
+                }
+
+                employeeDoc = snapshot.docs[0];
+                employeeData = employeeDoc.data();
+
+                console.log('✅ [Auth] Employee found:', employeeData.employeeId);
+
+                // Check if account is active
+                if (employeeData.auth?.isActive === false) {
+                    console.log('❌ [Auth] Account inactive');
+                    return { success: false, error: 'Your account is inactive. Please contact HR.' };
+                }
+
+                console.log('✅ [Auth] Login successful!');
+
+            } catch (firebaseAuthError: any) {
+                console.log('❌ [Auth] Firebase Auth failed:', firebaseAuthError.code);
+                console.error('❌ [Auth] Full error:', firebaseAuthError);
+
+                // Handle specific Firebase Auth errors
+                if (firebaseAuthError.code === 'auth/user-not-found' || firebaseAuthError.code === 'auth/invalid-credential') {
+                    return { success: false, error: 'Email not found or invalid credentials. Please check your details or complete the setup process first.' };
+                } else if (firebaseAuthError.code === 'auth/wrong-password') {
+                    return { success: false, error: 'Incorrect password. Please try again.' };
+                } else if (firebaseAuthError.code === 'auth/user-disabled') {
+                    return { success: false, error: 'Your account has been disabled. Please contact HR.' };
+                } else if (firebaseAuthError.code === 'auth/too-many-requests') {
+                    return { success: false, error: 'Too many failed attempts. Please try again later.' };
+                } else if (firebaseAuthError.code === 'auth/invalid-email') {
+                    return { success: false, error: 'Invalid email format. Please check your email.' };
+                } else {
+                    // For undefined or unknown errors
+                    const errorMessage = firebaseAuthError.message || 'Authentication failed. Please try again.';
+                    return { success: false, error: `Authentication error: ${errorMessage}. Please ensure you've completed the account setup process.` };
+                }
             }
 
-            const employeeDoc = snapshot.docs[0];
-            const employeeData = employeeDoc.data();
-
-            console.log('✅ [Auth] Employee found:', employeeData.employeeId);
-
-            // Check if password has been set
-            if (!employeeData.auth?.passwordHash) {
-                console.log('⚠️ [Auth] Password not set yet');
-                return {
-                    success: false,
-                    error: 'Password not set. Please check your email for the setup link or contact HR.'
-                };
-            }
-
-            // For now, we'll do a simple password comparison
-            // In production, use bcrypt.compare(password, employeeData.auth.passwordHash)
-            // For MVP, we'll store password directly (NOT SECURE - TEMPORARY!)
-            if (password !== employeeData.auth.password) {
-                console.log('❌ [Auth] Incorrect password');
-                return { success: false, error: 'Incorrect password. Please try again.' };
-            }
-
-            // Check if account is active
-            if (employeeData.auth?.isActive === false) {
-                console.log('❌ [Auth] Account inactive');
-                return { success: false, error: 'Your account is inactive. Please contact HR.' };
-            }
-
-            console.log('✅ [Auth] Login successful!');
-
-            // Create employee object
+            // Create employee object (this will only run if Firebase Auth succeeded)
             const employee: CurrentEmployee = {
                 id: employeeDoc.id,
                 employeeId: employeeData.employeeId,
@@ -176,8 +197,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
         console.log('👋 [Auth] Logging out');
+
+        // Sign out from Firebase Auth
+        try {
+            await signOut(auth);
+            console.log('✅ [Auth] Firebase Auth sign out successful');
+        } catch (error) {
+            console.error('❌ [Auth] Firebase Auth sign out error:', error);
+        }
+
         setCurrentEmployee(null);
         localStorage.removeItem('employeeSession');
         localStorage.removeItem('currentEmployeeId');

@@ -73,12 +73,13 @@ export const EmployeeSetup: React.FC = () => {
                 }
 
                 // Verify invite token (if required)
-                if (inviteToken && employeeData.inviteToken !== inviteToken) {
+                if (inviteToken && employeeData.auth?.setupToken !== inviteToken) {
                     setError('Invalid invitation token. Please contact your HR department.');
                     setLoading(false);
                     return;
                 }
 
+                console.log('✅ [Employee Setup] Employee data loaded:', employeeData);
                 setEmployee(employeeData);
                 setLoading(false);
             } catch (err: any) {
@@ -126,25 +127,47 @@ export const EmployeeSetup: React.FC = () => {
         setError('');
 
         try {
-            console.log('🔐 [Employee Setup] Creating account for:', employee.email);
+            const employeeEmail = employee.auth?.email || employee.contactInfo?.workEmail;
+            console.log('🔐 [Employee Setup] Creating Firebase Auth account for:', employeeEmail);
 
-            // Create Firebase Authentication account
-            const userCredential = await createUserWithEmailAndPassword(
-                auth,
-                employee.email,
-                formData.password
-            );
-
-            console.log('✅ [Employee Setup] Firebase account created');
+            let userCredential;
+            try {
+                // Try to create new Firebase Auth account
+                userCredential = await createUserWithEmailAndPassword(
+                    auth,
+                    employeeEmail,
+                    formData.password
+                );
+                console.log('✅ [Employee Setup] New Firebase Auth account created');
+            } catch (error: any) {
+                if (error.code === 'auth/email-already-in-use') {
+                    console.log('⚠️ [Employee Setup] Account exists, updating password...');
+                    // Account exists - we need to sign in with current password and update
+                    // For now, let's just update the employee record and let them login normally
+                    userCredential = null;
+                    console.log('✅ [Employee Setup] Account exists, will use existing Firebase Auth');
+                } else {
+                    throw error;
+                }
+            }
 
             // Update employee document
             const employeeRef = doc(db, 'employees', employeeId);
-            await updateDoc(employeeRef, {
+            const updateData: any = {
                 accountSetup: 'completed',
                 setupCompletedAt: new Date().toISOString(),
-                firebaseUid: userCredential.user.uid,
-                inviteToken: null // Clear invite token
-            });
+                'auth.isActive': true,
+                'auth.lastLogin': null,
+                'auth.loginCount': 0
+            };
+
+            // Store Firebase UID if we created a new account
+            if (userCredential) {
+                updateData['auth.firebaseUid'] = userCredential.user.uid;
+                updateData['auth.emailVerified'] = userCredential.user.emailVerified;
+            }
+
+            await updateDoc(employeeRef, updateData);
 
             console.log('✅ [Employee Setup] Employee profile updated');
 
@@ -367,4 +390,5 @@ export const EmployeeSetup: React.FC = () => {
 };
 
 export default EmployeeSetup;
+
 

@@ -13,6 +13,12 @@ import { getComprehensiveDataFlowService, EmployeeProfile } from '../../services
 import { Link, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { useAuth } from '../../context/AuthContext';
+import { departmentService } from '../../services/departmentService';
+import EmployeeDocumentUpload from '../../components/EmployeeDocumentUpload';
+import { documentService } from '../../services/documentService';
+import { DocumentMetadata } from '../../services/documentMetadataService';
+import { testCloudinaryConfig } from '../../utils/cloudinaryTest';
+import { testFirestoreDocumentMetadata } from '../../utils/firestoreTest';
 
 // Use the EmployeeProfile interface from the service
 type ComprehensiveProfile = EmployeeProfile;
@@ -25,7 +31,88 @@ export default function EmployeeProfilePage() {
     const [editData, setEditData] = useState<Partial<ComprehensiveProfile>>({});
     const [activeTab, setActiveTab] = useState('personal');
 
+    // Department options state
+    const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: string, label: string }>>([]);
+    const [loadingDepartments, setLoadingDepartments] = useState(false);
+
+    // Document management state
+    const [employeeDocuments, setEmployeeDocuments] = useState<DocumentMetadata[]>([]);
+    const [loadingDocuments, setLoadingDocuments] = useState(false);
+
     const currentEmployeeId = currentEmployee?.employeeId || '';
+
+    // Test Cloudinary configuration on component mount
+    useEffect(() => {
+        testCloudinaryConfig();
+        testFirestoreDocumentMetadata();
+    }, []);
+
+    // Load employee documents
+    useEffect(() => {
+        if (profile?.companyId && currentEmployeeId && activeTab === 'documents') {
+            loadEmployeeDocuments();
+        }
+    }, [profile?.companyId, currentEmployeeId, activeTab]);
+
+    const loadEmployeeDocuments = async () => {
+        if (!profile?.companyId || !currentEmployeeId) return;
+
+        setLoadingDocuments(true);
+        try {
+            const result = await documentService.listDocuments(profile.companyId, currentEmployeeId);
+
+            if (result.success && result.documents) {
+                setEmployeeDocuments(result.documents);
+            } else {
+                console.warn('⚠️ [Document Storage] Failed to load documents:', result.error);
+            }
+        } catch (error) {
+            console.error('❌ [Document Storage] Error loading documents:', error);
+        } finally {
+            setLoadingDocuments(false);
+        }
+    };
+
+    const handleDocumentUpload = (url: string, metadata: DocumentMetadata) => {
+        // Refresh the document list to get the latest documents from localStorage
+        loadEmployeeDocuments();
+    };
+
+    const handleDocumentDelete = (path: string) => {
+        setEmployeeDocuments(prev => prev.filter(doc => doc.path !== path));
+    };
+
+    // Load department options when employee changes
+    useEffect(() => {
+        if (!currentEmployee?.companyId) return;
+
+        const loadDepartments = async () => {
+            try {
+                setLoadingDepartments(true);
+                console.log('📋 [Profile] Loading departments for company:', currentEmployee.companyId);
+
+                const options = await departmentService.getDepartmentOptions(currentEmployee.companyId);
+                setDepartmentOptions(options);
+
+                console.log('✅ [Profile] Loaded departments:', options.length);
+            } catch (error) {
+                console.error('❌ [Profile] Error loading departments:', error);
+                // Set fallback departments
+                setDepartmentOptions([
+                    { value: 'Human Resources', label: 'Human Resources' },
+                    { value: 'Engineering', label: 'Engineering' },
+                    { value: 'Marketing', label: 'Marketing' },
+                    { value: 'Sales', label: 'Sales' },
+                    { value: 'Finance', label: 'Finance' },
+                    { value: 'Operations', label: 'Operations' }
+                ]);
+            } finally {
+                setLoadingDepartments(false);
+            }
+        };
+
+        loadDepartments();
+    }, [currentEmployee?.companyId]);
 
     // Load profile data on component mount and when employee changes
     useEffect(() => {
@@ -614,21 +701,33 @@ export default function EmployeeProfilePage() {
                                                 <SelectValue placeholder="Select department" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Human Resources">Human Resources</SelectItem>
-                                                <SelectItem value="Information Technology">Information Technology</SelectItem>
-                                                <SelectItem value="Finance">Finance</SelectItem>
-                                                <SelectItem value="Marketing">Marketing</SelectItem>
-                                                <SelectItem value="Sales">Sales</SelectItem>
-                                                <SelectItem value="Operations">Operations</SelectItem>
-                                                <SelectItem value="Customer Service">Customer Service</SelectItem>
-                                                <SelectItem value="Legal">Legal</SelectItem>
-                                                <SelectItem value="Engineering">Engineering</SelectItem>
-                                                <SelectItem value="Product Management">Product Management</SelectItem>
-                                                <SelectItem value="Quality Assurance">Quality Assurance</SelectItem>
-                                                <SelectItem value="Research & Development">Research & Development</SelectItem>
-                                                <SelectItem value="Administration">Administration</SelectItem>
-                                                <SelectItem value="Security">Security</SelectItem>
-                                                <SelectItem value="Facilities">Facilities</SelectItem>
+                                                {loadingDepartments ? (
+                                                    <SelectItem value="" disabled>Loading departments...</SelectItem>
+                                                ) : departmentOptions.length > 0 ? (
+                                                    departmentOptions.map((option) => (
+                                                        <SelectItem key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <SelectItem value="Human Resources">Human Resources</SelectItem>
+                                                        <SelectItem value="Information Technology">Information Technology</SelectItem>
+                                                        <SelectItem value="Finance">Finance</SelectItem>
+                                                        <SelectItem value="Marketing">Marketing</SelectItem>
+                                                        <SelectItem value="Sales">Sales</SelectItem>
+                                                        <SelectItem value="Operations">Operations</SelectItem>
+                                                        <SelectItem value="Customer Service">Customer Service</SelectItem>
+                                                        <SelectItem value="Legal">Legal</SelectItem>
+                                                        <SelectItem value="Engineering">Engineering</SelectItem>
+                                                        <SelectItem value="Product Management">Product Management</SelectItem>
+                                                        <SelectItem value="Quality Assurance">Quality Assurance</SelectItem>
+                                                        <SelectItem value="Research & Development">Research & Development</SelectItem>
+                                                        <SelectItem value="Administration">Administration</SelectItem>
+                                                        <SelectItem value="Security">Security</SelectItem>
+                                                        <SelectItem value="Facilities">Facilities</SelectItem>
+                                                    </>
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     ) : (
@@ -1466,241 +1565,28 @@ export default function EmployeeProfilePage() {
                             <CardHeader>
                                 <CardTitle className="flex items-center space-x-2">
                                     <FileText className="h-5 w-5" />
-                                    <span>Required Documents</span>
+                                    <span>My Documents</span>
                                 </CardTitle>
-                                <div className="mt-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium">Document Upload Progress</span>
-                                        <span className="text-sm text-muted-foreground">0/8 Required</span>
-                                    </div>
-                                    <Progress value={0} className="h-2" />
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Upload all required documents to access the employee portal
-                                    </p>
-                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-6">
-                                    {/* Authentication Flow Notice */}
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                        <div className="flex items-start space-x-3">
-                                            <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
-                                            <div>
-                                                <h4 className="font-medium text-blue-900">Document Upload Required</h4>
-                                                <p className="text-sm text-blue-700 mt-1">
-                                                    As part of your employee setup process, you must upload all required documents before accessing the employee portal.
-                                                    This ensures compliance and completes your account verification.
-                                                </p>
-                                            </div>
-                                        </div>
+                                {loadingDocuments ? (
+                                    <div className="flex items-center justify-center p-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                        <span className="ml-3 text-gray-600">Loading documents...</span>
                                     </div>
-
-                                    {/* Upload Section */}
-                                    <div className="border-2 border-dashed border-primary/20 rounded-lg p-6 text-center bg-primary/5">
-                                        <Upload className="h-12 w-12 mx-auto text-primary mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Required Documents</h3>
-                                        <p className="text-gray-500 mb-4">Upload all required documents to access the employee portal</p>
-                                        <div className="space-y-2">
-                                            <input
-                                                type="file"
-                                                multiple
-                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                                className="hidden"
-                                                id="file-upload"
-                                                onChange={(e) => {
-                                                    const files = Array.from(e.target.files || []);
-                                                    console.log('Files selected:', files);
-                                                    // TODO: Implement file upload logic
-                                                }}
-                                            />
-                                            <label
-                                                htmlFor="file-upload"
-                                                className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 cursor-pointer"
-                                            >
-                                                <Upload className="h-4 w-4 mr-2" />
-                                                Choose Files to Upload
-                                            </label>
-                                        </div>
-                                        <p className="text-xs text-gray-400 mt-2">
-                                            Supported formats: PDF, DOC, DOCX, JPG, PNG (Max 10MB each)
-                                        </p>
+                                ) : profile?.companyId && currentEmployeeId ? (
+                                    <EmployeeDocumentUpload
+                                        companyId={profile.companyId}
+                                        employeeId={currentEmployeeId}
+                                        existingDocuments={employeeDocuments}
+                                        onUploadComplete={handleDocumentUpload}
+                                        onDocumentDelete={handleDocumentDelete}
+                                    />
+                                ) : (
+                                    <div className="text-center p-8 text-gray-500">
+                                        Loading profile information...
                                     </div>
-
-                                    {/* Required Documents */}
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium text-gray-900 flex items-center">
-                                            <Shield className="h-4 w-4 mr-2 text-red-500" />
-                                            Required Documents
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* Personal Documents */}
-                                            <div className="space-y-3">
-                                                <h5 className="font-medium text-gray-700">Personal Documents</h5>
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between p-3 border border-red-200 rounded-lg bg-red-50">
-                                                        <div className="flex items-center space-x-3">
-                                                            <FileText className="h-5 w-5 text-red-500" />
-                                                            <div>
-                                                                <p className="text-sm font-medium">Government ID</p>
-                                                                <p className="text-xs text-red-600">Required - Not uploaded</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex space-x-1">
-                                                            <button className="p-1 text-red-400 hover:text-red-600">
-                                                                <Upload className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center justify-between p-3 border border-red-200 rounded-lg bg-red-50">
-                                                        <div className="flex items-center space-x-3">
-                                                            <FileText className="h-5 w-5 text-red-500" />
-                                                            <div>
-                                                                <p className="text-sm font-medium">Passport/Visa</p>
-                                                                <p className="text-xs text-red-600">Required - Not uploaded</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex space-x-1">
-                                                            <button className="p-1 text-red-400 hover:text-red-600">
-                                                                <Upload className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Work Documents */}
-                                            <div className="space-y-3">
-                                                <h5 className="font-medium text-gray-700">Work Documents</h5>
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between p-3 border border-red-200 rounded-lg bg-red-50">
-                                                        <div className="flex items-center space-x-3">
-                                                            <FileText className="h-5 w-5 text-red-500" />
-                                                            <div>
-                                                                <p className="text-sm font-medium">Employment Contract</p>
-                                                                <p className="text-xs text-red-600">Required - Not uploaded</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex space-x-1">
-                                                            <button className="p-1 text-red-400 hover:text-red-600">
-                                                                <Upload className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center justify-between p-3 border border-red-200 rounded-lg bg-red-50">
-                                                        <div className="flex items-center space-x-3">
-                                                            <FileText className="h-5 w-5 text-red-500" />
-                                                            <div>
-                                                                <p className="text-sm font-medium">Resume/CV</p>
-                                                                <p className="text-xs text-red-600">Required - Not uploaded</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex space-x-1">
-                                                            <button className="p-1 text-red-400 hover:text-red-600">
-                                                                <Upload className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Educational Documents */}
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium text-gray-900 flex items-center">
-                                            <GraduationCap className="h-4 w-4 mr-2 text-orange-500" />
-                                            Educational Documents
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="flex items-center justify-between p-3 border border-orange-200 rounded-lg bg-orange-50">
-                                                <div className="flex items-center space-x-3">
-                                                    <FileText className="h-5 w-5 text-orange-500" />
-                                                    <div>
-                                                        <p className="text-sm font-medium">Degree Certificate</p>
-                                                        <p className="text-xs text-orange-600">Required - Not uploaded</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex space-x-1">
-                                                    <button className="p-1 text-orange-400 hover:text-orange-600">
-                                                        <Upload className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between p-3 border border-orange-200 rounded-lg bg-orange-50">
-                                                <div className="flex items-center space-x-3">
-                                                    <FileText className="h-5 w-5 text-orange-500" />
-                                                    <div>
-                                                        <p className="text-sm font-medium">Transcript</p>
-                                                        <p className="text-xs text-orange-600">Required - Not uploaded</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex space-x-1">
-                                                    <button className="p-1 text-orange-400 hover:text-orange-600">
-                                                        <Upload className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Additional Documents */}
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium text-gray-900 flex items-center">
-                                            <FileText className="h-4 w-4 mr-2 text-blue-500" />
-                                            Additional Documents
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="flex items-center justify-between p-3 border border-blue-200 rounded-lg bg-blue-50">
-                                                <div className="flex items-center space-x-3">
-                                                    <FileText className="h-5 w-5 text-blue-500" />
-                                                    <div>
-                                                        <p className="text-sm font-medium">Professional Certificates</p>
-                                                        <p className="text-xs text-blue-600">Optional - Not uploaded</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex space-x-1">
-                                                    <button className="p-1 text-blue-400 hover:text-blue-600">
-                                                        <Upload className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between p-3 border border-blue-200 rounded-lg bg-blue-50">
-                                                <div className="flex items-center space-x-3">
-                                                    <FileText className="h-5 w-5 text-blue-500" />
-                                                    <div>
-                                                        <p className="text-sm font-medium">Reference Letters</p>
-                                                        <p className="text-xs text-blue-600">Optional - Not uploaded</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex space-x-1">
-                                                    <button className="p-1 text-blue-400 hover:text-blue-600">
-                                                        <Upload className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Document Completion Status */}
-                                    <div className="bg-gray-50 rounded-lg p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h4 className="font-medium text-gray-900">Document Completion Status</h4>
-                                                <p className="text-sm text-gray-600">Complete document upload to access the employee portal</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-2xl font-bold text-gray-900">0%</div>
-                                                <div className="text-sm text-gray-500">Complete</div>
-                                            </div>
-                                        </div>
-                                        <div className="mt-4">
-                                            <div className="flex items-center space-x-2 text-sm text-gray-600">
-                                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                                <span>8 required documents pending - Portal access restricted</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>

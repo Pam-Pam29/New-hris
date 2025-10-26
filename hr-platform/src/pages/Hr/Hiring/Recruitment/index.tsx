@@ -711,23 +711,38 @@ export default function RecruitmentPage() {
       // Send email notification if enabled
       if (interviewForm.sendEmailNotification && selectedCandidateForInterview.email) {
         try {
-          const { EmailNotificationService } = await import('../../../../services/emailNotificationService');
-          const emailData = {
-            candidateName: selectedCandidateForInterview.name,
-            candidateEmail: selectedCandidateForInterview.email,
-            jobTitle: selectedCandidateForInterview.position,
-            interviewDate: new Date(interviewForm.scheduledTime),
-            duration: interviewForm.duration,
-            interviewType: interviewForm.type,
-            meetingLink: interviewForm.meetingLink,
-            interviewers: panelInterviewers.length > 0 ? panelInterviewers : undefined,
-            notes: interviewForm.notes,
-            companyName: company?.displayName || 'Our Company'
-          };
+          // Import and use the primary email service
+          const { vercelEmailService } = await import('../../../../services/vercelEmailService');
 
-          const email = EmailNotificationService.generateInterviewEmail(emailData);
-          await EmailNotificationService.sendEmail(email);
-          console.log('✅ Email notification sent to candidate');
+          await vercelEmailService.sendInterviewInvitation({
+            candidateName: selectedCandidateForInterview.name,
+            email: selectedCandidateForInterview.email,
+            position: selectedCandidateForInterview.position,
+            interviewDate: new Date(interviewForm.scheduledTime).toLocaleDateString(),
+            interviewTime: new Date(interviewForm.scheduledTime).toLocaleTimeString(),
+            location: interviewForm.type === 'onsite' ? 'Office' : interviewForm.type,
+            companyName: company?.displayName || 'Our Company'
+          });
+
+          // Also send interview reminder email
+          const reminderResult = await vercelEmailService.sendInterviewReminder({
+            candidateName: selectedCandidateForInterview.name,
+            email: selectedCandidateForInterview.email,
+            jobTitle: selectedCandidateForInterview.position,
+            interviewDate: new Date(interviewForm.scheduledTime).toLocaleDateString(),
+            interviewTime: new Date(interviewForm.scheduledTime).toLocaleTimeString(),
+            interviewType: interviewForm.type === 'onsite' ? 'On-site Interview' : interviewForm.type === 'video' ? 'Video Interview' : 'Phone Interview',
+            meetingLink: interviewForm.meetingLink,
+            companyName: company?.displayName || 'Our Company'
+          });
+
+          if (reminderResult.success) {
+            console.log('✅ Interview reminder email sent successfully');
+          } else {
+            console.warn('⚠️ Failed to send interview reminder email:', reminderResult.error);
+          }
+
+          console.log('✅ Email notification sent to candidate via primary service');
         } catch (error) {
           console.error('Failed to send email:', error);
         }

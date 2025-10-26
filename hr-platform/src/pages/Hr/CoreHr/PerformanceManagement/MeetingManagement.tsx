@@ -29,6 +29,7 @@ import { PerformanceMeeting, PerformanceGoal, PerformanceReview, normalizeMeetin
 import { performanceSyncService } from '../../../../services/performanceSyncService';
 import { googleMeetService } from '../../../../services/googleMeetService';
 import { meetingNotificationService } from '../../../../services/meetingNotificationService';
+import { vercelEmailService } from '../../../../services/vercelEmailService';
 import { Progress } from '../../../../components/ui/progress';
 import { useEffect } from 'react';
 import { goalOverdueService } from '../../../../services/goalOverdueService';
@@ -189,6 +190,24 @@ export default function MeetingManagement() {
                 managerName: 'HR Manager',
                 createdBy: 'hr'
             });
+
+            // Send performance meeting reminder email
+            const emailResult = await vercelEmailService.sendPerformanceMeetingReminder({
+                employeeName: formData.employeeName,
+                email: 'employee@company.com', // This should come from employee data
+                meetingTitle: formData.title,
+                meetingDate: formData.scheduledDate,
+                meetingTime: formData.scheduledTime,
+                location: formData.location,
+                companyName: company?.displayName || 'Your Company'
+            });
+
+            if (emailResult.success) {
+                console.log('✅ Performance meeting reminder email sent successfully');
+            } else {
+                console.warn('⚠️ Failed to send performance meeting reminder email:', emailResult.error);
+                // Don't throw error - email failure shouldn't break the meeting scheduling process
+            }
 
             setShowScheduleForm(false);
             setFormData({

@@ -2,13 +2,17 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, whe
 import { db } from '../../../config/firebase';
 
 export type OnboardingStep =
+    | 'welcome_video'
     | 'contract_review'
     | 'contract_upload'
     | 'personal_info'
+    | 'personal_info_extended'
     | 'emergency_contacts'
     | 'banking_info'
     | 'document_upload'
+    | 'equipment_access'
     | 'work_email_setup'
+    | 'team_introduction'
     | 'policy_acknowledgment'
     | 'system_training'
     | 'completion';
@@ -19,18 +23,25 @@ export interface OnboardingProgress {
     completedSteps: OnboardingStep[];
     workEmail?: string;
     personalInfo?: any;
+    personalInfoExtended?: any;
     emergencyContacts?: any;
     bankingInfo?: any;
     documents?: any[];
+    equipmentAccess?: any;
+    teamIntroduction?: any;
     trainingCompleted?: boolean;
     isComplete?: boolean;
+    welcomeVideoWatched?: boolean;
     contractReviewed?: boolean;
     contractUploaded?: boolean;
     personalInfoCompleted?: boolean;
+    personalInfoExtendedCompleted?: boolean;
     emergencyContactsCompleted?: boolean;
     bankingInfoCompleted?: boolean;
     documentsUploaded?: boolean;
+    equipmentAccessCompleted?: boolean;
     workEmailSetup?: boolean;
+    teamIntroductionCompleted?: boolean;
     policiesAcknowledged?: boolean;
     systemTrainingCompleted?: boolean;
     createdAt?: Date;
@@ -72,6 +83,68 @@ export interface BankingInfo {
     accountType: 'checking' | 'savings';
     accountHolderName: string;
     isPrimary: boolean;
+}
+
+export interface PersonalInfoExtended {
+    profilePhoto?: string;
+    socialMediaProfiles?: {
+        linkedin?: string;
+        twitter?: string;
+        github?: string;
+    };
+    skills: string[];
+    certifications: Array<{
+        name: string;
+        issuer: string;
+        dateIssued: Date;
+        expiryDate?: Date;
+    }>;
+    previousExperience: Array<{
+        company: string;
+        position: string;
+        startDate: Date;
+        endDate?: Date;
+        description: string;
+    }>;
+    education: Array<{
+        institution: string;
+        degree: string;
+        fieldOfStudy: string;
+        graduationYear: number;
+    }>;
+}
+
+export interface EquipmentAccess {
+    laptopAssigned: boolean;
+    laptopModel?: string;
+    laptopSerialNumber?: string;
+    softwareAccess: string[];
+    buildingAccess: boolean;
+    parkingSpot?: string;
+    transportationInfo?: string;
+    deskLocation?: string;
+    keycardNumber?: string;
+}
+
+export interface TeamIntroduction {
+    managerName: string;
+    managerEmail: string;
+    managerPhone?: string;
+    buddyName?: string;
+    buddyEmail?: string;
+    buddyPhone?: string;
+    department: string;
+    teamMembers: Array<{
+        name: string;
+        role: string;
+        email: string;
+    }>;
+    firstWeekSchedule: Array<{
+        day: string;
+        time: string;
+        activity: string;
+        location?: string;
+    }>;
 }
 
 class OnboardingService {
@@ -250,13 +323,17 @@ class OnboardingService {
     // Get next onboarding step
     getNextOnboardingStep(currentStep: OnboardingStep): OnboardingStep | null {
         const stepOrder: OnboardingStep[] = [
+            'welcome_video',
             'contract_review',
             'contract_upload',
             'personal_info',
+            'personal_info_extended',
             'emergency_contacts',
             'banking_info',
             'document_upload',
+            'equipment_access',
             'work_email_setup',
+            'team_introduction',
             'policy_acknowledgment',
             'system_training',
             'completion'

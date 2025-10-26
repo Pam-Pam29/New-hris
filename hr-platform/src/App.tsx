@@ -20,11 +20,16 @@ import PerformanceManagement from './pages/Hr/CoreHr/PerformanceManagement';
 import PolicyManagement from './pages/Hr/CoreHr/PolicyManagement';
 import TimeManagement from './pages/Hr/CoreHr/TimeManagement';
 import Onboarding from './pages/Hr/Hiring/Onboarding';
+import SettingsPage from './pages/Hr/Settings/Settings';
 import AvailabilitySettings from './pages/Hr/CoreHr/Settings/AvailabilitySettings';
 import CompanyOnboarding from './pages/Onboarding/CompanyOnboarding';
 import DataCleanup from './pages/DataCleanup';
 import { HrAuthGuard } from './components/HrAuthGuard';
 import { HrSignUp } from './components/HrSignUp';
+import HrOnboardingSignup from './pages/Hr/Auth/HrOnboardingSignup';
+import HrOnboardingSignin from './pages/Hr/Auth/HrOnboardingSignin';
+import HrSignup from './pages/Hr/HrSignup';
+// Employee routes temporarily removed due to import issues
 
 // Protected Route Component - Checks onboarding status
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -66,18 +71,27 @@ const HrLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 export default function App() {
     return (
-        <HrAuthGuard>
-            <CompanyProvider>
-                <Router>
+        <CompanyProvider>
+            <Router>
+                <HrAuthGuard>
                     <Routes>
                         {/* Onboarding Route - No Protection */}
                         <Route path="/onboarding" element={<CompanyOnboarding />} />
+
+                        {/* HR Onboarding Auth Routes - No Protection */}
+                        <Route path="/hr-onboarding-signup" element={<HrOnboardingSignup />} />
+                        <Route path="/hr-onboarding-signin" element={<HrOnboardingSignin />} />
+
+                        {/* Company Signup Route - No Protection */}
+                        <Route path="/hr-signup" element={<HrSignup />} />
 
                         {/* Sign Up Route - After onboarding, before login */}
                         <Route path="/signup" element={<HrSignUp />} />
 
                         {/* Data Cleanup Route - No Protection (Standalone Tool) */}
                         <Route path="/data-cleanup" element={<DataCleanup />} />
+
+                        {/* Employee routes temporarily disabled - use employee platform instead */}
 
                         {/* All other routes are protected - require onboarding completion */}
                         <Route path="/" element={
@@ -264,7 +278,7 @@ export default function App() {
                         <Route path="/settings" element={
                             <ProtectedRoute>
                                 <HrLayout>
-                                    <AvailabilitySettings />
+                                    <SettingsPage />
                                 </HrLayout>
                             </ProtectedRoute>
                         } />
@@ -303,8 +317,8 @@ export default function App() {
                             </ProtectedRoute>
                         } />
                     </Routes>
-                </Router>
-            </CompanyProvider>
-        </HrAuthGuard>
+                </HrAuthGuard>
+            </Router>
+        </CompanyProvider>
     );
 }

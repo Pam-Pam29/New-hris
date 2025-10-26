@@ -338,3 +338,7 @@ A: Use Firebase Console → Authentication → Users → Reset password
 
 **Ready to secure your HR Platform? Follow Method 1 above!** 🔐
 
+
+
+
+

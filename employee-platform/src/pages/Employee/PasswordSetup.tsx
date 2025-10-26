@@ -113,20 +113,18 @@ const PasswordSetupPage: React.FC = () => {
                 }
             }
 
-            console.log('✅ [PasswordSetup] Token validated, saving password...');
+            console.log('✅ [PasswordSetup] Token validated, updating employee record...');
 
-            // Save password (FOR MVP: storing directly, NOT hashed - NOT PRODUCTION READY!)
-            // TODO: In production, use bcrypt to hash the password
+            // Note: We don't store passwords in Firestore - Firebase Authentication handles passwords securely
+            // We only update the employee record to mark setup as complete
             await updateDoc(employeeRef, {
-                'auth.password': password,
-                'auth.passwordHash': password, // Same for now (NOT SECURE!)
                 'auth.passwordSetAt': new Date(),
                 'auth.isActive': true,
                 'auth.setupToken': null, // Clear token after use
                 'auth.setupExpiry': null
             });
 
-            console.log('✅ [PasswordSetup] Password saved successfully!');
+            console.log('✅ [PasswordSetup] Employee record updated successfully!');
 
             setSuccess(true);
 

@@ -201,6 +201,16 @@ const LoginPage: React.FC = () => {
                         </button>
                     </div>
 
+                    {/* Setup Link Info */}
+                    <div className="text-center">
+                        <p className="text-sm text-gray-600">
+                            Need to set up your account?{' '}
+                            <span className="text-gray-500">
+                                Contact HR for your setup link
+                            </span>
+                        </p>
+                    </div>
+
                     {/* Help Text */}
                     <div className="text-center">
                         <p className="text-xs text-gray-500">

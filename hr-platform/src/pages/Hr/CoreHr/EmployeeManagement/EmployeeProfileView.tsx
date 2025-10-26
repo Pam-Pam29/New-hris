@@ -349,14 +349,13 @@ export default function EmployeeProfileView() {
 
             {/* Main Content Tabs */}
             <Tabs defaultValue="personal" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-7 gap-1 sm:grid-cols-7 md:grid-cols-7 lg:grid-cols-7">
+                <TabsList className="grid w-full grid-cols-6 gap-1 sm:grid-cols-6 md:grid-cols-6 lg:grid-cols-6">
                     <TabsTrigger value="personal" className="text-xs px-2">Personal</TabsTrigger>
                     <TabsTrigger value="work" className="text-xs px-2">Work</TabsTrigger>
                     <TabsTrigger value="contact" className="text-xs px-2">Contact</TabsTrigger>
                     <TabsTrigger value="banking" className="text-xs px-2">Banking</TabsTrigger>
                     <TabsTrigger value="skills" className="text-xs px-2">Skills</TabsTrigger>
                     <TabsTrigger value="family" className="text-xs px-2">Family</TabsTrigger>
-                    <TabsTrigger value="documents" className="text-xs px-2">Documents</TabsTrigger>
                 </TabsList>
 
                 {/* Personal Information Tab */}
@@ -734,53 +733,6 @@ export default function EmployeeProfileView() {
                     </Card>
                 </TabsContent>
 
-                {/* Documents Tab */}
-                <TabsContent value="documents" className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center">
-                                <FileText className="w-5 h-5 mr-2" />
-                                Employee Documents
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {profile.documents && profile.documents.length > 0 ? (
-                                <div className="space-y-4">
-                                    <div className="grid gap-4">
-                                        {profile.documents.map((doc) => (
-                                            <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="p-2 bg-blue-100 rounded-lg">
-                                                        <FileText className="w-5 h-5 text-blue-600" />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                                                        <p className="text-sm text-gray-500">
-                                                            {doc.type} • {(doc.size / 1024).toFixed(1)} KB •
-                                                            {formatDate(doc.uploadedAt)}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center space-x-2">
-                                                    <Button variant="outline" size="sm">
-                                                        <Download className="w-4 h-4 mr-2" />
-                                                        Download
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-8">
-                                    <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Documents Uploaded</h3>
-                                    <p className="text-gray-600">This employee hasn't uploaded any documents yet.</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
             </Tabs>
         </div>
     );
