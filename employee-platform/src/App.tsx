@@ -23,7 +23,6 @@ import EmployeeOnboardingSignin from './pages/Employee/Auth/EmployeeOnboardingSi
 import EmployeeSignup from './pages/Employee/EmployeeSignup';
 // Testing components
 import CreateTestProfile from './components/CreateTestProfile';
-import FirebaseConnectionTest from './components/FirebaseConnectionTest';
 // Context providers for multi-tenancy and authentication
 import { CompanyProvider } from './context/CompanyContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -279,7 +278,6 @@ export default function App() {
                             <EmployeeLayout>
                                 <div className="p-8 space-y-6">
                                     <CreateTestProfile />
-                                    <FirebaseConnectionTest />
                                 </div>
                             </EmployeeLayout>
                         } />
