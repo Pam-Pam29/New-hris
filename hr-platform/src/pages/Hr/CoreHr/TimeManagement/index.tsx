@@ -52,6 +52,7 @@ import { getOfficeLocationService, OfficeLocation, calculateDistance, formatDist
 
 // Import Schedule Manager
 import { ScheduleManager } from '../../../../components/ScheduleManager';
+import { useCompany } from '../../../../context/CompanyContext';
 
 const statusConfig = {
   Present: { color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
@@ -63,6 +64,7 @@ const statuses = Object.keys(statusConfig);
 
 export default function TimeManagement() {
   const { toast } = useToast();
+  const { companyId } = useCompany();
 
   // State for attendance records from backend
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -138,12 +140,12 @@ export default function TimeManagement() {
     initializeService();
   }, []);
 
-  // Load employees using Employee Service
+  // Load employees using Employee Service (filtered by company)
   const fetchEmployees = async () => {
-    if (!employeeService) return;
+    if (!employeeService || !companyId) return;
 
     try {
-      const employeesList = await employeeService.getEmployees();
+      const employeesList = await employeeService.getEmployees(companyId);
       setEmployees(employeesList);
     } catch (err) {
       console.error('Error fetching employees:', err);
