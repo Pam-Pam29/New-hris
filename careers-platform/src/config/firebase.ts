@@ -15,7 +15,7 @@ const requiredEnvVars = [
   'VITE_FIREBASE_APP_ID'
 ];
 
-const missingVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+const missingVars = requiredEnvVars.filter(varName => !(import.meta as any).env[varName]);
 
 if (missingVars.length > 0) {
   console.error('❌ Missing required Firebase environment variables:', missingVars);
@@ -23,13 +23,13 @@ if (missingVars.length > 0) {
 }
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
+  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || '',
+  measurementId: (import.meta as any).env?.VITE_FIREBASE_MEASUREMENT_ID || ''
 };
 
 // Firebase instances - will be initialized later
@@ -131,7 +131,7 @@ export const getServiceConfig = async () => {
   await initializeFirebase();
 
   // Check environment variable for service preference
-  const preferredService = import.meta.env.VITE_DEFAULT_SERVICE || 'firebase';
+  const preferredService = (import.meta as any).env?.VITE_DEFAULT_SERVICE || 'firebase';
   const useFirebase = (preferredService === 'firebase' && isFirebaseConfigured());
 
   console.log('Service config check:', {
