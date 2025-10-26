@@ -26,8 +26,10 @@ import { getScheduleService, WorkSchedule, ShiftTemplate, getShortDayName } from
 import { getEmployeeService } from '../services/employeeService';
 import { getTimeNotificationService } from '../services/timeNotificationService';
 import { getComprehensiveDataFlowService } from '../services/comprehensiveDataFlowService';
+import { useCompany } from '../context/CompanyContext';
 
 export function ScheduleManager() {
+    const { companyId } = useCompany();
     const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
     const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
@@ -59,10 +61,17 @@ export function ScheduleManager() {
     const [bulkTemplate, setBulkTemplate] = useState('morning');
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (companyId) {
+            loadData();
+        }
+    }, [companyId]);
 
     const loadData = async () => {
+        if (!companyId) {
+            console.log('⏳ ScheduleManager waiting for company...');
+            return;
+        }
+
         setLoading(true);
         try {
             const scheduleService = await getScheduleService();
@@ -71,7 +80,13 @@ export function ScheduleManager() {
             const [allSchedules, shiftTemplates, allEmployees] = await Promise.all([
                 scheduleService.getSchedules(),
                 scheduleService.getShiftTemplates(),
-                dataFlowService.getAllEmployees()
+                // Filter employees by company using subscribeToAllEmployees
+                new Promise<any[]>((resolve) => {
+                    const unsubscribe = dataFlowService.subscribeToAllEmployees((employees) => {
+                        resolve(employees);
+                        unsubscribe();
+                    }, companyId);
+                })
             ]);
 
             // Create default shift templates if none exist

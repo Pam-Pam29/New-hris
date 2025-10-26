@@ -118,14 +118,28 @@ export default function MeetingManagement() {
     const goals = (allGoals as PerformanceGoal[]) || [];
     const reviews = (allReviews as PerformanceReview[]) || [];
 
-    // Load employees for selection
+    // Load employees for selection (filtered by company)
     useEffect(() => {
         const loadEmployees = async () => {
+            if (!companyId) {
+                console.log('⏳ MeetingManagement waiting for company...');
+                return;
+            }
+
             setLoadingEmployees(true);
             try {
                 const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
                 const dataFlowService = await getComprehensiveDataFlowService();
-                const allEmployees = await dataFlowService.getAllEmployees();
+                
+                // Use subscribeToAllEmployees with companyId to filter by company
+                let allEmployees: any[] = [];
+                await new Promise<void>((resolve) => {
+                    const unsubscribe = dataFlowService.subscribeToAllEmployees((employees) => {
+                        allEmployees = employees;
+                        unsubscribe();
+                        resolve();
+                    }, companyId);
+                });
 
                 const employeeList = allEmployees.map(emp => ({
                     id: emp.id || emp.employeeId,
@@ -134,7 +148,7 @@ export default function MeetingManagement() {
                 })).filter(emp => emp.id); // Filter out any invalid entries
 
                 setEmployees(employeeList);
-                console.log('✅ Loaded employees for selection:', employeeList.length);
+                console.log(`✅ Loaded ${employeeList.length} employees for company ${companyId}`);
             } catch (error) {
                 console.error('Failed to load employees:', error);
             } finally {
@@ -142,7 +156,7 @@ export default function MeetingManagement() {
             }
         };
         loadEmployees();
-    }, []);
+    }, [companyId]);
 
     // Start meeting notification checker for HR
     useEffect(() => {
