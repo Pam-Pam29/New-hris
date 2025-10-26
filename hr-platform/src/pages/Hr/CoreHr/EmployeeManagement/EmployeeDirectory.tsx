@@ -706,13 +706,13 @@ export default function EmployeeDirectory() {
           alert(`✅ Employee created and invitation email sent successfully!\n\n📧 Email sent to: ${pendingEmployeeData.email}\n\n🔗 Setup Link (click to copy): ${setupLink}\n\n💡 The employee will receive an email with setup instructions.`);
         } else {
           console.warn('⚠️ [HR] Email sending failed:', emailResult.error);
-          
+
           // Save setup link and keep dialog open for user to copy
           setSetupLink(setupLink);
-          
+
           // Show notification
           alert(`✅ Employee created successfully!\n\n⚠️ Email sending failed: ${emailResult.error}\n\n📋 The setup link is displayed below - you can copy it.\n\n📧 Send to: ${pendingEmployeeData.email}`);
-          
+
           // Don't close the dialog - let user continue working with the link visible
           return;
         }

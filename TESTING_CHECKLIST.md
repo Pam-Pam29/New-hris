@@ -1,115 +1,69 @@
-# ✅ Quick Testing Checklist
+# Multi-Tenancy Testing Checklist
 
-## 📋 **Use this as you go through COMPLETE_ONBOARDING_FLOW_TEST.md**
+## ✅ Step 1: Complete Onboarding for Travellife
 
----
+- [ ] Sign up with `hr@travellife.com`
+- [ ] Complete company onboarding (if not already done)
+- [ ] Verify you can access the HR dashboard
+- [ ] Company ID should be: `mwtCcggGNLgGNUV7SuUt`
 
-## 🏢 **Part 1: Companies** 
+## ✅ Step 2: Add Employees to Travellife
 
-- [ ] Acme Corporation onboarded
-- [ ] TechCorp Inc. set up (leave types created)
-- [ ] Globex Industries set up (leave types created)
-- [ ] Company switcher works
+- [ ] Click "Add Employee" or "New Employee"
+- [ ] Fill in employee details:
+  - Name: e.g., "John Doe"
+  - Email: e.g., "john@travellife.com"
+  - Department: e.g., "Sales"
+  - Role: e.g., "Sales Manager"
+- [ ] Save the employee
+- [ ] Repeat to add 2-3 more employees
 
----
+## ✅ Step 3: Verify Travellife Dashboard
 
-## 👥 **Part 2: Employees**
+- [ ] Go to Dashboard
+- [ ] Check that you see ONLY Travellife employees
+- [ ] Check console logs - should show: `📊 Found X employees in Firebase for company mwtCcggGNLgGNUV7SuUt`
+- [ ] Verify no employees from other companies appear
 
-### **Acme:**
-- [ ] ACME001 - Sarah Johnson (HR Manager) - ₦5.4M
-- [ ] ACME002 - Michael Adebayo (Software Engineer) - ₦4.8M
+## ✅ Step 4: Create Second Company (Siro)
 
-### **TechCorp:**
-- [ ] TECH001 - Chioma Okafor (Product Manager) - ₦6.0M
-- [ ] TECH002 - James Okonkwo (DevOps Engineer) - ₦5.2M
+- [ ] Sign out of Travellife account
+- [ ] Go to signup page
+- [ ] Create new account with: `hr@siro.com` (or any email)
+- [ ] Complete onboarding for "Siro" company
+- [ ] Note the new Company ID
 
-### **Globex:**
-- [ ] GLOB001 - Fatima Yusuf (Sales Manager) - ₦5.8M
-- [ ] GLOB002 - Daniel Eze (Marketing Specialist) - ₦3.9M
+## ✅ Step 5: Add Employees to Siro
 
----
+- [ ] Add 2-3 test employees to Siro
+- [ ] Verify they appear in Siro's dashboard
 
-## 🧪 **Part 3: Employee Platform Tests**
+## ✅ Step 6: Test Multi-Tenancy
 
-- [ ] Sarah (ACME001) - Dashboard loads correctly
-- [ ] Sarah - Profile update works
-- [ ] Sarah - Leave request submitted (5 days Annual)
-- [ ] Michael (ACME002) - Dashboard loads
-- [ ] Michael - Clock in/out works
-- [ ] Chioma (TECH001) - Dashboard loads (TechCorp context)
-- [ ] Chioma - Leave request (2 days Sick)
-- [ ] James (TECH002) - Dashboard loads
-- [ ] Fatima (GLOB001) - Dashboard loads (Globex context)
-- [ ] Daniel (GLOB002) - Dashboard loads
+- [ ] Log out of Siro
+- [ ] Log back into Travellife (`hr@travellife.com`)
+- [ ] Verify dashboard shows ONLY Travellife employees (not Siro's)
+- [ ] Log out of Travellife
+- [ ] Log back into Siro
+- [ ] Verify dashboard shows ONLY Siro employees (not Travellife's)
 
----
+## ✅ Step 7: Test Other Pages
 
-## 🔄 **Part 4: Real-Time Sync Tests**
+Test these pages for each company to ensure they're filtered correctly:
 
-- [ ] Leave approval syncs to Employee Platform (no refresh)
-- [ ] Job posting syncs to Careers Platform (no refresh)
-- [ ] Multi-tenancy verified (no cross-company data)
-- [ ] No console errors
-- [ ] Smooth performance
+- [ ] Employee Directory - shows only company employees
+- [ ] Leave Management - shows only company leave requests
+- [ ] Time Management - shows only company time entries
+- [ ] Payroll - shows only company employees
+- [ ] Policies - shows only company policies
+- [ ] Job Board - shows only company job postings
 
----
+## Expected Results
 
-## 🎯 **Quick URLs**
-
-### **HR Platform:**
-```
-http://localhost:3003
-```
-
-### **Employee Platform:**
-```
-# Acme
-http://localhost:3005?employee=ACME001&company=acme
-http://localhost:3005?employee=ACME002&company=acme
-
-# TechCorp
-http://localhost:3005?employee=TECH001&company=techcorp
-http://localhost:3005?employee=TECH002&company=techcorp
-
-# Globex
-http://localhost:3005?employee=GLOB001&company=globex
-http://localhost:3005?employee=GLOB002&company=globex
-```
-
-### **Careers Platform:**
-```
-http://localhost:3004/careers/acme
-http://localhost:3004/careers/techcorp
-http://localhost:3004/careers/globex
-```
-
----
-
-## 📊 **Expected Results**
-
-### **HR Dashboard (per company):**
-- Employees: `2`
-- Leave Types: `3`
-- Departments: Multiple
-
-### **Employee Leave Balances:**
-- Annual Leave: `20 days`
-- Sick Leave: `10 days`
-- Personal Leave: `5 days`
-
----
-
-## 🐛 **Issues Found:**
-
-```
-1. _______________________________________
-2. _______________________________________
-3. _______________________________________
-```
-
----
-
-**Check off items as you complete them! ✅**
+✅ Each company ONLY sees their own data
+✅ No data from other companies appears
+✅ Console logs show correct companyId filtering
+✅ Multi-tenancy is working correctly!
 
 
 

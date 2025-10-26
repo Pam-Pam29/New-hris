@@ -83,7 +83,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
             // Fetch hrUsers document to get companyId
             console.log('🔍 [HR Auth] Importing Firebase modules...');
             const { getFirebaseDb } = await import('../config/firebase');
-            const { doc, getDoc } = await import('firebase/firestore');
+            const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
             const db = getFirebaseDb();
             console.log('🔍 [HR Auth] Firebase DB initialized');
 
@@ -99,18 +99,49 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                 const hrUserData = hrUserDoc.data();
                 companyId = hrUserData.companyId;
                 console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
-                
-                // Fix invalid "default" companyId
-                if (!companyId || companyId === 'default') {
-                    console.warn('⚠️ [HR Auth] Invalid companyId found ("default"), using userId instead');
-                    companyId = userId;
-                }
             }
 
-            // If not in hrUsers or invalid, the companyId is the userId itself (based on HrSignup logic)
-            if (!companyId) {
-                companyId = userId;
-                console.log('✅ [HR Auth] Using userId as company ID:', companyId);
+            // If not in hrUsers or invalid, try to find an existing company by email
+            if (!companyId || companyId === 'default' || companyId === userId) {
+                console.warn('⚠️ [HR Auth] Invalid or missing companyId, searching for existing company...');
+
+                try {
+                    // Get user email
+                    const userEmail = userCredential.user.email;
+                    console.log('🔍 [HR Auth] Searching for company with email:', userEmail);
+
+                    // Try to find company by owner email
+                    const companiesRef = collection(db, 'companies');
+                    const q = query(companiesRef, where('email', '==', userEmail));
+                    const companySnapshot = await getDocs(q);
+
+                    console.log('🔍 [HR Auth] Found', companySnapshot.docs.length, 'companies');
+
+                    if (!companySnapshot.empty) {
+                        companyId = companySnapshot.docs[0].id;
+                        console.log('✅ [HR Auth] Found existing company by email:', companyId);
+                    } else {
+                        // Try to find by any email in the company document
+                        const allCompaniesSnapshot = await getDocs(collection(db, 'companies'));
+                        console.log('🔍 [HR Auth] Total companies in database:', allCompaniesSnapshot.docs.length);
+                        allCompaniesSnapshot.docs.forEach((doc) => {
+                            console.log('  - Company ID:', doc.id, 'Email:', doc.data().email);
+                        });
+
+                        // If there's only one company in the database, use it
+                        if (allCompaniesSnapshot.docs.length === 1) {
+                            companyId = allCompaniesSnapshot.docs[0].id;
+                            console.log('✅ [HR Auth] Found single company in database, using it:', companyId);
+                        } else {
+                            // Fallback to userId
+                            companyId = userId;
+                            console.log('⚠️ [HR Auth] No company found, using userId as company ID:', companyId);
+                        }
+                    }
+                } catch (searchError) {
+                    console.error('❌ [HR Auth] Error searching for company:', searchError);
+                    companyId = userId;
+                }
             }
 
             if (companyId) {
@@ -120,21 +151,35 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                 // Trigger company context reload
                 window.dispatchEvent(new CustomEvent('companyIdChanged'));
 
-                // Wait for company data to load
-                setTimeout(() => {
-                    console.log('🔍 [HR Auth] Company data check:', {
-                        hasCompany: !!company,
-                        onboardingCompleted: company?.settings?.onboardingCompleted,
-                        settings: company?.settings
-                    });
+                // Wait a bit for context to update, then check onboarding status
+                setTimeout(async () => {
+                    // Try to load company data directly from Firestore to check onboarding
+                    try {
+                        const companyDoc = await getDoc(doc(db, 'companies', companyId));
+                        if (companyDoc.exists()) {
+                            const companyData = companyDoc.data();
+                            console.log('🔍 [HR Auth] Company data loaded directly:', {
+                                companyId: companyId,
+                                onboardingCompleted: companyData.settings?.onboardingCompleted,
+                                displayName: companyData.displayName
+                            });
 
-                    if (!company?.settings?.onboardingCompleted) {
-                        console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                            if (companyData.settings?.onboardingCompleted) {
+                                console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
+                                // Don't redirect - let ProtectedRoute handle it
+                            } else {
+                                console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                                navigate('/onboarding');
+                            }
+                        } else {
+                            console.error('❌ [HR Auth] Company document not found');
+                            navigate('/onboarding');
+                        }
+                    } catch (error) {
+                        console.error('❌ [HR Auth] Error loading company data:', error);
                         navigate('/onboarding');
-                    } else {
-                        console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
                     }
-                }, 1500);
+                }, 1000);
             } else {
                 console.warn('⚠️ [HR Auth] No company ID found');
             }

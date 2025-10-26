@@ -392,7 +392,7 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             console.log('🔍 [DataFlow] Full updateData being sent:', JSON.stringify(updateData, null, 2));
 
             const firestoreData = this.convertToFirestore(updateData);
-            
+
             console.log('🔍 [DataFlow] After conversion to Firestore:', JSON.stringify(firestoreData, null, 2));
 
             await setDoc(docRef, firestoreData, { merge: true });
