@@ -51,6 +51,7 @@ import { Employee } from '../EmployeeManagement/types';
 import { Asset } from './types';
 import { getAssetService } from './services/assetService';
 import { useToast } from "../../../../hooks/use-toast";
+import { useCompany } from '../../../../context/CompanyContext';
 
 interface StatCardProps {
   title: string;
@@ -88,6 +89,7 @@ interface AssetDetailsDrawerProps {
 
 export default function AssetManagement() {
   const { toast } = useToast();
+  const { companyId } = useCompany();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [starterKits, setStarterKits] = useState<any[]>([]);
@@ -139,10 +141,24 @@ export default function AssetManagement() {
       try {
         const service = await getAssetService();
 
-        // Load employees from comprehensive data flow service instead
+        // Load employees from comprehensive data flow service instead (filtered by company)
         const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
         const dataFlowService = await getComprehensiveDataFlowService();
-        const allEmployees = await dataFlowService.getAllEmployees();
+        
+        // Use subscribeToAllEmployees with companyId filter
+        let allEmployees: any[] = [];
+        if (companyId) {
+          await new Promise<void>((resolve) => {
+            const unsubscribe = dataFlowService.subscribeToAllEmployees((employees) => {
+              allEmployees = employees;
+              unsubscribe();
+              resolve();
+            }, companyId);
+          });
+          console.log(`👥 AssetManagement: Loaded ${allEmployees.length} employees for company`);
+        } else {
+          allEmployees = await dataFlowService.getAllEmployees();
+        }
 
         // Convert to Employee format for this component
         const employeeData = allEmployees.map(emp => {
@@ -174,7 +190,8 @@ export default function AssetManagement() {
             employeeId: emp.employeeId || emp.id,
             role: jobTitle,
             employmentType: 'full-time',
-            status: 'active'
+            status: 'active',
+            companyId: companyId || ''
           };
 
           // Comprehensive debug log for Victoria
