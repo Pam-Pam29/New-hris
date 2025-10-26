@@ -69,9 +69,9 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
         try {
             console.log('🔐 [HR Auth] Attempting login for:', email);
+            console.log('⏳ [HR Auth] Calling signInWithEmailAndPassword...');
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
-
-            // Success - authentication state will update via onAuthStateChanged
+            console.log('✅ [HR Auth] signInWithEmailAndPassword completed');
             console.log('✅ [HR Auth] Login successful - Starting company ID fetch');
             console.log('🔍 [HR Auth] User ID:', userCredential.user.uid);
 
