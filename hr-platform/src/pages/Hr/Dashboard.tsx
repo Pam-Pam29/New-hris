@@ -411,9 +411,9 @@ function RecentActivity() {
 					submittedAt: l.submittedAt
 				})));
 
-				// Get employees for name lookup
+				// Get employees for name lookup (filtered by company)
 				const empSvcForLeave = await getEmployeeService();
-				const allEmps = await empSvcForLeave.getEmployees();
+				const allEmps = await empSvcForLeave.getEmployees(companyId);
 				const empMap = new Map(allEmps.map((e: any) => [e.employeeId || e.firebaseId, e.name]));
 
 				const recentLeaves = companyLeaves.slice(0, 3).map((leave: any) => {
@@ -1012,13 +1012,16 @@ function HeadcountTrendChart() {
 function DepartmentDistribution() {
 	const [departmentData, setDepartmentData] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
+	const { companyId } = useCompany();
 
 	useEffect(() => {
 		const loadDepartmentData = async () => {
+			if (!companyId) return; // Wait for company to load
+			
 			try {
 				console.log('📊 Loading department distribution...');
 				const empSvc = await getEmployeeService();
-				const emps = await empSvc.getEmployees();
+				const emps = await empSvc.getEmployees(companyId);
 
 				// Calculate department distribution (case-insensitive)
 				const deptCounts = emps.reduce((acc: any, emp: any) => {
@@ -1059,7 +1062,7 @@ function DepartmentDistribution() {
 			}
 		};
 		loadDepartmentData();
-	}, []);
+	}, [companyId]);
 
 	return (
 		<Card className="card-modern">
