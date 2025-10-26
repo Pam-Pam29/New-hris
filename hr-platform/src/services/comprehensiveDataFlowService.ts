@@ -384,10 +384,18 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
                 employeeId,
                 hasAuth: !!(profileData as any).auth,
                 authKeys: (profileData as any).auth ? Object.keys((profileData as any).auth) : [],
-                setupToken: (profileData as any).auth?.setupToken
+                setupToken: (profileData as any).auth?.setupToken,
+                setupExpiry: (profileData as any).auth?.setupExpiry,
+                fullAuth: (profileData as any).auth
             });
 
-            await setDoc(docRef, this.convertToFirestore(updateData), { merge: true });
+            console.log('🔍 [DataFlow] Full updateData being sent:', JSON.stringify(updateData, null, 2));
+
+            const firestoreData = this.convertToFirestore(updateData);
+            
+            console.log('🔍 [DataFlow] After conversion to Firestore:', JSON.stringify(firestoreData, null, 2));
+
+            await setDoc(docRef, firestoreData, { merge: true });
 
             // Create notification for HR
             await this.createNotification({
