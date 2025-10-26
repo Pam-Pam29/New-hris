@@ -82,40 +82,48 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
             const { doc, getDoc } = await import('firebase/firestore');
             const db = getFirebaseDb();
 
+            // Try to find company ID from hrUsers document first
             const hrUserRef = doc(db, 'hrUsers', userId);
             const hrUserDoc = await getDoc(hrUserRef);
-
+            
+            let companyId: string | null = null;
+            
             if (hrUserDoc.exists()) {
                 const hrUserData = hrUserDoc.data();
-                const companyId = hrUserData.companyId;
+                companyId = hrUserData.companyId;
+                console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
+            }
+            
+            // If not in hrUsers, the companyId is the userId itself (based on HrSignup logic)
+            if (!companyId) {
+                companyId = userId;
+                console.log('✅ [HR Auth] Using userId as company ID:', companyId);
+            }
 
-                if (companyId) {
-                    console.log('✅ [HR Auth] Found company ID:', companyId);
-                    localStorage.setItem('companyId', companyId);
+            if (companyId) {
+                console.log('✅ [HR Auth] Setting company ID in localStorage:', companyId);
+                localStorage.setItem('companyId', companyId);
 
-                    // Trigger company context reload
-                    window.dispatchEvent(new CustomEvent('companyIdChanged'));
+                // Trigger company context reload
+                window.dispatchEvent(new CustomEvent('companyIdChanged'));
 
-                    // Wait for company data to load
-                    setTimeout(() => {
-                        console.log('🔍 [HR Auth] Company data check:', {
-                            hasCompany: !!company,
-                            onboardingCompleted: company?.settings?.onboardingCompleted,
-                            settings: company?.settings
-                        });
-                        
-                        if (!company?.settings?.onboardingCompleted) {
-                            console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
-                            navigate('/onboarding');
-                        } else {
-                            console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
-                        }
-                    }, 1500);
-                } else {
-                    console.warn('⚠️ [HR Auth] No company ID found in hrUsers document');
-                }
+                // Wait for company data to load
+                setTimeout(() => {
+                    console.log('🔍 [HR Auth] Company data check:', {
+                        hasCompany: !!company,
+                        onboardingCompleted: company?.settings?.onboardingCompleted,
+                        settings: company?.settings
+                    });
+
+                    if (!company?.settings?.onboardingCompleted) {
+                        console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                        navigate('/onboarding');
+                    } else {
+                        console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
+                    }
+                }, 1500);
             } else {
-                console.warn('⚠️ [HR Auth] hrUsers document not found');
+                console.warn('⚠️ [HR Auth] No company ID found');
             }
         } catch (error: any) {
             console.error('❌ [HR Auth] Login error:', error);
