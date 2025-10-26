@@ -99,9 +99,15 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                 const hrUserData = hrUserDoc.data();
                 companyId = hrUserData.companyId;
                 console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
+                
+                // Fix invalid "default" companyId
+                if (!companyId || companyId === 'default') {
+                    console.warn('⚠️ [HR Auth] Invalid companyId found ("default"), using userId instead');
+                    companyId = userId;
+                }
             }
 
-            // If not in hrUsers, the companyId is the userId itself (based on HrSignup logic)
+            // If not in hrUsers or invalid, the companyId is the userId itself (based on HrSignup logic)
             if (!companyId) {
                 companyId = userId;
                 console.log('✅ [HR Auth] Using userId as company ID:', companyId);
