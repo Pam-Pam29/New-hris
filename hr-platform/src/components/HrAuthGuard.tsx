@@ -72,7 +72,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
             // Success - authentication state will update via onAuthStateChanged
-            console.log('✅ [HR Auth] Login successful');
+            console.log('✅ [HR Auth] Login successful - Starting company ID fetch');
             console.log('🔍 [HR Auth] User ID:', userCredential.user.uid);
 
             // Load company ID from hrUsers collection
