@@ -34,7 +34,13 @@ export class FirebaseEmployeeService implements IEmployeeService {
       
       const querySnapshot = await getDocs(q);
 
-      console.log(`📊 Found ${querySnapshot.docs.length} employees in Firebase${companyId ? ' for company' : ' (all companies)'}`);
+      console.log(`📊 Found ${querySnapshot.docs.length} employees in Firebase${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+      
+      // DEBUG: Log sample of companyIds
+      if (querySnapshot.docs.length > 0) {
+        const sampleCompanyIds = querySnapshot.docs.slice(0, 3).map(doc => doc.data().companyId);
+        console.log(`🔍 Sample companyIds:`, sampleCompanyIds);
+      }
 
       return querySnapshot.docs.map((doc, index) => {
         const data = doc.data();
