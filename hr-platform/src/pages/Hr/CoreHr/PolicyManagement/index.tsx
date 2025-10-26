@@ -32,8 +32,10 @@ import { getPolicyService, Policy, PolicyAcknowledgment } from './services/polic
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebaseDb } from '../../../../config/firebase';
 import { vercelEmailService } from '../../../../services/vercelEmailService';
+import { useCompany } from '../../../../context/CompanyContext';
 
 export default function HRPolicyManagement() {
+  const { companyId } = useCompany();
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [acknowledgments, setAcknowledgments] = useState<PolicyAcknowledgment[]>([]);
   const [statistics, setStatistics] = useState<any>(null);
@@ -139,13 +141,14 @@ export default function HRPolicyManagement() {
       setPolicies(policiesData);
       setAcknowledgments(acknowledgmentsData);
 
-      // Get real employee count from Firebase
+      // Get real employee count from Firebase (filtered by company)
       let totalEmployees = 1;
       try {
-        const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
-        const dataFlowService = await getComprehensiveDataFlowService();
-        const allEmployees = await dataFlowService.getAllEmployees();
+        const { getEmployeeService } = await import('../../../../services/employeeService');
+        const employeeService = await getEmployeeService();
+        const allEmployees = await employeeService.getEmployees(companyId || undefined);
         totalEmployees = allEmployees.length || 1;
+        console.log(`👥 Policy Management: Loaded ${totalEmployees} employees for company`);
       } catch (error) {
         console.warn('Could not load employee count, using default:', error);
         totalEmployees = 1;

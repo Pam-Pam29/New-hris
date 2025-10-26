@@ -55,11 +55,13 @@ import {
 import { getComprehensiveDataFlowService } from '../../../services/comprehensiveDataFlowService';
 import { Employee } from '../CoreHr/EmployeeManagement/types';
 import { vercelEmailService } from '../../../services/vercelEmailService';
+import { useCompany } from '../../../context/CompanyContext';
 
 // Use the singleton from service
 const getPayrollService = getPayrollServiceImport;
 
 export default function Payroll() {
+  const { companyId } = useCompany();
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,9 +118,22 @@ export default function Payroll() {
         // Get payroll service
         const payrollService = await getPayrollService();
 
-        // Fetch employees for dropdown
+        // Fetch employees for dropdown (filtered by company)
         const dataFlowService = await getComprehensiveDataFlowService();
-        const employeeProfiles = await dataFlowService.getAllEmployees();
+        // Use subscribeToAllEmployees with companyId filter
+        let employeeProfiles: any[] = [];
+        if (companyId) {
+          await new Promise<void>((resolve) => {
+            const unsubscribe = dataFlowService.subscribeToAllEmployees((employees) => {
+              employeeProfiles = employees;
+              unsubscribe();
+              resolve();
+            }, companyId);
+          });
+          console.log(`👥 Payroll: Loaded ${employeeProfiles.length} employees for company`);
+        } else {
+          employeeProfiles = await dataFlowService.getAllEmployees();
+        }
 
         // Convert to Employee format (comprehensive field checking)
         const employeesData: Employee[] = employeeProfiles.map((profile: any) => {
@@ -157,7 +172,8 @@ export default function Payroll() {
             department: profile.department || profile.jobInfo?.department || profile.workInfo?.department || 'General',
             employmentType: profile.employmentType || profile.workInfo?.employmentType || profile.jobInfo?.employmentType || 'Full-time',
             status: profile.status || 'active',
-            dateStarted: profile.dateStarted || profile.workInfo?.startDate
+            dateStarted: profile.dateStarted || profile.workInfo?.startDate,
+            companyId: companyId || ''
           };
         });
 
