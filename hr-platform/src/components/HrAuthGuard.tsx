@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Lock, LogOut, AlertCircle, Loader } from 'lucide-react';
+import { useCompany } from '../context/CompanyContext';
 
 /**
  * HR Authentication Guard
@@ -24,6 +25,7 @@ interface HrAuthGuardProps {
 
 export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     const navigate = useNavigate();
+    const { company, loading: companyLoading } = useCompany();
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [email, setEmail] = useState<string>('');
@@ -71,6 +73,17 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
             // Success - authentication state will update via onAuthStateChanged
             console.log('✅ [HR Auth] Login successful');
+            
+            // Check onboarding status and redirect accordingly
+            // Wait a bit for company data to load
+            setTimeout(() => {
+                if (!company?.settings?.onboardingCompleted) {
+                    console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                    navigate('/onboarding');
+                } else {
+                    console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
+                }
+            }, 500);
         } catch (error: any) {
             console.error('❌ [HR Auth] Login error:', error);
 
