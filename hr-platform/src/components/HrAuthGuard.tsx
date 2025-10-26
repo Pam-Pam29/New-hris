@@ -26,6 +26,7 @@ interface HrAuthGuardProps {
 export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     const navigate = useNavigate();
     const { company, loading: companyLoading } = useCompany();
+    console.log('🚀 [HR Auth] HrAuthGuard component initialized');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [email, setEmail] = useState<string>('');
