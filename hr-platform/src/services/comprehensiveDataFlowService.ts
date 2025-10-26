@@ -380,6 +380,13 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
                 }
             };
 
+            console.log('🔍 [DataFlow] Saving employee profile to Firestore:', {
+                employeeId,
+                hasAuth: !!(profileData as any).auth,
+                authKeys: (profileData as any).auth ? Object.keys((profileData as any).auth) : [],
+                setupToken: (profileData as any).auth?.setupToken
+            });
+
             await setDoc(docRef, this.convertToFirestore(updateData), { merge: true });
 
             // Create notification for HR
