@@ -614,9 +614,12 @@ function RecentActivity() {
 function UpcomingEvents() {
 	const [events, setEvents] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
+	const { companyId } = useCompany();
 
 	useEffect(() => {
 		const loadEvents = async () => {
+			if (!companyId) return; // Wait for company to load
+			
 			try {
 				console.log('📅 Loading upcoming events...');
 				const eventList: any[] = [];
@@ -781,10 +784,10 @@ function UpcomingEvents() {
 					console.error('❌ Error loading recruitment interviews:', err);
 				}
 
-				// Load upcoming birthdays
+				// Load upcoming birthdays (filtered by company)
 				try {
 					const empSvc = await getEmployeeService();
-					const emps = await empSvc.getEmployees();
+					const emps = await empSvc.getEmployees(companyId);
 					const now = new Date();
 					const currentYear = now.getFullYear();
 
@@ -886,7 +889,7 @@ function UpcomingEvents() {
 			}
 		};
 		loadEvents();
-	}, []);
+	}, [companyId]);
 
 	return (
 		<Card className="card-modern">
