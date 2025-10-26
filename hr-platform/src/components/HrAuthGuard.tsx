@@ -73,27 +73,33 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
             // Success - authentication state will update via onAuthStateChanged
             console.log('✅ [HR Auth] Login successful');
+            console.log('🔍 [HR Auth] User ID:', userCredential.user.uid);
 
             // Load company ID from hrUsers collection
             const userId = userCredential.user.uid;
+            console.log('🔍 [HR Auth] About to fetch company ID...');
 
             // Fetch hrUsers document to get companyId
+            console.log('🔍 [HR Auth] Importing Firebase modules...');
             const { getFirebaseDb } = await import('../config/firebase');
             const { doc, getDoc } = await import('firebase/firestore');
             const db = getFirebaseDb();
+            console.log('🔍 [HR Auth] Firebase DB initialized');
 
             // Try to find company ID from hrUsers document first
+            console.log('🔍 [HR Auth] Fetching hrUsers document...');
             const hrUserRef = doc(db, 'hrUsers', userId);
             const hrUserDoc = await getDoc(hrUserRef);
-            
+            console.log('🔍 [HR Auth] hrUsers document exists:', hrUserDoc.exists());
+
             let companyId: string | null = null;
-            
+
             if (hrUserDoc.exists()) {
                 const hrUserData = hrUserDoc.data();
                 companyId = hrUserData.companyId;
                 console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
             }
-            
+
             // If not in hrUsers, the companyId is the userId itself (based on HrSignup logic)
             if (!companyId) {
                 companyId = userId;
