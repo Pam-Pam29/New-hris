@@ -242,6 +242,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                                 type="submit"
                                 className="w-full"
                                 disabled={isLoggingIn}
+                                onClick={() => console.log('🔘 [HR Auth] Login button clicked!')}
                             >
                                 {isLoggingIn ? (
                                     <>
