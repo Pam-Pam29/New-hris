@@ -166,7 +166,8 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
                             if (companyData.settings?.onboardingCompleted) {
                                 console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
-                                // Don't redirect - let ProtectedRoute handle it
+                                // Redirect to dashboard to ensure we show the right page
+                                navigate('/dashboard');
                             } else {
                                 console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
                                 navigate('/onboarding');
