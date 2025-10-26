@@ -80,6 +80,7 @@ export default function EmployeeDirectory() {
   const [showContractDialog, setShowContractDialog] = useState(false);
   const [pendingEmployeeData, setPendingEmployeeData] = useState<any>(null);
   const [contractData, setContractData] = useState<any>(null);
+  const [setupLink, setSetupLink] = useState<string | null>(null);
   const [selectedViewEmployee, setSelectedViewEmployee] = useState<ViewEmployee | null>(null);
   const [dataFlowService, setDataFlowService] = useState<any>(null);
 
@@ -702,10 +703,18 @@ export default function EmployeeDirectory() {
 
         if (emailResult.success) {
           console.log('✅ [HR] Employee invitation email sent successfully');
-          alert(`✅ Employee created and invitation email sent successfully!\n\n📧 Email sent to: ${pendingEmployeeData.email}\n\n🔗 Setup Link: ${setupLink}\n\n💡 The employee will receive an email with setup instructions.`);
+          alert(`✅ Employee created and invitation email sent successfully!\n\n📧 Email sent to: ${pendingEmployeeData.email}\n\n🔗 Setup Link (click to copy): ${setupLink}\n\n💡 The employee will receive an email with setup instructions.`);
         } else {
           console.warn('⚠️ [HR] Email sending failed:', emailResult.error);
-          alert(`✅ Employee created successfully!\n\n⚠️ Email sending failed: ${emailResult.error}\n\n📧 Please send this setup link manually to the employee:\n\n🔗 Setup Link: ${setupLink}\n\n📧 Send to: ${pendingEmployeeData.email}`);
+          
+          // Save setup link and keep dialog open for user to copy
+          setSetupLink(setupLink);
+          
+          // Show notification
+          alert(`✅ Employee created successfully!\n\n⚠️ Email sending failed: ${emailResult.error}\n\n📋 The setup link is displayed below - you can copy it.\n\n📧 Send to: ${pendingEmployeeData.email}`);
+          
+          // Don't close the dialog - let user continue working with the link visible
+          return;
         }
       } else {
         console.log('📄 [HR] Contract saved as pending - employee is inactive until contract is ready to send');
@@ -1678,6 +1687,33 @@ export default function EmployeeDirectory() {
                     </div>
                   </div>
                 </div>
+
+                {/* Setup Link Display (shown after employee creation) */}
+                {setupLink && (
+                  <div className="space-y-2 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                    <h3 className="text-sm font-semibold text-blue-900">📧 Employee Setup Link</h3>
+                    <p className="text-xs text-blue-700">Copy this link and send it to the employee:</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={setupLink}
+                        readOnly
+                        className="flex-1 px-3 py-2 border border-blue-300 rounded bg-white text-sm font-mono"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(setupLink);
+                          alert('✅ Link copied to clipboard!');
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs text-blue-600">Send to: {pendingEmployeeData?.email}</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-6 pt-4 border-t border-border">
