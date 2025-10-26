@@ -45,7 +45,8 @@ service cloud.firestore {
     // ==========================================
     match /companies/{companyId} {
       allow read: if true; // Public read for company info
-      allow write: if isHROrAdmin();
+      allow create: if isAuthenticated(); // Allow authenticated users to create companies during onboarding
+      allow update, delete: if isHROrAdmin();
     }
 
     // ==========================================
