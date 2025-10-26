@@ -688,14 +688,17 @@ export default function EmployeeDirectory() {
       // Only send setup link and email if contract is ready to send
       if (contractData.status === 'ready_to_send') {
         // Generate setup link
-        const setupLink = `https://hris-employee-platform-1l6vdan9g-pam-pam29s-projects.vercel.app/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
+        const newSetupLink = `https://hris-employee-platform-1l6vdan9g-pam-pam29s-projects.vercel.app/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
 
-        // Send automated email invitation
+        // Always show the setup link in the dialog
+        setSetupLink(newSetupLink);
+
+        // Try to send automated email invitation
         console.log('📧 [HR] Sending automated employee invitation email...');
         const emailResult = await vercelEmailService.sendEmployeeInvitation({
           employeeName: `${pendingEmployeeData.firstName} ${pendingEmployeeData.lastName}`,
           employeeId: pendingEmployeeData.employeeId,
-          setupLink: setupLink,
+          setupLink: newSetupLink,
           companyName: company?.displayName || 'Your Company',
           position: pendingEmployeeData.role,
           email: pendingEmployeeData.email
@@ -703,22 +706,23 @@ export default function EmployeeDirectory() {
 
         if (emailResult.success) {
           console.log('✅ [HR] Employee invitation email sent successfully');
-          alert(`✅ Employee created and invitation email sent successfully!\n\n📧 Email sent to: ${pendingEmployeeData.email}\n\n🔗 Setup Link (click to copy): ${setupLink}\n\n💡 The employee will receive an email with setup instructions.`);
+          // Don't show alert - keep dialog open with setup link visible
         } else {
           console.warn('⚠️ [HR] Email sending failed:', emailResult.error);
-
-          // Save setup link and keep dialog open for user to copy
-          setSetupLink(setupLink);
-
-          // Show notification
-          alert(`✅ Employee created successfully!\n\n⚠️ Email sending failed: ${emailResult.error}\n\n📋 The setup link is displayed below - you can copy it.\n\n📧 Send to: ${pendingEmployeeData.email}`);
-
-          // Don't close the dialog - let user continue working with the link visible
-          return;
+          // Setup link is already shown, just log the error
         }
+        
+        // Keep dialog open so user can copy the setup link
+        return;
       } else {
         console.log('📄 [HR] Contract saved as pending - employee is inactive until contract is ready to send');
         alert(`✅ Employee created successfully!\n\n📄 Contract Status: ${contractData.status}\n\n👤 Employee Status: Inactive\n\n💡 The employee will become active and receive setup instructions when you mark the contract as "Ready to Send".`);
+        
+        // Close dialog for pending contracts
+        setShowContractDialog(false);
+        setPendingEmployeeData(null);
+        setContractData(null);
+        setSetupLink(null);
       }
 
       setFormData({ name: '', email: '', role: '', department: '' });
