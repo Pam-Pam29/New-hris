@@ -312,8 +312,8 @@ export default function RecruitmentPage() {
         postedDate: new Date().toISOString().split('T')[0]
       });
 
-      // Reload jobs
-      const updatedJobs = await jobBoardService.getJobPostings();
+      // Reload jobs (filtered by company)
+      const updatedJobs = await jobBoardService.getJobPostings(companyId);
       setJobs(updatedJobs);
     } catch (error) {
       console.error('Error adding job:', error);
@@ -360,8 +360,8 @@ export default function RecruitmentPage() {
         notes: ''
       });
 
-      // Reload candidates
-      const updatedCandidates = await recruitmentService.getCandidates();
+      // Reload candidates (filtered by company)
+      const updatedCandidates = await recruitmentService.getCandidates(companyId);
       setCandidates(updatedCandidates);
     } catch (error) {
       console.error('Error adding candidate:', error);
@@ -449,8 +449,8 @@ export default function RecruitmentPage() {
       setIsEditingJob(false);
       setSelectedJob(null);
 
-      // Reload jobs
-      const updatedJobs = await jobBoardService.getJobPostings();
+      // Reload jobs (filtered by company)
+      const updatedJobs = await jobBoardService.getJobPostings(companyId);
       const jobsWithDates = updatedJobs.map((job: any) => ({
         ...job,
         postedDate: job.postedDate ? new Date(job.postedDate) : null,
@@ -508,8 +508,8 @@ export default function RecruitmentPage() {
       setIsEditingCandidate(false);
       setSelectedCandidate(null);
 
-      // Reload candidates
-      const updatedCandidates = await recruitmentService.getCandidates();
+      // Reload candidates (filtered by company)
+      const updatedCandidates = await recruitmentService.getCandidates(companyId);
       setCandidates(updatedCandidates);
     } catch (error) {
       console.error('Error updating candidate:', error);
@@ -531,8 +531,8 @@ export default function RecruitmentPage() {
       await jobBoardService.updateJobPosting(jobId, { status: 'draft' });
       setSuccess(`Job posting "${jobTitle}" has been unpublished successfully`);
 
-      // Reload jobs
-      const updatedJobs = await jobBoardService.getJobPostings();
+      // Reload jobs (filtered by company)
+      const updatedJobs = await jobBoardService.getJobPostings(companyId);
       setJobs(updatedJobs);
     } catch (error) {
       console.error('Error unpublishing job:', error);
@@ -554,8 +554,8 @@ export default function RecruitmentPage() {
       await jobBoardService.closeJobPosting(jobId); // Using closeJobPosting as delete functionality
       setSuccess(`Job posting "${jobTitle}" has been deleted successfully`);
 
-      // Reload jobs
-      const updatedJobs = await jobBoardService.getJobPostings();
+      // Reload jobs (filtered by company)
+      const updatedJobs = await jobBoardService.getJobPostings(companyId);
       setJobs(updatedJobs);
     } catch (error) {
       console.error('Error deleting job:', error);
@@ -578,8 +578,8 @@ export default function RecruitmentPage() {
       // Delete candidate
       await recruitmentService.deleteCandidate(candidateId);
 
-      // Clean up any orphaned interviews for this candidate
-      const allInterviews = await recruitmentService.getInterviews();
+      // Clean up any orphaned interviews for this candidate (filtered by company)
+      const allInterviews = await recruitmentService.getInterviews(companyId);
       const orphanedInterviews = allInterviews.filter(interview => interview.candidateId === candidateId);
 
       // Delete orphaned interviews
@@ -593,10 +593,10 @@ export default function RecruitmentPage() {
 
       setSuccess(`Candidate "${candidateName}" has been deleted successfully`);
 
-      // Reload candidates and interviews
+      // Reload candidates and interviews (filtered by company)
       const [updatedCandidates, updatedInterviews] = await Promise.all([
-        recruitmentService.getCandidates(),
-        recruitmentService.getInterviews()
+        recruitmentService.getCandidates(companyId),
+        recruitmentService.getInterviews(companyId)
       ]);
 
       // Convert Firebase Timestamps to JavaScript Dates for interviews
@@ -843,8 +843,8 @@ export default function RecruitmentPage() {
       await recruitmentService.updateCandidateStatus(candidateId, 'hired');
       setSuccess(`Candidate "${candidateName}" has been hired successfully!`);
 
-      // Reload candidates
-      const updatedCandidates = await recruitmentService.getCandidates();
+      // Reload candidates (filtered by company)
+      const updatedCandidates = await recruitmentService.getCandidates(companyId);
       setCandidates(updatedCandidates);
     } catch (error) {
       console.error('Error hiring candidate:', error);
@@ -1362,7 +1362,7 @@ export default function RecruitmentPage() {
                     onClick={async () => {
                       try {
                         const recruitmentService = await getRecruitmentService();
-                        const updatedInterviews = await recruitmentService.getInterviews();
+                        const updatedInterviews = await recruitmentService.getInterviews(companyId);
                         const interviewsWithDates = updatedInterviews.map((interview: any) => {
                           let scheduledTime: Date | null = null;
 

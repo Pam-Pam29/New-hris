@@ -127,10 +127,9 @@ function useLiveStats(companyId: string | null) {
 				setPendingLeaves(pendingCount);
 				console.log('✅ Pending leave requests:', pendingCount, 'out of', companyLeaves.length, 'company leaves (', leaves.length, 'total)');
 
-				// Load job postings (filter by company)
+				// Load job postings (filtered by company at service level)
 				try {
-					const jobs = await jobBoardService.getJobPostings();
-					const companyJobs = jobs.filter(job => job.companyId === companyId);
+					const companyJobs = await jobBoardService.getJobPostings(companyId);
 					const publishedJobs = companyJobs.filter(job => job.status === 'published');
 					setOpenPositions(publishedJobs.length);
 					console.log('✅ Open positions:', publishedJobs.length, 'of', companyJobs.length, 'company jobs (', jobs.length, 'total)');
@@ -139,10 +138,9 @@ function useLiveStats(companyId: string | null) {
 					setOpenPositions(0);
 				}
 
-				// Load recruitment candidates (filter by company)
+				// Load recruitment candidates (filtered by company at service level)
 				try {
-					const candidates = await recruitmentService.getCandidates();
-					const companyCandidates = candidates.filter(c => c.companyId === companyId);
+					const companyCandidates = await recruitmentService.getCandidates(companyId);
 					const hired = companyCandidates.filter(c => c.status === 'hired');
 					setHiredCandidates(hired.length);
 					console.log('✅ Hired candidates:', hired.length, 'of', companyCandidates.length, 'company candidates (', candidates.length, 'total)');
@@ -698,9 +696,9 @@ function UpcomingEvents() {
 					console.log('⚠️ No upcoming HR meetings');
 				}
 
-				// Load recruitment interviews
+				// Load recruitment interviews (filtered by company)
 				try {
-					const interviews = await recruitmentService.getInterviews();
+					const interviews = await recruitmentService.getInterviews(companyId);
 					console.log('🎤 All interviews loaded:', interviews.length);
 					console.log('🎤 Interview details:', interviews.map((i: any) => ({
 						id: i.id,
@@ -710,8 +708,8 @@ function UpcomingEvents() {
 						status: i.status
 					})));
 
-					// Get candidates for name lookup
-					const candidates = await recruitmentService.getCandidates();
+					// Get candidates for name lookup (filtered by company)
+					const candidates = await recruitmentService.getCandidates(companyId);
 					const candidateMap = new Map(candidates.map((c: any) => [c.id, c.name]));
 
 					const upcomingInterviews = interviews

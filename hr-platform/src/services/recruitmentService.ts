@@ -46,7 +46,7 @@ export interface Offer {
 
 export interface IRecruitmentService {
     // Candidates
-    getCandidates(): Promise<RecruitmentCandidate[]>;
+    getCandidates(companyId?: string): Promise<RecruitmentCandidate[]>;
     getCandidate(id: string): Promise<RecruitmentCandidate | null>;
     addCandidate(candidate: Omit<RecruitmentCandidate, 'id'>): Promise<string>;
     updateCandidate(id: string, candidate: Partial<RecruitmentCandidate>): Promise<void>;
@@ -55,7 +55,7 @@ export interface IRecruitmentService {
 
     // Interviews
     scheduleInterview(interview: Omit<Interview, 'id'>): Promise<string>;
-    getInterviews(): Promise<Interview[]>;
+    getInterviews(companyId?: string): Promise<Interview[]>;
     getInterviewsForCandidate(candidateId: string): Promise<Interview[]>;
     updateInterviewFeedback(id: string, feedback: string): Promise<void>;
     cancelInterview(id: string): Promise<void>;
@@ -70,10 +70,17 @@ export class FirebaseRecruitmentService implements IRecruitmentService {
     constructor(private db: Firestore) { }
 
     // Candidate methods
-    async getCandidates(): Promise<RecruitmentCandidate[]> {
-        const { collection, getDocs } = await import('firebase/firestore');
+    async getCandidates(companyId?: string): Promise<RecruitmentCandidate[]> {
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
         const candidatesRef = collection(this.db, 'recruitment_candidates');
-        const snapshot = await getDocs(candidatesRef);
+        
+        let q = query(candidatesRef);
+        if (companyId) {
+            q = query(candidatesRef, where('companyId', '==', companyId));
+            console.log(`🏢 Filtering candidates by companyId: ${companyId}`);
+        }
+        
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -126,10 +133,16 @@ export class FirebaseRecruitmentService implements IRecruitmentService {
         return docRef.id;
     }
 
-    async getInterviews(): Promise<Interview[]> {
-        const { collection, getDocs, orderBy, query } = await import('firebase/firestore');
+    async getInterviews(companyId?: string): Promise<Interview[]> {
+        const { collection, getDocs, orderBy, query, where } = await import('firebase/firestore');
         const interviewsRef = collection(this.db, 'interviews');
-        const q = query(interviewsRef, orderBy('scheduledTime', 'asc'));
+        
+        let q = query(interviewsRef, orderBy('scheduledTime', 'asc'));
+        if (companyId) {
+            q = query(interviewsRef, where('companyId', '==', companyId), orderBy('scheduledTime', 'asc'));
+            console.log(`🏢 Filtering interviews by companyId: ${companyId}`);
+        }
+        
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({
             id: doc.id,

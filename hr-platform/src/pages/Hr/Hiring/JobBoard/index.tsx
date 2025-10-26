@@ -48,6 +48,7 @@ const getJobBoardService = async () => {
 };
 
 export default function JobBoard() {
+    const { companyId } = useCompany();
     const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
     const [applications, setApplications] = useState<JobApplication[]>([]);
     const [loading, setLoading] = useState(true);
@@ -76,6 +77,8 @@ export default function JobBoard() {
 
     // Fetch data on component mount with REAL-TIME sync
     useEffect(() => {
+        if (!companyId) return; // Wait for company to load
+        
         let unsubscribe: (() => void) | null = null;
 
         const setupRealtimeSync = async () => {
@@ -83,7 +86,7 @@ export default function JobBoard() {
                 setLoading(true);
 
                 // Import Firebase for real-time listener
-                const { collection, onSnapshot } = await import('firebase/firestore');
+                const { collection, query, where, onSnapshot } = await import('firebase/firestore');
                 const { getFirebaseDb } = await import('../../../../config/firebase');
                 const db = getFirebaseDb();
 
@@ -91,10 +94,11 @@ export default function JobBoard() {
                     throw new Error('Firebase not available');
                 }
 
-                // Set up real-time listener for job postings
+                // Set up real-time listener for job postings (filtered by company)
                 const jobPostingsRef = collection(db, 'job_postings');
+                const q = query(jobPostingsRef, where('companyId', '==', companyId));
 
-                unsubscribe = onSnapshot(jobPostingsRef, (snapshot) => {
+                unsubscribe = onSnapshot(q, (snapshot) => {
                     const jobs = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data()
@@ -102,7 +106,7 @@ export default function JobBoard() {
 
                     setJobPostings(jobs);
                     setLoading(false);
-                    console.log('✅ Job Board synced: Jobs updated in real-time');
+                    console.log(`✅ Job Board synced: ${jobs.length} jobs for company`);
                 }, (err) => {
                     console.error('Error in real-time job sync:', err);
                     setError('Failed to sync job postings. Please refresh.');
@@ -125,7 +129,7 @@ export default function JobBoard() {
                 console.log('🔌 Job Board real-time sync disconnected');
             }
         };
-    }, []);
+    }, [companyId]);
 
     // Handle adding a new job posting
     const handleAddJob = async () => {
@@ -140,8 +144,8 @@ export default function JobBoard() {
 
             await jobBoardService.createJobPosting(jobToAdd);
 
-            // Refresh job postings list
-            const jobsData = await jobBoardService.getJobPostings();
+            // Refresh job postings list (filtered by company)
+            const jobsData = await jobBoardService.getJobPostings(companyId);
             setJobPostings(jobsData);
 
             // Close dialog and reset form

@@ -40,7 +40,7 @@ export interface Candidate {
 
 export interface IJobBoardService {
     // Job Postings
-    getJobPostings(): Promise<JobPosting[]>;
+    getJobPostings(companyId?: string): Promise<JobPosting[]>;
     getJobPosting(id: string): Promise<JobPosting | null>;
     createJobPosting(posting: Omit<JobPosting, 'id'>): Promise<string>;
     updateJobPosting(id: string, posting: Partial<JobPosting>): Promise<void>;
@@ -62,10 +62,17 @@ export class FirebaseJobBoardService implements IJobBoardService {
     constructor(private db: Firestore) { }
 
     // Job Posting methods
-    async getJobPostings(): Promise<JobPosting[]> {
-        const { collection, getDocs } = await import('firebase/firestore');
+    async getJobPostings(companyId?: string): Promise<JobPosting[]> {
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
         const postingsRef = collection(this.db, 'job_postings');
-        const snapshot = await getDocs(postingsRef);
+        
+        let q = query(postingsRef);
+        if (companyId) {
+            q = query(postingsRef, where('companyId', '==', companyId));
+            console.log(`🏢 Filtering jobs by companyId: ${companyId}`);
+        }
+
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -211,7 +218,7 @@ export class FirebaseJobBoardService implements IJobBoardService {
 
 export class MockJobBoardService implements IJobBoardService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async getJobPostings(): Promise<JobPosting[]> {
+    async getJobPostings(companyId?: string): Promise<JobPosting[]> {
         return [];
     }
 
