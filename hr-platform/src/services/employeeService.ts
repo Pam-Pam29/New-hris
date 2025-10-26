@@ -4,7 +4,7 @@ import { Firestore } from 'firebase/firestore';
 
 // Abstract interface for employee operations
 export interface IEmployeeService {
-  getEmployees(): Promise<Employee[]>;
+  getEmployees(companyId?: string): Promise<Employee[]>;
   getEmployeeById(id: string): Promise<Employee | null>;
   createEmployee(employee: Omit<Employee, 'id'>): Promise<Employee>;
   updateEmployee(id: string, employee: Partial<Employee>): Promise<Employee>;
@@ -20,14 +20,21 @@ export class FirebaseEmployeeService implements IEmployeeService {
     this.db = db;
   }
 
-  async getEmployees(): Promise<Employee[]> {
+  async getEmployees(companyId?: string): Promise<Employee[]> {
     try {
-      const { collection, getDocs, query } = await import('firebase/firestore');
+      const { collection, getDocs, query, where } = await import('firebase/firestore');
       const employeesRef = collection(this.db, 'employees');
-      const q = query(employeesRef);
+      
+      // Build query with optional company filter for multi-tenancy
+      let q = query(employeesRef);
+      if (companyId) {
+        q = query(employeesRef, where('companyId', '==', companyId));
+        console.log(`🏢 Filtering employees by companyId: ${companyId}`);
+      }
+      
       const querySnapshot = await getDocs(q);
 
-      console.log(`📊 Found ${querySnapshot.docs.length} employees in Firebase`);
+      console.log(`📊 Found ${querySnapshot.docs.length} employees in Firebase${companyId ? ' for company' : ' (all companies)'}`);
 
       return querySnapshot.docs.map((doc, index) => {
         const data = doc.data();
@@ -180,7 +187,10 @@ export class FirebaseEmployeeService implements IEmployeeService {
 export class MockEmployeeService implements IEmployeeService {
   private employees: Employee[] = [];
 
-  async getEmployees(): Promise<Employee[]> {
+  async getEmployees(companyId?: string): Promise<Employee[]> {
+    if (companyId) {
+      return Promise.resolve(this.employees.filter(emp => emp.companyId === companyId));
+    }
     return Promise.resolve(this.employees);
   }
 

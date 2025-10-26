@@ -49,12 +49,11 @@ function useLiveStats(companyId: string | null) {
 			try {
 				console.log(`📊 Loading Dashboard for ${company?.displayName || 'company'}...`);
 
-				// Load employees (filter by company)
+				// Load employees (filtered by company at service level)
 				const empSvc = await getEmployeeService();
-				const emps = await empSvc.getEmployees();
-				const companyEmps = emps.filter((e: any) => e.companyId === companyId);
+				const companyEmps = await empSvc.getEmployees(companyId);
 				setEmployees(companyEmps.length);
-				console.log(`✅ Total employees: ${companyEmps.length} for ${company?.displayName} (${emps.length} total in DB)`);
+				console.log(`✅ Total employees: ${companyEmps.length} for ${company?.displayName}`);
 
 				// Calculate upcoming birthdays (this week, including today)
 				const now = new Date();
@@ -391,15 +390,19 @@ function QuickActions() {
 function RecentActivity() {
 	const [activities, setActivities] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
+	const { companyId } = useCompany();
 
 	useEffect(() => {
 		const loadActivities = async () => {
+			if (!companyId) return; // Wait for company to load
+			
 			try {
 				console.log('📋 Loading recent activities...');
 				const activityList: any[] = [];
 
-				// Load recent leave requests
+				// Load recent leave requests (filtered by company)
 				const leaves = await leaveRequestService.getAll();
+				const companyLeaves = leaves.filter((l: any) => l.companyId === companyId);
 				console.log('📋 Leave request details:', leaves.map((l: any) => ({
 					employeeName: l.employeeName,
 					employeeId: l.employeeId,
@@ -413,7 +416,7 @@ function RecentActivity() {
 				const allEmps = await empSvcForLeave.getEmployees();
 				const empMap = new Map(allEmps.map((e: any) => [e.employeeId || e.firebaseId, e.name]));
 
-				const recentLeaves = leaves.slice(0, 3).map((leave: any) => {
+				const recentLeaves = companyLeaves.slice(0, 3).map((leave: any) => {
 					const status = String(leave.status || '').toLowerCase();
 
 					// Get employee name - try multiple sources
@@ -464,9 +467,9 @@ function RecentActivity() {
 				});
 				activityList.push(...recentLeaves);
 
-				// Load recent employees (new hires)
+				// Load recent employees (new hires) - filtered by company
 				const empSvc = await getEmployeeService();
-				const emps = await empSvc.getEmployees();
+				const emps = await empSvc.getEmployees(companyId);
 				console.log('📅 Employee hire dates:', emps.map((e: any) => ({
 					name: e.name,
 					hireDate: e.hireDate,
@@ -551,7 +554,7 @@ function RecentActivity() {
 			}
 		};
 		loadActivities();
-	}, []);
+	}, [companyId]);
 
 	// Helper function to format time ago
 	const formatTimeAgo = (date: Date): string => {
