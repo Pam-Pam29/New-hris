@@ -5,9 +5,10 @@
 
 ---
 
-## 🏢 HR Platform (Firebase Hosting)
-**URL:** https://hris-system-baa22.web.app  
-**Status:** 🟢 Live  
+## 🏢 HR Platform (Vercel)
+**URL:** https://hr-platform-ghvstzds9-pam-pam29s-projects.vercel.app  
+**Alternative URL (Firebase):** https://hris-system-baa22.web.app  
+**Status:** 🟢 Live on Vercel  
 **Features:**
 - Company onboarding
 - HR authentication
@@ -16,6 +17,9 @@
 - Payroll processing
 - Recruitment
 - Job board
+
+**Vercel Dashboard:**  
+https://vercel.com/pam-pam29s-projects/hr-platform
 
 **Firebase Console:**  
 https://console.firebase.google.com/project/hris-system-baa22
@@ -55,7 +59,7 @@ https://vercel.com/pam-pam29s-projects/hris-careers-platform
 ## 🔑 Access Information
 
 ### **HR Platform Access:**
-1. Visit: https://hris-system-baa22.web.app
+1. Visit: https://hr-platform-ghvstzds9-pam-pam29s-projects.vercel.app
 2. Complete company onboarding
 3. Create HR account
 4. Login
@@ -91,7 +95,7 @@ https://resend.com/emails
 
 | Platform | URL | Dashboard |
 |----------|-----|-----------|
-| HR Platform | https://hris-system-baa22.web.app | [Firebase](https://console.firebase.google.com/project/hris-system-baa22) |
+| HR Platform | https://hr-platform-ghvstzds9-pam-pam29s-projects.vercel.app | [Vercel](https://vercel.com/pam-pam29s-projects/hr-platform) |
 | Employee Platform | https://hris-employee-platform-r27soltjn-pam-pam29s-projects.vercel.app | [Vercel](https://vercel.com/pam-pam29s-projects/hris-employee-platform) |
 | Careers Platform | https://hris-careers-platform-cgnkc9kdj-pam-pam29s-projects.vercel.app | [Vercel](https://vercel.com/pam-pam29s-projects/hris-careers-platform) |
 
