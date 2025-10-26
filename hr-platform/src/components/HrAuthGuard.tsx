@@ -36,7 +36,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     // Check if current path should bypass authentication
     const isPublicRoute = () => {
         const path = window.location.pathname;
-        return path === '/signup' || path === '/hr-signup' || path === '/onboarding' || path === '/data-cleanup';
+        return path === '/signup' || path === '/hr-signup' || path === '/hr-onboarding-signup' || path === '/hr-onboarding-signin' || path === '/onboarding' || path === '/data-cleanup';
     };
 
     // Check authentication state on mount
@@ -197,7 +197,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                                 <p>
                                     Don't have an account?{' '}
                                     <button
-                                        onClick={() => navigate('/hr-signup')}
+                                        onClick={() => navigate('/hr-onboarding-signup')}
                                         className="text-blue-600 hover:underline font-medium"
                                     >
                                         Sign up here
