@@ -88,7 +88,8 @@ service cloud.firestore {
     // ==========================================
     match /leaveTypes/{typeId} {
       allow read: if true; // All can read leave types
-      allow write: if isHROrAdmin();
+      allow create: if isAuthenticated(); // Allow authenticated users to create during onboarding
+      allow update, delete: if isHROrAdmin();
     }
     
     match /leaveBalances/{balanceId} {
@@ -320,14 +321,23 @@ service cloud.firestore {
       allow write: if isHROrAdmin();
     }
     
-    // ==========================================
+        // ==========================================
     // DEPARTMENTS - Read all, write HR only
     // ==========================================
     match /departments/{deptId} {
       allow read: if true;
-      allow write: if isHROrAdmin();
+      allow create: if isAuthenticated(); // Allow authenticated users to create during onboarding
+      allow update, delete: if isHROrAdmin();
     }
-    
+
+    // ==========================================
+    // SYSTEM CONFIG - For onboarding setup
+    // ==========================================
+    match /systemConfig/{configId} {
+      allow create: if isAuthenticated(); // Allow authenticated users to create during onboarding
+      allow read, update, delete: if isHROrAdmin();
+    }
+
     // ==========================================
     // DOCUMENT METADATA - For Cloudinary integration
     // ==========================================
