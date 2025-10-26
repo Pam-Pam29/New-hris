@@ -119,19 +119,22 @@ export default function CareersPage() {
                 const jobPostingsRef = collection(db, 'job_postings');
                 const q = query(
                     jobPostingsRef,
-                    where('companyId', '==', company.id),     // ← Company filter!
-                    where('status', '==', 'published')        // ← Only published
+                    where('companyId', '==', company.id)     // ← Company filter!
+                    // Temporarily removed status filter until composite index is built
                 );
 
                 unsubscribe = onSnapshot(q, (snapshot) => {
-                    const companyJobs = snapshot.docs.map(doc => ({
+                    const allJobs = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data()
                     } as JobPosting));
 
-                    setJobs(companyJobs);
+                    // Filter to only published jobs client-side
+                    const publishedJobs = allJobs.filter(job => job.status === 'published');
+                    
+                    setJobs(publishedJobs);
                     setLoading(false);
-                    console.log(`✅ ${company.displayName}: Loaded ${companyJobs.length} jobs in real-time`);
+                    console.log(`✅ ${company.displayName}: Loaded ${publishedJobs.length} published jobs out of ${allJobs.length} total`);
                 }, (err) => {
                     console.error('Error in real-time job sync:', err);
                     setError('Failed to load jobs');
