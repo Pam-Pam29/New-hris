@@ -69,21 +69,48 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
         try {
             console.log('🔐 [HR Auth] Attempting login for:', email);
-            await signInWithEmailAndPassword(auth, email, password);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
             // Success - authentication state will update via onAuthStateChanged
             console.log('✅ [HR Auth] Login successful');
+
+            // Load company ID from hrUsers collection
+            const userId = userCredential.user.uid;
             
-            // Check onboarding status and redirect accordingly
-            // Wait a bit for company data to load
-            setTimeout(() => {
-                if (!company?.settings?.onboardingCompleted) {
-                    console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
-                    navigate('/onboarding');
+            // Fetch hrUsers document to get companyId
+            const { getFirebaseDb } = await import('../config/firebase');
+            const { doc, getDoc } = await import('firebase/firestore');
+            const db = getFirebaseDb();
+            
+            const hrUserRef = doc(db, 'hrUsers', userId);
+            const hrUserDoc = await getDoc(hrUserRef);
+            
+            if (hrUserDoc.exists()) {
+                const hrUserData = hrUserDoc.data();
+                const companyId = hrUserData.companyId;
+                
+                if (companyId) {
+                    console.log('✅ [HR Auth] Found company ID:', companyId);
+                    localStorage.setItem('companyId', companyId);
+                    
+                    // Trigger company context reload
+                    window.dispatchEvent(new CustomEvent('companyIdChanged'));
+                    
+                    // Wait for company data to load
+                    setTimeout(() => {
+                        if (!company?.settings?.onboardingCompleted) {
+                            console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                            navigate('/onboarding');
+                        } else {
+                            console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
+                        }
+                    }, 1000);
                 } else {
-                    console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
+                    console.warn('⚠️ [HR Auth] No company ID found in hrUsers document');
                 }
-            }, 500);
+            } else {
+                console.warn('⚠️ [HR Auth] hrUsers document not found');
+            }
         } catch (error: any) {
             console.error('❌ [HR Auth] Login error:', error);
 
