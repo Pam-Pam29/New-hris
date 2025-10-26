@@ -141,11 +141,8 @@ export const EmployeeSetup: React.FC = () => {
                 console.log('✅ [Employee Setup] New Firebase Auth account created');
             } catch (error: any) {
                 if (error.code === 'auth/email-already-in-use') {
-                    console.log('⚠️ [Employee Setup] Account exists, updating password...');
-                    // Account exists - we need to sign in with current password and update
-                    // For now, let's just update the employee record and let them login normally
-                    userCredential = null;
-                    console.log('✅ [Employee Setup] Account exists, will use existing Firebase Auth');
+                    console.log('⚠️ [Employee Setup] Account exists, cannot update password automatically');
+                    throw new Error('This email is already registered. Please contact HR to reset your password or use the login page if you know your password.');
                 } else {
                     throw error;
                 }
