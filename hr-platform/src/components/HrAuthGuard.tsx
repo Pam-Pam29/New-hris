@@ -76,35 +76,41 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
             // Load company ID from hrUsers collection
             const userId = userCredential.user.uid;
-            
+
             // Fetch hrUsers document to get companyId
             const { getFirebaseDb } = await import('../config/firebase');
             const { doc, getDoc } = await import('firebase/firestore');
             const db = getFirebaseDb();
-            
+
             const hrUserRef = doc(db, 'hrUsers', userId);
             const hrUserDoc = await getDoc(hrUserRef);
-            
+
             if (hrUserDoc.exists()) {
                 const hrUserData = hrUserDoc.data();
                 const companyId = hrUserData.companyId;
-                
+
                 if (companyId) {
                     console.log('✅ [HR Auth] Found company ID:', companyId);
                     localStorage.setItem('companyId', companyId);
-                    
+
                     // Trigger company context reload
                     window.dispatchEvent(new CustomEvent('companyIdChanged'));
-                    
+
                     // Wait for company data to load
                     setTimeout(() => {
+                        console.log('🔍 [HR Auth] Company data check:', {
+                            hasCompany: !!company,
+                            onboardingCompleted: company?.settings?.onboardingCompleted,
+                            settings: company?.settings
+                        });
+                        
                         if (!company?.settings?.onboardingCompleted) {
                             console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
                             navigate('/onboarding');
                         } else {
                             console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
                         }
-                    }, 1000);
+                    }, 1500);
                 } else {
                     console.warn('⚠️ [HR Auth] No company ID found in hrUsers document');
                 }
