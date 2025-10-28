@@ -134,7 +134,6 @@ class EmployeeSyncService {
         }
     }
 
-    // Link employee to Employee Dashboard
     async linkEmployeeToDashboard(employeeId: string, dashboardData: any): Promise<boolean> {
         try {
             const employeeRef = doc(db, 'employees', employeeId);
