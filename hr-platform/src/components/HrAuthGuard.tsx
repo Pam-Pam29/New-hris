@@ -150,9 +150,11 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
 
                 // Trigger company context reload
                 window.dispatchEvent(new CustomEvent('companyIdChanged'));
+                console.log('✅ [HR Auth] Company context change event dispatched');
 
                 // Wait a bit for context to update, then check onboarding status
                 setTimeout(async () => {
+                    console.log('✅ [HR Auth] setTimeout callback executing after 1 second');
                     // Try to load company data directly from Firestore to check onboarding
                     try {
                         const companyDoc = await getDoc(doc(db, 'companies', companyId));
@@ -180,7 +182,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                         console.error('❌ [HR Auth] Error loading company data:', error);
                         navigate('/onboarding');
                     }
-                }, 1000);
+                }, 3000); // Increased to 3 seconds for better reliability
             } else {
                 console.warn('⚠️ [HR Auth] No company ID found');
             }
