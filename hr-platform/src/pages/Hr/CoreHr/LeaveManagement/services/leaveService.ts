@@ -7,6 +7,7 @@ import {
   deleteDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   Timestamp,
   DocumentData,
@@ -77,6 +78,7 @@ interface LeaveType {
   accrualRate?: number;
   carryForward?: boolean;
   requiresApproval?: boolean;
+  companyId?: string;
 }
 
 interface Employee {
@@ -195,9 +197,16 @@ class FirebaseLeaveRequestService {
 class FirebaseLeaveTypeService {
   private collectionName = 'leaveTypes';
 
-  async getAll(): Promise<LeaveType[]> {
+  async getAll(companyId?: string): Promise<LeaveType[]> {
     try {
-      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      let q = query(collection(db, this.collectionName));
+      
+      // Filter by companyId if provided
+      if (companyId) {
+        q = query(q, where('companyId', '==', companyId));
+      }
+      
+      const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -238,8 +247,15 @@ class FirebaseLeaveTypeService {
     }
   }
 
-  subscribe(callback: (types: LeaveType[]) => void): () => void {
-    return onSnapshot(collection(db, this.collectionName), (snapshot: QuerySnapshot<DocumentData>) => {
+  subscribe(callback: (types: LeaveType[]) => void, companyId?: string): () => void {
+    let q = query(collection(db, this.collectionName));
+    
+    // Filter by companyId if provided
+    if (companyId) {
+      q = query(q, where('companyId', '==', companyId));
+    }
+    
+    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
       const types = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -344,18 +360,18 @@ export const handleFirebaseError = (error: any): string => {
 };
 
 // Initialize default data
-export const initializeDefaultData = async (): Promise<void> => {
+export const initializeDefaultData = async (companyId?: string): Promise<void> => {
   try {
-    // Check if leave types exist
-    const leaveTypes = await leaveTypeService.getAll();
-    if (leaveTypes.length === 0) {
-      // Add default leave types
+    // Check if leave types exist (filtered by companyId if provided)
+    const leaveTypes = await leaveTypeService.getAll(companyId);
+    if (leaveTypes.length === 0 && companyId) {
+      // Add default leave types with companyId
       const defaultLeaveTypes = [
-        { name: 'Annual Leave', daysAllowed: 21, color: '#3B82F6' },
-        { name: 'Sick Leave', daysAllowed: 10, color: '#EF4444' },
-        { name: 'Personal Leave', daysAllowed: 5, color: '#8B5CF6' },
-        { name: 'Maternity Leave', daysAllowed: 90, color: '#EC4899' },
-        { name: 'Paternity Leave', daysAllowed: 14, color: '#06B6D4' }
+        { name: 'Annual Leave', daysAllowed: 21, color: '#3B82F6', companyId },
+        { name: 'Sick Leave', daysAllowed: 10, color: '#EF4444', companyId },
+        { name: 'Personal Leave', daysAllowed: 5, color: '#8B5CF6', companyId },
+        { name: 'Maternity Leave', daysAllowed: 90, color: '#EC4899', companyId },
+        { name: 'Paternity Leave', daysAllowed: 14, color: '#06B6D4', companyId }
       ];
 
       for (const leaveType of defaultLeaveTypes) {

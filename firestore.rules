@@ -133,9 +133,16 @@ service cloud.firestore {
       allow update, delete: if isHROrAdmin();
     }
     
+    // Recruitment candidates collection (with underscore)
+    match /recruitment_candidates/{candidateId} {
+      allow create: if isAuthenticated(); // Authenticated users can create (public can apply)
+      allow read: if isAuthenticated(); // All authenticated users can read
+      allow update, delete: if isHROrAdmin();
+    }
+    
     match /interviews/{interviewId} {
       allow read: if isAuthenticated(); // Allow all authenticated users to read
-      allow write: if isHROrAdmin();
+      allow create, update, delete: if isHROrAdmin();
     }
     
     match /applications/{applicationId} {
@@ -331,11 +338,12 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // SYSTEM CONFIG - For onboarding setup
+    // SYSTEM CONFIG - For onboarding setup and platform URLs
     // ==========================================
     match /systemConfig/{configId} {
-      allow create: if isAuthenticated(); // Allow authenticated users to create during onboarding
-      allow read, update, delete: if isHROrAdmin();
+      allow read: if isAuthenticated(); // All authenticated users can read (needed for platform URLs)
+      allow create, update: if isAuthenticated(); // Allow authenticated users to create/update
+      allow delete: if isHROrAdmin();
     }
 
     // ==========================================

@@ -3,7 +3,7 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { Analytics, getAnalytics } from 'firebase/analytics';
+import { Analytics } from 'firebase/analytics';
 
 // Validate that all required environment variables are present
 const requiredEnvVars = [

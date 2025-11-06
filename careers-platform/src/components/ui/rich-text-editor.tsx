@@ -53,7 +53,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }}
       />
       
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{__html: `
         .rich-text-editor .ql-editor {
           min-height: ${minHeight};
           font-family: inherit;
@@ -108,7 +108,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         .rich-text-editor .ql-snow .ql-picker-item:hover {
           background: hsl(var(--muted));
         }
-      `}</style>
+      `}} />
     </div>
   );
 };

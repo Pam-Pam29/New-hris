@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -70,6 +70,21 @@ export default function LeaveManagement() {
         request.employeeId === employeeId
     ) || [];
 
+    // Deduplicate leave types by ID (in case of duplicates)
+    const uniqueLeaveTypes = useMemo(() => {
+        const typesArray = (leaveTypes as LeaveType[]) || [];
+        const seen = new Map<string, LeaveType>();
+        typesArray.forEach((type: LeaveType) => {
+            if (type.id && !seen.has(type.id)) {
+                seen.set(type.id, type);
+            } else if (type.name && !seen.has(type.name)) {
+                // Fallback: deduplicate by name if ID is missing
+                seen.set(type.name, type);
+            }
+        });
+        return Array.from(seen.values());
+    }, [leaveTypes]);
+
 
     // Load employee name from profile
     useEffect(() => {
@@ -116,7 +131,7 @@ export default function LeaveManagement() {
         setSubmitting(true);
 
         try {
-            const selectedType = (leaveTypes as LeaveType[]).find((lt: LeaveType) => lt.id === selectedLeaveType);
+            const selectedType = uniqueLeaveTypes.find((lt: LeaveType) => lt.id === selectedLeaveType);
             if (!selectedType) {
                 setError('Invalid leave type selected');
                 return;
@@ -311,7 +326,7 @@ export default function LeaveManagement() {
                     {/* Leave Balances */}
                     <TabsContent value="balances" className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {(leaveTypes as LeaveType[]).map((type: LeaveType) => {
+                            {uniqueLeaveTypes.map((type: LeaveType) => {
                                 // Calculate used days from approved requests
                                 const usedDays = leaveRequests
                                     .filter(req => req.leaveTypeId === type.id && normalizeLeaveStatus(req.status) === 'approved')
@@ -412,7 +427,7 @@ export default function LeaveManagement() {
                                             <SelectValue placeholder="Select leave type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {(leaveTypes as LeaveType[]).map((type: LeaveType) => (
+                                            {uniqueLeaveTypes.map((type: LeaveType) => (
                                                 <SelectItem key={type.id} value={type.id}>
                                                     {type.name}
                                                 </SelectItem>

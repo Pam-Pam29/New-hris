@@ -451,14 +451,45 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Leave Management
-    async getLeaveTypes(): Promise<LeaveType[]> {
+    async getLeaveTypes(companyId?: string): Promise<LeaveType[]> {
         try {
-            const q = query(collection(getFirebaseDb(), 'leaveTypes'), where('isActive', '==', true), orderBy('name'));
+            let q = query(collection(getFirebaseDb(), 'leaveTypes'), where('isActive', '==', true));
+            
+            // Filter by companyId if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+            }
+            
             const querySnapshot = await getDocs(q);
+            
+            // Get all leave types and sort in memory to avoid index requirement
+            let leaveTypes = querySnapshot.docs.map(doc => this.convertFirestoreToLeaveType(doc.data()));
+            
+            // Sort by name in memory
+            leaveTypes.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-            return querySnapshot.docs.map(doc => this.convertFirestoreToLeaveType(doc.data()));
-        } catch (error) {
+            return leaveTypes;
+        } catch (error: any) {
             console.error('Error getting leave types:', error);
+            // If there's an index error, try without orderBy and isActive filter
+            if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+                try {
+                    let q = query(collection(getFirebaseDb(), 'leaveTypes'));
+                    if (companyId) {
+                        q = query(q, where('companyId', '==', companyId));
+                    }
+                    const querySnapshot = await getDocs(q);
+                    let leaveTypes = querySnapshot.docs.map(doc => this.convertFirestoreToLeaveType(doc.data()));
+                    // Filter active and sort in memory
+                    leaveTypes = leaveTypes.filter(lt => lt.isActive !== false);
+                    leaveTypes.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                    console.log('✅ [getLeaveTypes] Using fallback query (no index required)');
+                    return leaveTypes;
+                } catch (fallbackError) {
+                    console.error('Error in fallback leave types query:', fallbackError);
+                    throw error; // Throw original error
+                }
+            }
             throw error;
         }
     }
@@ -564,12 +595,17 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Policy Management
-    async getPolicies(activeOnly: boolean = true): Promise<Policy[]> {
+    async getPolicies(activeOnly: boolean = true, companyId?: string): Promise<Policy[]> {
         try {
             let q = query(collection(getFirebaseDb(), 'policies'), orderBy('effectiveDate', 'desc'));
 
             if (activeOnly) {
                 q = query(q, where('isActive', '==', true));
+            }
+            
+            // Filter by companyId if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
             }
 
             const querySnapshot = await getDocs(q);
@@ -644,10 +680,15 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Performance Management
-    async getPerformanceGoals(employeeId?: string): Promise<PerformanceGoal[]> {
+    async getPerformanceGoals(employeeId?: string, companyId?: string): Promise<PerformanceGoal[]> {
         try {
             let q = query(collection(getFirebaseDb(), 'performanceGoals'), orderBy('createdAt', 'desc'));
 
+            // Filter by companyId first if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+            }
+            
             if (employeeId) {
                 q = query(q, where('employeeId', '==', employeeId));
             }
@@ -1069,8 +1110,14 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         });
     }
 
-    async getLeaveRequests(employeeId?: string): Promise<LeaveRequest[]> {
+    async getLeaveRequests(employeeId?: string, companyId?: string): Promise<LeaveRequest[]> {
         let q = query(collection(getFirebaseDb(), 'leaveRequests'), orderBy('submittedAt', 'desc'));
+        
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+        
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
@@ -1078,8 +1125,14 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         return querySnapshot.docs.map(doc => this.convertFirestoreToLeaveRequest(doc.data()));
     }
 
-    async getLeaveBalances(employeeId?: string): Promise<LeaveBalance[]> {
+    async getLeaveBalances(employeeId?: string, companyId?: string): Promise<LeaveBalance[]> {
         let q = query(collection(getFirebaseDb(), 'leaveBalances'));
+        
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+        
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
@@ -1095,8 +1148,14 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         await setDoc(docRef, updates, { merge: true });
     }
 
-    async getPolicyAcknowledgments(policyId?: string, employeeId?: string): Promise<PolicyAcknowledgment[]> {
+    async getPolicyAcknowledgments(policyId?: string, employeeId?: string, companyId?: string): Promise<PolicyAcknowledgment[]> {
         let q = query(collection(getFirebaseDb(), 'policyAcknowledgments'), orderBy('acknowledgedAt', 'desc'));
+        
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+        
         if (policyId) {
             q = query(q, where('policyId', '==', policyId));
         }
@@ -1120,8 +1179,14 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         await updateDoc(docRef, { isActive: false, lastModified: serverTimestamp() });
     }
 
-    async getPerformanceReviews(employeeId?: string): Promise<PerformanceReview[]> {
+    async getPerformanceReviews(employeeId?: string, companyId?: string): Promise<PerformanceReview[]> {
         let q = query(collection(getFirebaseDb(), 'performanceReviews'), orderBy('createdAt', 'desc'));
+        
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+        
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
@@ -1150,8 +1215,14 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         await updateDoc(docRef, updates);
     }
 
-    async getMeetingSchedules(employeeId?: string): Promise<MeetingSchedule[]> {
+    async getMeetingSchedules(employeeId?: string, companyId?: string): Promise<MeetingSchedule[]> {
         let q = query(collection(getFirebaseDb(), 'meetingSchedules'), orderBy('scheduledDate', 'asc'));
+        
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+        }
+        
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }

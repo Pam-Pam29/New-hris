@@ -68,6 +68,24 @@ interface ViewEmployee extends Omit<Employee, 'personalInfo' | 'skills'> {
 import { getComprehensiveDataFlowService } from '../../../../services/comprehensiveDataFlowService';
 import { useCompany } from '../../../../context/CompanyContext';
 
+// Helper function to generate employee setup link
+const getEmployeeSetupLink = async (employeeId: string, setupToken: string): Promise<string> => {
+    // Try to get URL from Firebase config first (can be updated without redeploy)
+    try {
+        const { getEmployeePlatformUrl } = await import('../../../../services/platformConfigService');
+        const baseUrl = await getEmployeePlatformUrl();
+        return `${baseUrl}/setup?id=${employeeId}&token=${setupToken}`;
+    } catch (error) {
+        console.error('Error getting platform URL from config, using fallback:', error);
+        // Fallback to environment variable or latest deployment URL
+        const employeePlatformUrl = import.meta.env.VITE_EMPLOYEE_PLATFORM_URL || 
+            'https://hris-employee-platform-jyj2hzyrp-pam-pam29s-projects.vercel.app';
+        const baseUrl = employeePlatformUrl.replace(/\/$/, '');
+        console.log('📎 Using fallback employee platform URL:', baseUrl);
+        return `${baseUrl}/setup?id=${employeeId}&token=${setupToken}`;
+    }
+};
+
 export default function EmployeeDirectory() {
   const navigate = useNavigate();
   const { companyId, company } = useCompany();
@@ -568,7 +586,7 @@ export default function EmployeeDirectory() {
         const setupExpiry = new Date();
         setupExpiry.setDate(setupExpiry.getDate() + 7);
 
-        const setupLink = `https://hris-employee-platform-1l6vdan9g-pam-pam29s-projects.vercel.app/setup?id=${employeeId}&token=${setupToken}`;
+        const setupLink = await getEmployeeSetupLink(employeeId, setupToken);
 
         // Find employee data for email
         const employee = employees.find(emp => emp.employeeId === employeeId);
@@ -689,7 +707,7 @@ export default function EmployeeDirectory() {
       // Only send setup link and email if contract is ready to send
       if (contractData.status === 'ready_to_send') {
         // Generate setup link
-        const newSetupLink = `https://hris-employee-platform-1l6vdan9g-pam-pam29s-projects.vercel.app/setup?id=${pendingEmployeeData.employeeId}&token=${pendingEmployeeData.setupToken}`;
+        const newSetupLink = await getEmployeeSetupLink(pendingEmployeeData.employeeId, pendingEmployeeData.setupToken);
 
         // Store setup link and show in separate dialog
         setSetupLink(newSetupLink);
@@ -1594,11 +1612,24 @@ export default function EmployeeDirectory() {
                       <label className="text-sm font-medium text-foreground">Salary (NGN)</label>
                       <input
                         type="number"
-                        value={contractData.terms.salary}
-                        onChange={(e) => setContractData(prev => ({
-                          ...prev,
-                          terms: { ...prev.terms, salary: parseInt(e.target.value) || 0 }
-                        }))}
+                        value={contractData.terms.salary ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setContractData(prev => ({
+                              ...prev,
+                              terms: { ...prev.terms, salary: undefined }
+                            }));
+                          } else {
+                            const num = parseInt(val);
+                            if (!isNaN(num)) {
+                              setContractData(prev => ({
+                                ...prev,
+                                terms: { ...prev.terms, salary: num }
+                              }));
+                            }
+                          }
+                        }}
                         className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
@@ -1606,11 +1637,24 @@ export default function EmployeeDirectory() {
                       <label className="text-sm font-medium text-foreground">Probation Period (months)</label>
                       <input
                         type="number"
-                        value={contractData.terms.probationPeriod}
-                        onChange={(e) => setContractData(prev => ({
-                          ...prev,
-                          terms: { ...prev.terms, probationPeriod: parseInt(e.target.value) || 3 }
-                        }))}
+                        value={contractData.terms.probationPeriod ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setContractData(prev => ({
+                              ...prev,
+                              terms: { ...prev.terms, probationPeriod: undefined }
+                            }));
+                          } else {
+                            const num = parseInt(val);
+                            if (!isNaN(num)) {
+                              setContractData(prev => ({
+                                ...prev,
+                                terms: { ...prev.terms, probationPeriod: num }
+                              }));
+                            }
+                          }
+                        }}
                         className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
@@ -2538,6 +2582,116 @@ export default function EmployeeDirectory() {
                     className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                   >
                     View Full Profile
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Get employee profile to retrieve setup token
+                        const { doc, getDoc, collection, query, where, getDocs, updateDoc } = await import('firebase/firestore');
+                        const { getFirebaseDb } = await import('../../../../config/firebase');
+                        const db = getFirebaseDb();
+                        
+                        // Try multiple ways to find the employee profile
+                        let employeeProfile: any = null;
+                        let employeeProfileRef: any = null;
+                        let profileData: any = null;
+                        
+                        // First try: employeeProfiles collection with id
+                        try {
+                          employeeProfileRef = doc(db, 'employeeProfiles', selectedViewEmployee.id);
+                          employeeProfile = await getDoc(employeeProfileRef);
+                          if (employeeProfile.exists()) {
+                            profileData = employeeProfile.data();
+                          }
+                        } catch (e) {
+                          console.log('Not found in employeeProfiles by id, trying other methods...');
+                        }
+                        
+                        // Second try: employeeProfiles collection with employeeId field
+                        if (!employeeProfile?.exists() && selectedViewEmployee.employeeId) {
+                          try {
+                            const profilesRef = collection(db, 'employeeProfiles');
+                            const profileQuery = query(profilesRef, where('employeeId', '==', selectedViewEmployee.employeeId));
+                            const profileSnapshot = await getDocs(profileQuery);
+                            if (!profileSnapshot.empty) {
+                              employeeProfile = profileSnapshot.docs[0];
+                              employeeProfileRef = doc(db, 'employeeProfiles', employeeProfile.id);
+                              profileData = employeeProfile.data();
+                            }
+                          } catch (e) {
+                            console.log('Not found in employeeProfiles by employeeId');
+                          }
+                        }
+                        
+                        // Third try: employees collection with employeeId field
+                        if (!profileData && selectedViewEmployee.employeeId) {
+                          try {
+                            const employeesRef = collection(db, 'employees');
+                            const employeeQuery = query(employeesRef, where('employeeId', '==', selectedViewEmployee.employeeId));
+                            const employeeSnapshot = await getDocs(employeeQuery);
+                            if (!employeeSnapshot.empty) {
+                              employeeProfile = employeeSnapshot.docs[0];
+                              employeeProfileRef = doc(db, 'employees', employeeProfile.id);
+                              profileData = employeeProfile.data();
+                            }
+                          } catch (e) {
+                            console.log('Not found in employees collection');
+                          }
+                        }
+                        
+                        // Fourth try: employees collection with id as document ID
+                        if (!profileData) {
+                          try {
+                            employeeProfileRef = doc(db, 'employees', selectedViewEmployee.employeeId);
+                            employeeProfile = await getDoc(employeeProfileRef);
+                            if (employeeProfile.exists()) {
+                              profileData = employeeProfile.data();
+                            }
+                          } catch (e) {
+                            console.log('Not found in employees by employeeId as doc ID');
+                          }
+                        }
+                        
+                        if (profileData) {
+                          const setupToken = profileData.auth?.setupToken;
+                          
+                          if (setupToken) {
+                            const setupLink = await getEmployeeSetupLink(selectedViewEmployee.employeeId, setupToken);
+                            
+                            // Show setup link in dialog
+                            setSetupLink(setupLink);
+                            setShowSetupLinkDialog(true);
+                            
+                            // Also copy to clipboard
+                            navigator.clipboard.writeText(setupLink);
+                          } else {
+                            // Generate new setup token if none exists
+                            const newSetupToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+                            const setupExpiry = new Date();
+                            setupExpiry.setDate(setupExpiry.getDate() + 7);
+                            
+                            // Update employee profile with new token
+                            await updateDoc(employeeProfileRef, {
+                              'auth.setupToken': newSetupToken,
+                              'auth.setupExpiry': setupExpiry
+                            });
+                            
+                            const setupLink = await getEmployeeSetupLink(selectedViewEmployee.employeeId, newSetupToken);
+                            setSetupLink(setupLink);
+                            setShowSetupLinkDialog(true);
+                            navigator.clipboard.writeText(setupLink);
+                          }
+                        } else {
+                          alert('Employee profile not found. Please create the employee first or ensure the employee is properly saved.');
+                        }
+                      } catch (error) {
+                        console.error('Error retrieving setup link:', error);
+                        alert('Failed to retrieve setup link. Please try again.');
+                      }
+                    }}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    Get Setup Link
                   </button>
                   <button
                     onClick={() => {

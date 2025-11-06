@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Company } from '../types/company';
 import { getCompanyService } from '../services/companyService';
+import { applyBrandingColors, removeBrandingColors } from '../utils/brandingUtils';
 
 interface CompanyContextType {
     company: Company | null;
@@ -32,6 +33,17 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
                     if (companyData && companyData.status === 'active') {
                         setCompany(companyData);
                         console.log('✅ Company context loaded:', companyData.displayName);
+                        
+                        // Apply company branding colors if available
+                        if (companyData.primaryColor || companyData.secondaryColor) {
+                            const isDark = document.documentElement.classList.contains('dark');
+                            applyBrandingColors(
+                                companyData.primaryColor || '#3B82F6',
+                                companyData.secondaryColor || '#8B5CF6',
+                                isDark
+                            );
+                            console.log('✅ Company branding colors applied');
+                        }
                     } else {
                         console.warn('Company not found or inactive:', storedCompanyId);
                         localStorage.removeItem('companyId');
@@ -40,6 +52,8 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
                     console.log('ℹ️ No company ID in localStorage - user needs to sign up or login');
                     // Don't auto-load any company - each user should have their own company
                     setCompany(null);
+                    // Remove branding colors when no company
+                    removeBrandingColors();
                 }
             } catch (error) {
                 console.error('Error loading company:', error);

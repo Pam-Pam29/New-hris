@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
+import { Input } from '../../../components/ui/input';
+import { Label } from '../../../components/ui/label';
+import { Alert, AlertDescription } from '../../../components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import {
     Settings as SettingsIcon,
@@ -18,13 +21,69 @@ import {
     Smartphone,
     Monitor,
     Moon,
-    Sun
+    Sun,
+    Loader,
+    CheckCircle,
+    AlertCircle
 } from 'lucide-react';
 import { useTheme } from '../../../components/atoms/ThemeProvider';
+import { getPlatformConfig, updatePlatformConfig } from '../../../services/platformConfigService';
+import { useCompany } from '../../../context/CompanyContext';
 
 const SettingsPage: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
+    const { company } = useCompany();
     const [activeTab, setActiveTab] = useState('general');
+    const [platformConfig, setPlatformConfig] = useState({
+        employeePlatformUrl: '',
+        careersPlatformUrl: '',
+        hrPlatformUrl: ''
+    });
+    const [loadingConfig, setLoadingConfig] = useState(false);
+    const [savingConfig, setSavingConfig] = useState(false);
+    const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Load platform configuration
+    useEffect(() => {
+        const loadConfig = async () => {
+            setLoadingConfig(true);
+            try {
+                const config = await getPlatformConfig();
+                setPlatformConfig({
+                    employeePlatformUrl: config.employeePlatformUrl || '',
+                    careersPlatformUrl: config.careersPlatformUrl || '',
+                    hrPlatformUrl: config.hrPlatformUrl || ''
+                });
+            } catch (error) {
+                console.error('Error loading platform config:', error);
+            } finally {
+                setLoadingConfig(false);
+            }
+        };
+        loadConfig();
+    }, []);
+
+    const handleSavePlatformUrls = async () => {
+        setSavingConfig(true);
+        setConfigMessage(null);
+        try {
+            await updatePlatformConfig(
+                {
+                    employeePlatformUrl: platformConfig.employeePlatformUrl.trim(),
+                    careersPlatformUrl: platformConfig.careersPlatformUrl.trim(),
+                    hrPlatformUrl: platformConfig.hrPlatformUrl.trim()
+                },
+                company?.displayName || 'HR Admin'
+            );
+            setConfigMessage({ type: 'success', text: 'Platform URLs updated successfully!' });
+            setTimeout(() => setConfigMessage(null), 3000);
+        } catch (error) {
+            console.error('Error saving platform config:', error);
+            setConfigMessage({ type: 'error', text: 'Failed to update platform URLs. Please try again.' });
+        } finally {
+            setSavingConfig(false);
+        }
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -135,6 +194,105 @@ const SettingsPage: React.FC = () => {
                                     </div>
                                     <Button variant="outline" size="sm">Change</Button>
                                 </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Globe className="w-5 h-5" />
+                                    Platform URLs Configuration
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="p-4 bg-blue-50 rounded-lg mb-4">
+                                    <p className="text-sm text-blue-800">
+                                        <strong>Important:</strong> If you redeploy the Employee or Careers platforms, 
+                                        their URLs may change. Update these URLs here so setup links work correctly.
+                                    </p>
+                                </div>
+
+                                {configMessage && (
+                                    <Alert variant={configMessage.type === 'success' ? 'default' : 'destructive'}>
+                                        {configMessage.type === 'success' ? (
+                                            <CheckCircle className="h-4 w-4" />
+                                        ) : (
+                                            <AlertCircle className="h-4 w-4" />
+                                        )}
+                                        <AlertDescription>{configMessage.text}</AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {loadingConfig ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader className="w-6 h-6 animate-spin text-primary" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="employeePlatformUrl">Employee Platform URL</Label>
+                                            <Input
+                                                id="employeePlatformUrl"
+                                                type="url"
+                                                value={platformConfig.employeePlatformUrl}
+                                                onChange={(e) => setPlatformConfig({
+                                                    ...platformConfig,
+                                                    employeePlatformUrl: e.target.value
+                                                })}
+                                                placeholder="https://hris-employee-platform-xxx.vercel.app"
+                                                className="font-mono text-sm"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Used for employee setup links. Update this when employee platform is redeployed.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="careersPlatformUrl">Careers Platform URL (Optional)</Label>
+                                            <Input
+                                                id="careersPlatformUrl"
+                                                type="url"
+                                                value={platformConfig.careersPlatformUrl}
+                                                onChange={(e) => setPlatformConfig({
+                                                    ...platformConfig,
+                                                    careersPlatformUrl: e.target.value
+                                                })}
+                                                placeholder="https://hris-careers-platform-xxx.vercel.app"
+                                                className="font-mono text-sm"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="hrPlatformUrl">HR Platform URL (Optional)</Label>
+                                            <Input
+                                                id="hrPlatformUrl"
+                                                type="url"
+                                                value={platformConfig.hrPlatformUrl}
+                                                onChange={(e) => setPlatformConfig({
+                                                    ...platformConfig,
+                                                    hrPlatformUrl: e.target.value
+                                                })}
+                                                placeholder="https://hr-platform-xxx.vercel.app"
+                                                className="font-mono text-sm"
+                                            />
+                                        </div>
+
+                                        <Button
+                                            onClick={handleSavePlatformUrls}
+                                            disabled={savingConfig}
+                                            className="w-full"
+                                        >
+                                            {savingConfig ? (
+                                                <>
+                                                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                'Save Platform URLs'
+                                            )}
+                                        </Button>
+                                    </>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>

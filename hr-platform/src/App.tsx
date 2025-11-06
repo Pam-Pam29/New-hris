@@ -33,7 +33,8 @@ import HrSignup from './pages/Hr/HrSignup';
 
 // Protected Route Component - Checks onboarding status
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { company, loading } = useCompany();
+    const { company, loading, companyId } = useCompany();
+    const location = window.location.pathname;
 
     // Show loading while company data is being fetched
     if (loading) {
@@ -47,11 +48,32 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         );
     }
 
+    // Allow onboarding page to be accessed
+    if (location === '/onboarding' || location.startsWith('/onboarding')) {
+        return <>{children}</>;
+    }
+
+    // If no company ID yet, don't redirect (let auth guard handle it)
+    if (!companyId) {
+        return <>{children}</>;
+    }
+
     // Check if onboarding is completed
     const onboardingCompleted = company?.settings?.onboardingCompleted;
+    
+    // If company exists but onboarding flag not set, check for indicators
+    // (same logic as HrAuthGuard)
+    const hasOnboardingIndicators = company?.settings?.departments?.length > 0 || 
+                                     company?.displayName || 
+                                     company?.settings?.industry;
 
-    if (!onboardingCompleted) {
-        return <Navigate to="/onboarding" replace />;
+    // If onboarding is not explicitly marked but indicators exist, allow access
+    // (HrAuthGuard will update the flag, so we don't need to redirect)
+    if (!onboardingCompleted && !hasOnboardingIndicators) {
+        // Only redirect if we're not already on onboarding or auth pages
+        if (!location.includes('onboarding') && !location.includes('signin') && !location.includes('signup')) {
+            return <Navigate to="/onboarding" replace />;
+        }
     }
 
     return <>{children}</>;

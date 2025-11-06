@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirebaseDb } from '../../../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -37,22 +40,72 @@ const HrOnboardingSignin: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // For now, just test the flow without validation
-        console.log('🚀 HR Onboarding Signin - Testing flow without validation');
-        console.log('Form data:', formData);
+        if (!formData.email || !formData.password) {
+            setError('Please enter both email and password');
+            return;
+        }
 
         setIsLoading(true);
         setError('');
 
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log('🚀 HR Onboarding Signin - Authenticating with Firebase');
+            console.log('Form data:', { email: formData.email });
+
+            const auth = getAuth();
+
+            // Sign in with Firebase
+            const userCredential = await signInWithEmailAndPassword(
+                auth,
+                formData.email,
+                formData.password
+            );
+
+            const user = userCredential.user;
+            console.log('✅ Firebase authentication successful:', user.uid);
+
+            // Load company ID from hrUsers collection
+            const db = getFirebaseDb();
+            const hrUserDoc = await getDoc(doc(db, 'hrUsers', user.uid));
+            
+            let companyId = user.uid; // Default to user ID if no company found
+            
+            if (hrUserDoc.exists()) {
+                const hrUserData = hrUserDoc.data();
+                // Try to find company ID from hrUser document or use user ID
+                if (hrUserData.companyId) {
+                    companyId = hrUserData.companyId;
+                }
+            }
+
+            // Set company ID in localStorage
+            localStorage.setItem('companyId', companyId);
+            console.log('✅ Company ID set:', companyId);
+
+            // Trigger company context reload
+            window.dispatchEvent(new CustomEvent('companyIdChanged'));
 
             console.log('✅ HR Signin successful - redirecting to onboarding');
-            navigate('/hr-onboarding', { replace: true });
-        } catch (error) {
+            
+            // Redirect to onboarding
+            navigate('/onboarding', { replace: true });
+        } catch (error: any) {
             console.error('❌ HR Signin error:', error);
-            setError('Signin failed. Please try again.');
+            
+            let errorMessage = 'Signin failed. Please try again.';
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                errorMessage = 'Invalid email or password. Please check your credentials.';
+            } else if (error.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email. Please sign up first.';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMessage = 'Too many failed attempts. Please try again later.';
+            } else if (error.code === 'auth/network-request-failed') {
+                errorMessage = 'Network error. Please check your connection.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }

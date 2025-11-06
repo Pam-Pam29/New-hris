@@ -1431,8 +1431,18 @@ export default function PerformanceManagement() {
                                         <Input
                                             id="targetValue"
                                             type="number"
-                                            value={goalForm.targetValue}
-                                            onChange={(e) => setGoalForm(prev => ({ ...prev, targetValue: parseInt(e.target.value) || 0 }))}
+                                            value={goalForm.targetValue ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '') {
+                                                    setGoalForm(prev => ({ ...prev, targetValue: undefined }));
+                                                } else {
+                                                    const num = parseInt(val);
+                                                    if (!isNaN(num)) {
+                                                        setGoalForm(prev => ({ ...prev, targetValue: num }));
+                                                    }
+                                                }
+                                            }}
                                         />
                                     </div>
                                     <div>
@@ -1440,8 +1450,18 @@ export default function PerformanceManagement() {
                                         <Input
                                             id="currentValue"
                                             type="number"
-                                            value={goalForm.currentValue}
-                                            onChange={(e) => setGoalForm(prev => ({ ...prev, currentValue: parseInt(e.target.value) || 0 }))}
+                                            value={goalForm.currentValue ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '') {
+                                                    setGoalForm(prev => ({ ...prev, currentValue: undefined }));
+                                                } else {
+                                                    const num = parseInt(val);
+                                                    if (!isNaN(num)) {
+                                                        setGoalForm(prev => ({ ...prev, currentValue: num }));
+                                                    }
+                                                }
+                                            }}
                                         />
                                     </div>
                                     <div>

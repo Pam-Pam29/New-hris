@@ -6,6 +6,7 @@ export function useRealTimeSync<T>(
     collectionName: string,
     options: {
         employeeId?: string;
+        companyId?: string;
         limit?: number;
         orderByField?: string;
         orderDirection?: 'asc' | 'desc';
@@ -22,6 +23,7 @@ export function useRealTimeSync<T>(
     // Memoize options to prevent unnecessary re-renders
     const memoizedOptions = useMemo(() => options, [
         options.employeeId,
+        options.companyId,
         options.limit,
         options.orderByField,
         options.orderDirection
@@ -99,9 +101,10 @@ export function useRealTimeSync<T>(
 }
 
 // Specialized hooks for common collections
-export function useLeaveRequests(employeeId?: string) {
+export function useLeaveRequests(employeeId?: string, companyId?: string) {
     return useRealTimeSync('leaveRequests', {
         employeeId,
+        companyId,
         limit: 50
         // Removed orderBy to avoid index requirements
     });
@@ -121,8 +124,9 @@ export function useEmployees() {
     });
 }
 
-export function useLeaveTypes() {
+export function useLeaveTypes(companyId?: string) {
     return useRealTimeSync('leaveTypes', {
+        companyId,
         limit: 50
     });
 }

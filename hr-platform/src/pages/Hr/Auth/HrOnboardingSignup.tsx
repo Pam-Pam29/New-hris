@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { getFirebaseDb } from '../../../config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -45,22 +48,87 @@ const HrOnboardingSignup: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // For now, just test the flow without validation
-        console.log('🚀 HR Onboarding Signup - Testing flow without validation');
-        console.log('Form data:', formData);
+        // Validate form
+        if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+            setError('Please fill in all required fields');
+            return;
+        }
+
+        if (formData.password.length < 6) {
+            setError('Password must be at least 6 characters');
+            return;
+        }
+
+        if (formData.password !== formData.confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
 
         setIsLoading(true);
         setError('');
 
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log('🚀 HR Onboarding Signup - Creating Firebase user');
+            console.log('Form data:', { email: formData.email, firstName: formData.firstName, lastName: formData.lastName });
 
-            console.log('✅ HR Signup successful - redirecting to onboarding');
-            navigate('/hr-onboarding-signin', { replace: true });
-        } catch (error) {
+            const auth = getAuth();
+
+            // Create user in Firebase Authentication
+            const userCredential = await createUserWithEmailAndPassword(
+                auth,
+                formData.email,
+                formData.password
+            );
+
+            const user = userCredential.user;
+            console.log('✅ Firebase user created:', user.uid);
+
+            // Update user profile with display name
+            await updateProfile(user, {
+                displayName: `${formData.firstName} ${formData.lastName}`
+            });
+
+            // Create HR user document in Firestore
+            const db = getFirebaseDb();
+            const hrUserData = {
+                uid: user.uid,
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                fullName: `${formData.firstName} ${formData.lastName}`,
+                companyName: formData.companyName || '',
+                companySize: formData.companySize || '',
+                jobTitle: formData.jobTitle || '',
+                role: 'hr',
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            await setDoc(doc(db, 'hrUsers', user.uid), hrUserData);
+            console.log('✅ HR user document created in Firestore');
+
+            // Set company ID to user ID temporarily (will be updated during onboarding)
+            localStorage.setItem('companyId', user.uid);
+
+            console.log('✅ HR Signup successful - user authenticated');
+            
+            // Redirect to onboarding
+            navigate('/onboarding', { replace: true });
+        } catch (error: any) {
             console.error('❌ HR Signup error:', error);
-            setError('Signup failed. Please try again.');
+            
+            let errorMessage = 'Signup failed. Please try again.';
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = 'This email is already registered. Please sign in instead.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address. Please check and try again.';
+            } else if (error.code === 'auth/weak-password') {
+                errorMessage = 'Password is too weak. Please use a stronger password.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }

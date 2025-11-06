@@ -160,10 +160,23 @@ export default function HRLeaveManagement() {
         });
         console.log('✅ Leave type updated successfully');
       } else {
+        // Check if a leave type with this name already exists for this company
+        const existingTypes = await leaveTypeService.getAll(companyId || undefined);
+        const duplicateType = existingTypes.find(
+          (type: LeaveType) => type.name.toLowerCase() === leaveTypeForm.name.toLowerCase()
+        );
+
+        if (duplicateType) {
+          setError(`A leave type named "${leaveTypeForm.name}" already exists for your company. Please use a different name or edit the existing one.`);
+          setSubmitting(false);
+          return;
+        }
+
         // Create new leave type
         await leaveTypeService.add({
           ...leaveTypeForm,
-          daysAllowed: leaveTypeForm.maxDays
+          daysAllowed: leaveTypeForm.maxDays,
+          companyId: companyId || undefined
         });
         console.log('✅ Leave type created successfully');
       }
@@ -675,10 +688,17 @@ export default function HRLeaveManagement() {
                     <Input
                       id="maxDays"
                       type="number"
-                      value={leaveTypeForm.maxDays}
+                      value={leaveTypeForm.maxDays ?? ''}
                       onChange={(e) => {
-                        const maxDays = parseInt(e.target.value) || 0;
-                        const calculatedAccrualRate = parseFloat((maxDays / 12).toFixed(2));
+                        const val = e.target.value;
+                        let maxDays: number | undefined;
+                        if (val === '') {
+                          maxDays = undefined;
+                        } else {
+                          const num = parseInt(val);
+                          maxDays = isNaN(num) ? undefined : num;
+                        }
+                        const calculatedAccrualRate = maxDays !== undefined ? parseFloat((maxDays / 12).toFixed(2)) : 0;
                         setLeaveTypeForm(prev => ({
                           ...prev,
                           maxDays,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -29,6 +29,9 @@ import { useCompany } from '../../context/CompanyContext';
 import { getCompanyService } from '../../services/companyService';
 import { getFirebaseDb } from '../../config/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { applyBrandingColors } from '../../utils/brandingUtils';
+import { useTheme } from '../../components/atoms/ThemeProvider';
 
 interface OnboardingData {
     // Step 1: Company Profile
@@ -57,7 +60,7 @@ interface OnboardingData {
     // Step 5: Leave Types
     leaveTypes: Array<{
         name: string;
-        days: number;
+        days: number | string; // Allow string for empty state
     }>;
 
     // Step 6: HR Team Setup
@@ -95,8 +98,7 @@ const STEPS = [
     { id: 5, title: 'Departments', icon: Users },
     { id: 6, title: 'Leave Policies', icon: Calendar },
     { id: 7, title: 'HR Team Setup', icon: Briefcase },
-    { id: 8, title: 'System Config', icon: Settings },
-    { id: 9, title: 'Complete', icon: CheckCircle }
+    { id: 8, title: 'Complete', icon: CheckCircle }
 ];
 
 const INDUSTRIES = [
@@ -123,22 +125,162 @@ const TIMEZONES = [
     'Africa/Lagos', // Nigerian timezone (default)
     'Africa/Johannesburg',
     'Africa/Cairo',
+    'Africa/Nairobi',
+    'Africa/Casablanca',
     'Europe/London',
     'Europe/Paris',
+    'Europe/Berlin',
+    'Europe/Madrid',
+    'Europe/Rome',
     'America/New_York',
     'America/Chicago',
+    'America/Denver',
     'America/Los_Angeles',
+    'America/Toronto',
+    'America/Sao_Paulo',
+    'America/Mexico_City',
     'Asia/Dubai',
     'Asia/Tokyo',
-    'Australia/Sydney'
+    'Asia/Shanghai',
+    'Asia/Kolkata',
+    'Asia/Singapore',
+    'Australia/Sydney',
+    'Australia/Melbourne',
+    'Pacific/Auckland'
 ];
+
+// Country to timezone mapping for auto-detection
+const COUNTRY_TIMEZONE_MAP: Record<string, string> = {
+    'Nigeria': 'Africa/Lagos',
+    'South Africa': 'Africa/Johannesburg',
+    'Egypt': 'Africa/Cairo',
+    'Kenya': 'Africa/Nairobi',
+    'Morocco': 'Africa/Casablanca',
+    'United Kingdom': 'Europe/London',
+    'UK': 'Europe/London',
+    'France': 'Europe/Paris',
+    'Germany': 'Europe/Berlin',
+    'Spain': 'Europe/Madrid',
+    'Italy': 'Europe/Rome',
+    'United States': 'America/New_York',
+    'USA': 'America/New_York',
+    'US': 'America/New_York',
+    'Canada': 'America/Toronto',
+    'Brazil': 'America/Sao_Paulo',
+    'Mexico': 'America/Mexico_City',
+    'UAE': 'Asia/Dubai',
+    'United Arab Emirates': 'Asia/Dubai',
+    'Japan': 'Asia/Tokyo',
+    'China': 'Asia/Shanghai',
+    'India': 'Asia/Kolkata',
+    'Singapore': 'Asia/Singapore',
+    'Australia': 'Australia/Sydney',
+    'New Zealand': 'Pacific/Auckland'
+};
+
+// City to timezone mapping (for major cities)
+const CITY_TIMEZONE_MAP: Record<string, string> = {
+    'Lagos': 'Africa/Lagos',
+    'Johannesburg': 'Africa/Johannesburg',
+    'Cairo': 'Africa/Cairo',
+    'London': 'Europe/London',
+    'Paris': 'Europe/Paris',
+    'Berlin': 'Europe/Berlin',
+    'New York': 'America/New_York',
+    'Chicago': 'America/Chicago',
+    'Los Angeles': 'America/Los_Angeles',
+    'Toronto': 'America/Toronto',
+    'Dubai': 'Asia/Dubai',
+    'Tokyo': 'Asia/Tokyo',
+    'Shanghai': 'Asia/Shanghai',
+    'Mumbai': 'Asia/Kolkata',
+    'Singapore': 'Asia/Singapore',
+    'Sydney': 'Australia/Sydney'
+};
+
+/**
+ * Detect timezone based on country and city
+ * Falls back to browser timezone if location doesn't match
+ */
+function detectTimezone(country: string, city: string): string {
+    // Try city first (more specific)
+    if (city && CITY_TIMEZONE_MAP[city]) {
+        return CITY_TIMEZONE_MAP[city];
+    }
+    
+    // Try country
+    if (country && COUNTRY_TIMEZONE_MAP[country]) {
+        return COUNTRY_TIMEZONE_MAP[country];
+    }
+    
+    // Fallback to browser timezone
+    try {
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (TIMEZONES.includes(browserTimezone)) {
+            return browserTimezone;
+        }
+    } catch (e) {
+        console.warn('Could not detect browser timezone:', e);
+    }
+    
+    // Default fallback
+    return 'Africa/Lagos';
+}
 
 export default function CompanyOnboarding() {
     const navigate = useNavigate();
-    const { company, setCompany } = useCompany();
+    const { company, companyId } = useCompany();
+    const { theme } = useTheme();
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [skipLoading, setSkipLoading] = useState(false);
+
+    // Function to skip onboarding and mark as complete
+    const handleSkipOnboarding = async () => {
+        if (!companyId) {
+            alert('Company ID not found. Please contact support.');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to skip onboarding? You can always complete it later from Settings.')) {
+            return;
+        }
+
+        setSkipLoading(true);
+        try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const db = getFirebaseDb();
+            const companyRef = doc(db, 'companies', companyId);
+            
+            await updateDoc(companyRef, {
+                'settings.onboardingCompleted': true,
+                'settings.onboardingCompletedAt': new Date().toISOString()
+            });
+
+            console.log('✅ Onboarding marked as completed');
+            alert('✅ Onboarding skipped. Redirecting to dashboard...');
+            navigate('/dashboard', { replace: true });
+        } catch (error) {
+            console.error('Error skipping onboarding:', error);
+            alert('Failed to skip onboarding. Please try again.');
+        } finally {
+            setSkipLoading(false);
+        }
+    };
+
+    // Initialize timezone from browser on mount
+    const getInitialTimezone = (): string => {
+        try {
+            const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (TIMEZONES.includes(browserTimezone)) {
+                return browserTimezone;
+            }
+        } catch (e) {
+            console.warn('Could not detect browser timezone:', e);
+        }
+        return 'Africa/Lagos';
+    };
 
     const [formData, setFormData] = useState<OnboardingData>({
         displayName: company?.displayName || '',
@@ -149,11 +291,11 @@ export default function CompanyOnboarding() {
         address: '',
         city: '',
         country: '',
-        timezone: 'Africa/Lagos',
+        timezone: getInitialTimezone(),
         phone: '',
         email: '',
         primaryColor: '#3B82F6',
-        secondaryColor: '#1E40AF',
+        secondaryColor: '#8B5CF6',
         logo: '',
         departments: ['Engineering', 'Sales', 'HR'],
         leaveTypes: [
@@ -178,6 +320,12 @@ export default function CompanyOnboarding() {
             sessionTimeout: 8
         }
     });
+    
+    // Apply initial branding colors when component mounts or theme changes
+    useEffect(() => {
+        const isDark = theme === 'dark';
+        applyBrandingColors(formData.primaryColor, formData.secondaryColor, isDark);
+    }, [theme]); // Re-apply when theme changes
 
     const handleNext = () => {
         if (currentStep < STEPS.length) {
@@ -300,13 +448,18 @@ export default function CompanyOnboarding() {
             let leaveTypesCreated = 0;
 
             for (const leaveType of formData.leaveTypes) {
-                if (leaveType.name && leaveType.days > 0) {
+                // Convert days to number, defaulting to 0 if empty string
+                const daysValue = typeof leaveType.days === 'string' && leaveType.days === '' 
+                    ? 0 
+                    : (typeof leaveType.days === 'number' ? leaveType.days : parseInt(String(leaveType.days)) || 0);
+                
+                if (leaveType.name && daysValue > 0) {
                     await addDoc(leaveTypesRef, {
                         companyId: companyId,
                         name: leaveType.name,
-                        maxDays: leaveType.days,
-                        description: `${leaveType.name} - ${leaveType.days} days per year`,
-                        accrualRate: leaveType.days / 12, // Monthly accrual
+                        maxDays: daysValue,
+                        description: `${leaveType.name} - ${daysValue} days per year`,
+                        accrualRate: daysValue / 12, // Monthly accrual
                         carryForward: true,
                         requiresApproval: true,
                         color: '#3B82F6',
@@ -342,17 +495,7 @@ export default function CompanyOnboarding() {
             }
             console.log(`✅ Created ${hrTeamCreated} HR team members`);
 
-            // Step 4: Create system configuration
-            const systemConfigRef = collection(db, 'systemConfig');
-            await addDoc(systemConfigRef, {
-                companyId: companyId,
-                emailTemplates: formData.emailTemplates,
-                notifications: formData.notifications,
-                security: formData.security,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now()
-            });
-            console.log(`✅ Created system configuration`);
+            // System configuration removed - can be configured later in Settings
 
             // Step 5: Create department documents for this company
             const departmentsRef = collection(db, 'departments');
@@ -395,11 +538,21 @@ export default function CompanyOnboarding() {
                 hrTeamCreated: hrTeamCreated
             });
 
-            // Show success message briefly before redirect
-            alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nNext: Create your HR administrator account`);
-
-            // Navigate to signup page to create HR user
-            navigate('/signup');
+            // Check if user is already authenticated (currentUser was checked at the start of handleComplete)
+            if (currentUser) {
+                // User is already authenticated (signed up before onboarding)
+                // Show success message and redirect to dashboard
+                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nRedirecting to dashboard...`);
+                
+                // Redirect to dashboard
+                navigate('/dashboard', { replace: true });
+            } else {
+                // User is not authenticated, redirect to signup
+                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nNext: Create your HR administrator account`);
+                
+                // Navigate to signup page to create HR user
+                navigate('/signup');
+            }
 
         } catch (err: any) {
             console.error('Error completing onboarding:', err);
@@ -476,16 +629,6 @@ export default function CompanyOnboarding() {
 
             case 8:
                 return (
-                    <SystemConfigStep
-                        formData={formData}
-                        setFormData={setFormData}
-                        onNext={handleNext}
-                        onBack={handleBack}
-                    />
-                );
-
-            case 9:
-                return (
                     <CompleteStep
                         formData={formData}
                         onComplete={handleComplete}
@@ -503,6 +646,28 @@ export default function CompanyOnboarding() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
             <div className="w-full max-w-4xl">
+                {/* Skip Button - Only show if company exists */}
+                {companyId && (
+                    <div className="mb-4 flex justify-end">
+                        <Button
+                            variant="outline"
+                            onClick={handleSkipOnboarding}
+                            disabled={skipLoading}
+                            className="text-sm"
+                        >
+                            {skipLoading ? (
+                                <>
+                                    <span className="animate-spin mr-2">⏳</span>
+                                    Skipping...
+                                </>
+                            ) : (
+                                <>
+                                    Skip Onboarding →
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                )}
                 {/* Progress Steps */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between">
@@ -711,6 +876,17 @@ function BusinessDetailsStep({
 }) {
     const canProceed = formData.address && formData.city && formData.country && formData.email;
 
+    // Auto-detect timezone when country or city changes
+    const handleCountryChange = (country: string) => {
+        const detectedTimezone = detectTimezone(country, formData.city);
+        setFormData({ ...formData, country, timezone: detectedTimezone });
+    };
+
+    const handleCityChange = (city: string) => {
+        const detectedTimezone = detectTimezone(formData.country, city);
+        setFormData({ ...formData, city, timezone: detectedTimezone });
+    };
+
     return (
         <Card className="border-2 shadow-xl">
             <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
@@ -742,8 +918,9 @@ function BusinessDetailsStep({
                             id="city"
                             placeholder="San Francisco"
                             value={formData.city}
-                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                            onChange={(e) => handleCityChange(e.target.value)}
                         />
+                        <p className="text-xs text-gray-500">Timezone will auto-detect based on your location</p>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="country">Country *</Label>
@@ -751,23 +928,42 @@ function BusinessDetailsStep({
                             id="country"
                             placeholder="United States"
                             value={formData.country}
-                            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                            onChange={(e) => handleCountryChange(e.target.value)}
                         />
                     </div>
                 </div>
 
                 <div className="space-y-2">
                     <Label htmlFor="timezone">Timezone *</Label>
-                    <select
-                        id="timezone"
-                        className="w-full p-2 border rounded-md"
-                        value={formData.timezone}
-                        onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                    >
-                        {TIMEZONES.map((tz) => (
-                            <option key={tz} value={tz}>{tz}</option>
-                        ))}
-                    </select>
+                    <div className="flex gap-2 items-center">
+                        <select
+                            id="timezone"
+                            className="flex-1 p-2 border rounded-md"
+                            value={formData.timezone}
+                            onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                        >
+                            {TIMEZONES.map((tz) => (
+                                <option key={tz} value={tz}>{tz}</option>
+                            ))}
+                        </select>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                const detected = detectTimezone(formData.country, formData.city);
+                                setFormData({ ...formData, timezone: detected });
+                            }}
+                            title="Auto-detect timezone from location"
+                        >
+                            <Globe className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                        {formData.country || formData.city 
+                            ? `Detected from ${formData.city ? formData.city : ''}${formData.city && formData.country ? ', ' : ''}${formData.country || ''}`
+                            : 'Enter your city or country to auto-detect timezone'}
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
@@ -823,9 +1019,26 @@ function BrandingStep({
     onNext: () => void;
     onBack: () => void;
 }) {
+    const { theme } = useTheme();
+    
+    // Apply colors in real-time as user changes them
+    const handleColorChange = (primary: string, secondary: string) => {
+        const isDark = theme === 'dark';
+        applyBrandingColors(primary, secondary, isDark);
+    };
+    
+    // Calculate text color for contrast (white or black based on background brightness)
+    const getContrastColor = (hex: string): string => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness > 128 ? '#000000' : '#FFFFFF';
+    };
+    
     return (
         <Card className="border-2 shadow-xl">
-            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-pink-600 rounded-lg flex items-center justify-center">
                         <Palette className="w-6 h-6 text-white" />
@@ -845,15 +1058,27 @@ function BrandingStep({
                                 id="primaryColor"
                                 type="color"
                                 value={formData.primaryColor.trim()}
-                                onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value.trim() })}
-                                className="w-20 h-12"
+                                onChange={(e) => {
+                                    const newColor = e.target.value.trim();
+                                    setFormData({ ...formData, primaryColor: newColor });
+                                    handleColorChange(newColor, formData.secondaryColor);
+                                }}
+                                className="w-20 h-12 cursor-pointer"
                             />
                             <Input
                                 value={formData.primaryColor}
-                                onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value.trim() })}
+                                onChange={(e) => {
+                                    const newColor = e.target.value.trim();
+                                    setFormData({ ...formData, primaryColor: newColor });
+                                    if (/^#[0-9A-F]{6}$/i.test(newColor)) {
+                                        handleColorChange(newColor, formData.secondaryColor);
+                                    }
+                                }}
                                 placeholder="#3B82F6"
+                                className="font-mono"
                             />
                         </div>
+                        <p className="text-xs text-muted-foreground">Main brand color for buttons and accents</p>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="secondaryColor">Secondary Color</Label>
@@ -862,28 +1087,68 @@ function BrandingStep({
                                 id="secondaryColor"
                                 type="color"
                                 value={formData.secondaryColor.trim()}
-                                onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value.trim() })}
-                                className="w-20 h-12"
+                                onChange={(e) => {
+                                    const newColor = e.target.value.trim();
+                                    setFormData({ ...formData, secondaryColor: newColor });
+                                    handleColorChange(formData.primaryColor, newColor);
+                                }}
+                                className="w-20 h-12 cursor-pointer"
                             />
                             <Input
                                 value={formData.secondaryColor}
-                                onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value.trim() })}
-                                placeholder="#1E40AF"
+                                onChange={(e) => {
+                                    const newColor = e.target.value.trim();
+                                    setFormData({ ...formData, secondaryColor: newColor });
+                                    if (/^#[0-9A-F]{6}$/i.test(newColor)) {
+                                        handleColorChange(formData.primaryColor, newColor);
+                                    }
+                                }}
+                                placeholder="#8B5CF6"
+                                className="font-mono"
                             />
                         </div>
+                        <p className="text-xs text-muted-foreground">Secondary brand color for highlights</p>
                     </div>
                 </div>
 
-                <div className="p-6 border-2 rounded-lg" style={{ borderColor: formData.primaryColor, background: `${formData.primaryColor}10` }}>
-                    <h3 className="text-lg font-bold mb-2" style={{ color: formData.primaryColor }}>Preview</h3>
-                    <p className="text-sm text-gray-600 mb-4">This is how your brand colors will appear across the platform.</p>
-                    <div className="flex gap-2">
-                        <div className="px-4 py-2 rounded" style={{ backgroundColor: formData.primaryColor, color: 'white' }}>
+                <div className="p-6 border-2 rounded-lg bg-muted/30 dark:bg-muted/20" style={{ borderColor: formData.primaryColor }}>
+                    <h3 className="text-lg font-bold mb-2" style={{ color: formData.primaryColor }}>Live Preview</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                        This is how your brand colors will appear across the platform in {theme} mode.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                        <button
+                            className="px-4 py-2 rounded-md font-medium transition-all hover:opacity-90"
+                            style={{ 
+                                backgroundColor: formData.primaryColor, 
+                                color: getContrastColor(formData.primaryColor)
+                            }}
+                        >
                             Primary Button
-                        </div>
-                        <div className="px-4 py-2 rounded" style={{ backgroundColor: formData.secondaryColor, color: 'white' }}>
+                        </button>
+                        <button
+                            className="px-4 py-2 rounded-md font-medium transition-all hover:opacity-90"
+                            style={{ 
+                                backgroundColor: formData.secondaryColor, 
+                                color: getContrastColor(formData.secondaryColor)
+                            }}
+                        >
                             Secondary Button
-                        </div>
+                        </button>
+                        <button
+                            className="px-4 py-2 rounded-md border-2 font-medium transition-all hover:bg-muted"
+                            style={{ 
+                                borderColor: formData.primaryColor,
+                                color: formData.primaryColor
+                            }}
+                        >
+                            Outlined Button
+                        </button>
+                    </div>
+                    <div className="mt-4 p-3 rounded bg-card border" style={{ borderColor: formData.secondaryColor + '40' }}>
+                        <p className="text-sm" style={{ color: formData.secondaryColor }}>
+                            Sample text using secondary color
+                        </p>
                     </div>
                 </div>
 
@@ -1024,7 +1289,18 @@ function LeaveTypesStep({
 
     const updateLeaveType = (index: number, field: 'name' | 'days', value: string | number) => {
         const newTypes = [...formData.leaveTypes];
-        newTypes[index] = { ...newTypes[index], [field]: value };
+        // For days field, allow empty string and 0
+        if (field === 'days') {
+            // Allow empty string to be stored as empty string
+            if (typeof value === 'string' && value === '') {
+                newTypes[index] = { ...newTypes[index], [field]: '' };
+            } else {
+                const numValue = typeof value === 'string' ? parseInt(value) : value;
+                newTypes[index] = { ...newTypes[index], [field]: isNaN(numValue) ? '' : numValue };
+            }
+        } else {
+            newTypes[index] = { ...newTypes[index], [field]: value };
+        }
         setFormData({ ...formData, leaveTypes: newTypes });
     };
 
@@ -1064,8 +1340,19 @@ function LeaveTypesStep({
                             <Input
                                 type="number"
                                 placeholder="10"
-                                value={type.days || ''}
-                                onChange={(e) => updateLeaveType(index, 'days', parseInt(e.target.value) || 0)}
+                                value={type.days ?? ''}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Allow empty string or valid number (including 0)
+                                    if (val === '') {
+                                        updateLeaveType(index, 'days', '');
+                                    } else {
+                                        const num = parseInt(val);
+                                        if (!isNaN(num)) {
+                                            updateLeaveType(index, 'days', num);
+                                        }
+                                    }
+                                }}
                                 className="w-24 text-center"
                                 min="0"
                                 max="365"

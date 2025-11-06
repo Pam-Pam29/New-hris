@@ -1,5 +1,5 @@
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { getFirebaseDb } from '../config/firebase';
 
 export interface Department {
     id: string;
@@ -21,6 +21,7 @@ export class DepartmentService {
         try {
             console.log('📋 [DepartmentService] Fetching departments for company:', companyId);
 
+            const db = getFirebaseDb();
             const departmentsRef = collection(db, 'departments');
             const q = query(
                 departmentsRef,
@@ -111,6 +112,7 @@ export class DepartmentService {
      */
     async getDepartmentById(departmentId: string): Promise<Department | null> {
         try {
+            const db = getFirebaseDb();
             const departmentsRef = collection(db, 'departments');
             const q = query(departmentsRef, where('__name__', '==', departmentId));
             const snapshot = await getDocs(q);

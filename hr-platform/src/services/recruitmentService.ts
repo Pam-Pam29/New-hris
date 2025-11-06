@@ -134,20 +134,41 @@ export class FirebaseRecruitmentService implements IRecruitmentService {
     }
 
     async getInterviews(companyId?: string): Promise<Interview[]> {
-        const { collection, getDocs, orderBy, query, where } = await import('firebase/firestore');
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
         const interviewsRef = collection(this.db, 'interviews');
         
-        let q = query(interviewsRef, orderBy('scheduledTime', 'asc'));
+        let q = query(interviewsRef);
         if (companyId) {
-            q = query(interviewsRef, where('companyId', '==', companyId), orderBy('scheduledTime', 'asc'));
+            q = query(interviewsRef, where('companyId', '==', companyId));
             console.log(`🏢 Filtering interviews by companyId: ${companyId}`);
         }
         
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Interview));
+        try {
+            const snapshot = await getDocs(q);
+            let interviews = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Interview));
+            
+            // Sort in memory to avoid index requirement
+            interviews.sort((a, b) => {
+                const aTime = a.scheduledTime instanceof Date ? a.scheduledTime.getTime() : 
+                             (a.scheduledTime as any)?.seconds ? (a.scheduledTime as any).seconds * 1000 : 0;
+                const bTime = b.scheduledTime instanceof Date ? b.scheduledTime.getTime() : 
+                             (b.scheduledTime as any)?.seconds ? (b.scheduledTime as any).seconds * 1000 : 0;
+                return aTime - bTime;
+            });
+            
+            return interviews;
+        } catch (error: any) {
+            console.error('Error loading interviews:', error);
+            // If there's a permission error, return empty array
+            if (error?.code === 'permission-denied' || error?.code === 'failed-precondition') {
+                console.warn('⚠️ Permission denied or index missing for interviews query');
+                return [];
+            }
+            throw error;
+        }
     }
 
     async getInterviewsForCandidate(candidateId: string): Promise<Interview[]> {
@@ -281,17 +302,38 @@ export class RecruitmentServiceFactory {
     }
 }
 
-// Initialize the service based on config
+// Async function to get the properly configured recruitment service
+export const getRecruitmentService = async (): Promise<IRecruitmentService> => {
+    try {
+        console.log('Getting recruitment service...');
+        const { initializeFirebase } = await import('../config/firebase');
+        await initializeFirebase(); // Wait for Firebase to be ready
+        const config = await getServiceConfig();
+        console.log('Service config check:', config);
+
+        if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+            console.log('Using Firebase Recruitment Service');
+            return RecruitmentServiceFactory.createService('firebase', config.firebase.db);
+        } else {
+            console.log('Using Mock Recruitment Service');
+            return RecruitmentServiceFactory.createService('mock');
+        }
+    } catch (error) {
+        console.warn('Failed to initialize Firebase Recruitment Service, falling back to Mock:', error);
+        return new MockRecruitmentService();
+    }
+};
+
+// For backwards compatibility - but this will start as mock until Firebase is ready
 let recruitmentService: IRecruitmentService = new MockRecruitmentService();
 
-getServiceConfig().then((config: { defaultService: 'firebase' | 'mock'; firebase: { enabled: boolean; db: Firestore | null }; mock: { enabled: boolean } }) => {
-    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-        console.log('Using Firebase Recruitment Service');
-        recruitmentService = RecruitmentServiceFactory.createService('firebase', config.firebase.db);
-    } else {
-        console.log('Using Mock Recruitment Service');
-        recruitmentService = RecruitmentServiceFactory.createService('mock');
+// Initialize the service asynchronously
+(async () => {
+    try {
+        recruitmentService = await getRecruitmentService();
+    } catch (error) {
+        console.error('Error initializing recruitment service:', error);
     }
-});
+})();
 
 export { recruitmentService };

@@ -266,36 +266,167 @@ export default function EmployeeDashboard() {
 
                 // Load leave data (filtered by company for multi-tenancy)
                 try {
-                    const leaveTypes = await dataFlowService.getLeaveTypes();
+                    const leaveTypes = await dataFlowService.getLeaveTypes(companyId || undefined);
                     const leaveRequests = await dataFlowService.getLeaveRequests(currentEmployeeId, companyId || undefined);
 
-                    // Calculate real leave balances (match employee platform's LeaveBalance type)
-                    const balances: LeaveBalance[] = leaveTypes.map(type => {
-                        const usedDays = leaveRequests
-                            .filter(r => r.leaveTypeId === type.id && (r.status === 'approved'))
-                            .reduce((sum, r) => sum + r.totalDays, 0);
+                    console.log('📊 [Dashboard] Leave types loaded:', leaveTypes.length);
+                    console.log('📊 [Dashboard] Leave types (raw):', leaveTypes.map(t => ({ 
+                        id: t.id || 'NO-ID', 
+                        name: t.name, 
+                        maxDays: t.maxDays || t.daysAllowed,
+                        isActive: t.isActive 
+                    })));
 
-                        const pendingDays = leaveRequests
-                            .filter(r => r.leaveTypeId === type.id && r.status === 'pending')
-                            .reduce((sum, r) => sum + r.totalDays, 0);
-
-                        const totalEntitlement = type.maxDays || 15;
-
-                        return {
-                            id: type.id,
-                            employeeId: currentEmployeeId,
-                            leaveTypeId: type.id,
-                            leaveTypeName: type.name,
-                            totalEntitlement: totalEntitlement,
-                            used: usedDays,
-                            pending: pendingDays,
-                            remaining: totalEntitlement - usedDays - pendingDays,
-                            accrued: totalEntitlement,
-                            year: new Date().getFullYear()
-                        };
+                    // Deduplicate leave types - keep unique by ID (in case same leave type appears multiple times)
+                    // Use a Map to ensure we only keep one per ID, but also allow types without IDs
+                    const uniqueLeaveTypesMap = new Map<string, typeof leaveTypes[0]>();
+                    leaveTypes.forEach(type => {
+                        if (type.id) {
+                            // If has ID, use it for deduplication
+                            if (!uniqueLeaveTypesMap.has(type.id)) {
+                                uniqueLeaveTypesMap.set(type.id, type);
+                            }
+                        } else {
+                            // If no ID, use name as key (fallback)
+                            const key = type.name || `no-id-${uniqueLeaveTypesMap.size}`;
+                            if (!uniqueLeaveTypesMap.has(key)) {
+                                uniqueLeaveTypesMap.set(key, type);
+                            }
+                        }
                     });
+                    const uniqueLeaveTypes = Array.from(uniqueLeaveTypesMap.values());
+
+                    console.log('📊 [Dashboard] Total leave types loaded:', leaveTypes.length);
+                    console.log('📊 [Dashboard] Unique leave types (after deduplication):', uniqueLeaveTypes.length);
+                    console.log('📊 [Dashboard] Leave type details:', uniqueLeaveTypes.map(t => ({ 
+                        id: t.id, 
+                        name: t.name, 
+                        maxDays: t.maxDays 
+                    })));
+
+                    // Try to get actual leave balances from Firebase first
+                    let balances: LeaveBalance[] = [];
+                    try {
+                        const actualBalances = await dataFlowService.getLeaveBalances(currentEmployeeId, companyId || undefined);
+                        if (actualBalances && actualBalances.length > 0) {
+                            console.log('✅ [Dashboard] Using actual leave balances from Firebase');
+                            balances = actualBalances.map(bal => {
+                                // Calculate remaining days from stored balance data
+                                // remainingDays is already stored, but we can also calculate it
+                                const totalDays = bal.totalDays || 0;
+                                const usedDays = bal.usedDays || 0;
+                                const pendingDays = bal.pendingDays || 0;
+                                const storedRemaining = bal.remainingDays || 0;
+                                const calculatedRemaining = totalDays - usedDays - pendingDays;
+                                const remaining = storedRemaining > 0 ? storedRemaining : calculatedRemaining;
+
+                                return {
+                                    id: bal.id || `${bal.employeeId}_${bal.leaveTypeId}`,
+                                    employeeId: bal.employeeId,
+                                    leaveTypeId: bal.leaveTypeId,
+                                    leaveTypeName: uniqueLeaveTypes.find(t => t.id === bal.leaveTypeId)?.name || 'Unknown',
+                                    totalEntitlement: totalDays,
+                                    used: usedDays,
+                                    pending: pendingDays,
+                                    remaining: remaining,
+                                    accrued: bal.accruedDays || totalDays,
+                                    year: bal.year || new Date().getFullYear()
+                                };
+                            });
+                        }
+                    } catch (balanceError) {
+                        console.warn('⚠️ [Dashboard] Could not load actual balances, calculating from types:', balanceError);
+                    }
+
+                    // If no actual balances exist in Firebase, calculate from leave types
+                    // This ensures we show balances for all leave types even if they haven't been initialized in leaveBalances collection
+                    if (balances.length === 0) {
+                        console.log('📊 [Dashboard] No actual balances found, calculating from leave types...');
+                        balances = uniqueLeaveTypes.map(type => {
+                            // Match leave requests by leaveTypeId or by name if ID doesn't match
+                            const matchingRequests = leaveRequests.filter(r => 
+                                r.leaveTypeId === type.id || 
+                                r.leaveTypeId === type.name ||
+                                r.leaveTypeName === type.name
+                            );
+                            
+                            const usedDays = matchingRequests
+                                .filter(r => r.status === 'approved' || r.status === 'Approved')
+                                .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+
+                            const pendingDays = matchingRequests
+                                .filter(r => r.status === 'pending' || r.status === 'Pending')
+                                .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+
+                            // Use maxDays from leave type (don't cap it - show actual entitlement)
+                            const totalEntitlement = type.maxDays || type.daysAllowed || 15;
+
+                            return {
+                                id: `${type.id || type.name || 'unknown'}_${currentEmployeeId}`,
+                                employeeId: currentEmployeeId,
+                                leaveTypeId: type.id || type.name || 'unknown',
+                                leaveTypeName: type.name || 'Unknown',
+                                totalEntitlement: totalEntitlement,
+                                used: usedDays,
+                                pending: pendingDays,
+                                remaining: totalEntitlement - usedDays - pendingDays,
+                                accrued: totalEntitlement,
+                                year: new Date().getFullYear()
+                            };
+                        });
+                        console.log('📊 [Dashboard] Calculated balances from types:', balances.map(b => ({
+                            name: b.leaveTypeName,
+                            total: b.totalEntitlement,
+                            used: b.used,
+                            pending: b.pending,
+                            remaining: b.remaining
+                        })));
+                    } else {
+                        // If we have actual balances, also ensure we include all leave types that might not have balances yet
+                        const balanceLeaveTypeIds = new Set(balances.map(b => b.leaveTypeId));
+                        const missingLeaveTypes = uniqueLeaveTypes.filter(type => !balanceLeaveTypeIds.has(type.id));
+                        
+                        if (missingLeaveTypes.length > 0) {
+                            console.log('📊 [Dashboard] Adding balances for leave types without Firebase entries:', missingLeaveTypes.map(t => t.name));
+                            const additionalBalances = missingLeaveTypes.map(type => {
+                                const usedDays = leaveRequests
+                                    .filter(r => r.leaveTypeId === type.id && (r.status === 'approved' || r.status === 'Approved'))
+                                    .reduce((sum, r) => sum + r.totalDays, 0);
+
+                                const pendingDays = leaveRequests
+                                    .filter(r => r.leaveTypeId === type.id && (r.status === 'pending' || r.status === 'Pending'))
+                                    .reduce((sum, r) => sum + r.totalDays, 0);
+
+                                const totalEntitlement = type.maxDays || type.daysAllowed || 15;
+
+                                return {
+                                    id: type.id,
+                                    employeeId: currentEmployeeId,
+                                    leaveTypeId: type.id,
+                                    leaveTypeName: type.name,
+                                    totalEntitlement: totalEntitlement,
+                                    used: usedDays,
+                                    pending: pendingDays,
+                                    remaining: totalEntitlement - usedDays - pendingDays,
+                                    accrued: totalEntitlement,
+                                    year: new Date().getFullYear()
+                                };
+                            });
+                            balances = [...balances, ...additionalBalances];
+                        }
+                    }
+
                     setLeaveBalances(balances.length > 0 ? balances : mockLeaveBalances);
-                    console.log('✅ Loaded leave balances:', balances.length);
+                    const totalRemaining = balances.reduce((sum, b) => sum + (b.remaining || 0), 0);
+                    console.log('✅ [Dashboard] Loaded leave balances:', balances.length);
+                    console.log('📊 [Dashboard] Total remaining days (calculated):', totalRemaining);
+                    console.log('📊 [Dashboard] Balance breakdown:', balances.map(b => ({ 
+                        name: b.leaveTypeName, 
+                        total: b.totalEntitlement, 
+                        used: b.used, 
+                        pending: b.pending, 
+                        remaining: b.remaining 
+                    })));
 
                     // Build activities from leave requests
                     const leaveActivities = leaveRequests.slice(0, 3).map(request => ({
@@ -469,12 +600,12 @@ export default function EmployeeDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Card className="hover:shadow-lg transition-shadow border-l-4 border-l-primary">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Leave Balance</CardTitle>
+                            <CardTitle className="text-sm font-medium">Total Leave Balance</CardTitle>
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-3xl font-bold text-primary">
-                                {leaveBalances.reduce((sum, b) => sum + b.remaining, 0) || 0}
+                                {leaveBalances.reduce((sum, b) => sum + (b.remaining || 0), 0)}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
                                 Days remaining this year
@@ -508,6 +639,7 @@ export default function EmployeeDashboard() {
                         </CardContent>
                     </Card>
                 </div>
+
 
                 {/* Quick Actions */}
                 <Card>

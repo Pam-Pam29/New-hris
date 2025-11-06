@@ -25,6 +25,7 @@ import {
 
 // Import the Firebase service
 import { leaveRequestService, leaveTypeService, employeeService, LeaveRequest, LeaveType, Employee } from '../services/leaveService';
+import { useCompany } from '../../../../../context/CompanyContext';
 
 // Simple inline components for missing UI elements
 const Input = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -217,6 +218,7 @@ const LeaveTypeManagement = ({
   loading: boolean;
   onRefresh: () => void;
 }) => {
+  const { companyId } = useCompany();
   const [types, setTypes] = useState<LeaveType[]>(leaveTypes);
   const [newType, setNewType] = useState({ name: '', daysAllowed: 0, color: '#3B82F6' });
   const [saving, setSaving] = useState(false);
@@ -233,7 +235,8 @@ const LeaveTypeManagement = ({
       const id = await leaveTypeService.add({
         name: newType.name,
         daysAllowed: newType.daysAllowed,
-        color: newType.color
+        color: newType.color,
+        companyId: companyId || undefined
       });
 
       const createdType = { id, ...newType };
@@ -290,8 +293,18 @@ const LeaveTypeManagement = ({
             <Label>Days Allowed</Label>
             <Input
               type="number"
-              value={newType.daysAllowed || ''}
-              onChange={(e) => setNewType(prev => ({ ...prev, daysAllowed: parseInt(e.target.value) || 0 }))}
+              value={newType.daysAllowed ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setNewType(prev => ({ ...prev, daysAllowed: undefined }));
+                } else {
+                  const num = parseInt(val);
+                  if (!isNaN(num)) {
+                    setNewType(prev => ({ ...prev, daysAllowed: num }));
+                  }
+                }
+              }}
               placeholder="21"
               disabled={saving}
             />
@@ -376,8 +389,10 @@ export default function LeaveManagement() {
 
   // Load initial data
   useEffect(() => {
-    loadData();
-  }, []);
+    if (companyId) {
+      loadData();
+    }
+  }, [companyId]);
 
   // Clear messages after 5 seconds
   useEffect(() => {
@@ -395,7 +410,7 @@ export default function LeaveManagement() {
     try {
       const [requestsData, leaveTypesData, employeesData] = await Promise.all([
         leaveRequestService.getAll(),
-        leaveTypeService.getAll(),
+        leaveTypeService.getAll(companyId || undefined),
         employeeService.getAll()
       ]);
 

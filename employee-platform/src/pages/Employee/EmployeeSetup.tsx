@@ -53,8 +53,32 @@ export const EmployeeSetup: React.FC = () => {
             }
 
             try {
-                const employeeRef = doc(db, 'employees', employeeId);
-                const employeeDoc = await getDoc(employeeRef);
+                // Try to find employee in employees collection first (by employeeId as document ID)
+                let employeeRef = doc(db, 'employees', employeeId);
+                let employeeDoc = await getDoc(employeeRef);
+                
+                // If not found, try to find by employeeId field in employees collection
+                if (!employeeDoc.exists()) {
+                    const { collection, query, where, getDocs } = await import('firebase/firestore');
+                    const employeesRef = collection(db, 'employees');
+                    const q = query(employeesRef, where('employeeId', '==', employeeId));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (!querySnapshot.empty) {
+                        employeeDoc = querySnapshot.docs[0];
+                        employeeRef = doc(db, 'employees', employeeDoc.id);
+                    } else {
+                        // Try employeeProfiles collection
+                        const profilesRef = collection(db, 'employeeProfiles');
+                        const profileQuery = query(profilesRef, where('employeeId', '==', employeeId));
+                        const profileSnapshot = await getDocs(profileQuery);
+                        
+                        if (!profileSnapshot.empty) {
+                            employeeDoc = profileSnapshot.docs[0];
+                            employeeRef = doc(db, 'employeeProfiles', employeeDoc.id);
+                        }
+                    }
+                }
 
                 if (!employeeDoc.exists()) {
                     setError('Employee not found. Please contact your HR department.');
@@ -64,12 +88,25 @@ export const EmployeeSetup: React.FC = () => {
 
                 const employeeData = employeeDoc.data();
 
-                // Check if already set up
-                if (employeeData.accountSetup === 'completed') {
-                    setError('Account already set up. Please use the login page.');
-                    setTimeout(() => navigate('/login'), 3000);
+                // Check if already set up - but only block if Firebase Auth account actually exists
+                const hasFirebaseAuth = employeeData.auth?.firebaseUid;
+                const isAccountSetup = employeeData.accountSetup === 'completed' || employeeData.auth?.isActive === true;
+                
+                // Only block setup if account is marked as completed AND Firebase Auth account exists
+                // If no Firebase Auth account, allow password setup to proceed
+                if (isAccountSetup && hasFirebaseAuth) {
+                    setError('Your account is already set up. Please use the login page to access your account.');
                     setLoading(false);
+                    
+                    // Auto-redirect to login after 5 seconds
+                    setTimeout(() => navigate('/login'), 5000);
                     return;
+                }
+                
+                // If account is marked as setup but no Firebase Auth exists, allow password creation
+                // This handles the case where HR created the profile but employee hasn't set password yet
+                if (isAccountSetup && !hasFirebaseAuth) {
+                    console.log('⚠️ [Employee Setup] Account marked as setup but no Firebase Auth exists - allowing password setup');
                 }
 
                 // Verify invite token (if required)
@@ -248,19 +285,52 @@ export const EmployeeSetup: React.FC = () => {
 
     // Error state (invalid link, already setup, etc.)
     if (error && !employee) {
+        const isAlreadySetup = error.includes('already set up') || error.includes('already completed');
+        
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-4">
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
                 <Card className="w-full max-w-md">
                     <CardContent className="pt-8">
                         <div className="text-center">
-                            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                                <AlertCircle className="w-8 h-8 text-red-600" />
+                            <div className={`mx-auto w-16 h-16 ${isAlreadySetup ? 'bg-blue-100' : 'bg-red-100'} rounded-full flex items-center justify-center mb-4`}>
+                                {isAlreadySetup ? (
+                                    <CheckCircle className="w-8 h-8 text-blue-600" />
+                                ) : (
+                                    <AlertCircle className="w-8 h-8 text-red-600" />
+                                )}
                             </div>
-                            <h2 className="text-2xl font-bold mb-2">Invalid Invitation</h2>
-                            <p className="text-gray-600 mb-4">{error}</p>
-                            <Button onClick={() => navigate('/login')} variant="outline">
-                                Go to Login
-                            </Button>
+                            <h2 className="text-2xl font-bold mb-2">
+                                {isAlreadySetup ? 'Account Already Set Up' : 'Invalid Invitation'}
+                            </h2>
+                            <p className="text-gray-600 mb-6">{error}</p>
+                            
+                            {isAlreadySetup && (
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg text-left">
+                                    <p className="text-sm text-blue-800 mb-2">
+                                        <strong>What to do next:</strong>
+                                    </p>
+                                    <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                                        <li>If you remember your password, click "Go to Login" below</li>
+                                        <li>If you forgot your password, contact your HR department</li>
+                                        <li>They can reset your password or generate a new setup link</li>
+                                    </ul>
+                                </div>
+                            )}
+                            
+                            <div className="space-y-3">
+                                <Button 
+                                    onClick={() => navigate('/login')} 
+                                    className="w-full"
+                                    size="lg"
+                                >
+                                    Go to Login
+                                </Button>
+                                {isAlreadySetup && (
+                                    <p className="text-xs text-gray-500">
+                                        Redirecting to login page in 5 seconds...
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

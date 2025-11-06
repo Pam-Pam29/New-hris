@@ -8,6 +8,7 @@ import {
     deleteDoc,
     onSnapshot,
     query,
+    where,
     orderBy,
     Timestamp,
     DocumentData,
@@ -56,7 +57,7 @@ interface LeaveBalance {
 
 // Service interfaces
 interface LeaveRequestService {
-    getAll(): Promise<LeaveRequest[]>;
+    getAll(companyId?: string): Promise<LeaveRequest[]>;
     getByEmployee(employeeId: string): Promise<LeaveRequest[]>;
     getById(id: string): Promise<LeaveRequest | null>;
     add(data: Omit<LeaveRequest, 'id'>): Promise<string>;
@@ -67,7 +68,7 @@ interface LeaveRequestService {
 }
 
 interface LeaveTypeService {
-    getAll(): Promise<LeaveType[]>;
+    getAll(companyId?: string): Promise<LeaveType[]>;
     getById(id: string): Promise<LeaveType | null>;
     add(data: Omit<LeaveType, 'id'>): Promise<string>;
     update(id: string, data: Partial<LeaveType>): Promise<void>;
@@ -83,7 +84,7 @@ interface LeaveBalanceService {
 class FirebaseLeaveRequestService implements LeaveRequestService {
     private collectionName = 'leaveRequests';
 
-    async getAll(): Promise<LeaveRequest[]> {
+    async getAll(companyId?: string): Promise<LeaveRequest[]> {
         try {
             // Force fresh Firebase initialization
             await initializeFirebase();
@@ -94,7 +95,13 @@ class FirebaseLeaveRequestService implements LeaveRequestService {
                 throw new Error('Firebase database not initialized');
             }
 
-            const q = query(collection(database, this.collectionName));
+            let q = query(collection(database, this.collectionName));
+            
+            // Filter by companyId if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+            }
+            
             const snapshot = await getDocs(q);
 
             return snapshot.docs.map(doc => ({
@@ -247,7 +254,7 @@ class FirebaseLeaveRequestService implements LeaveRequestService {
 class FirebaseLeaveTypeService implements LeaveTypeService {
     private collectionName = 'leaveTypes';
 
-    async getAll(): Promise<LeaveType[]> {
+    async getAll(companyId?: string): Promise<LeaveType[]> {
         try {
             // Force fresh Firebase initialization
             await initializeFirebase();
@@ -258,7 +265,13 @@ class FirebaseLeaveTypeService implements LeaveTypeService {
                 throw new Error('Firebase database not initialized');
             }
 
-            const q = query(collection(database, this.collectionName));
+            let q = query(collection(database, this.collectionName));
+            
+            // Filter by companyId if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+            }
+            
             const snapshot = await getDocs(q);
 
             return snapshot.docs.map(doc => ({

@@ -274,7 +274,7 @@ export interface IComprehensiveDataFlowService {
     subscribeToEmployeeUpdates(employeeId: string, callback: (profile: EmployeeProfile) => void): () => void;
 
     // Leave Management
-    getLeaveTypes(): Promise<LeaveType[]>;
+    getLeaveTypes(companyId?: string): Promise<LeaveType[]>;
     createLeaveType(leaveType: Omit<LeaveType, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeaveType>;
     updateLeaveType(id: string, updates: Partial<LeaveType>): Promise<void>;
     deleteLeaveType(id: string): Promise<void>;
@@ -425,15 +425,50 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Leave Management
-    async getLeaveTypes(): Promise<LeaveType[]> {
+    async getLeaveTypes(companyId?: string): Promise<LeaveType[]> {
         try {
-            const q = query(collection(db, 'leaveTypes'), where('isActive', '==', true), orderBy('name'));
+            let q = query(collection(db, 'leaveTypes'), where('isActive', '==', true));
+            
+            // Filter by companyId if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+            }
+            
             const querySnapshot = await getDocs(q);
+            
+            // Get all leave types and sort in memory to avoid index requirement
+            // Include document ID from Firestore (it's stored separately, not in doc.data())
+            let leaveTypes = querySnapshot.docs.map(doc => ({
+                ...this.convertFirestoreToLeaveType(doc.data()),
+                id: doc.id // Ensure ID is set from Firestore document ID
+            }));
+            
+            // Sort by name in memory
+            leaveTypes.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-            return querySnapshot.docs.map(doc => this.convertFirestoreToLeaveType(doc.data()));
+            return leaveTypes;
         } catch (error) {
             console.error('Error getting leave types:', error);
-            throw error;
+            // If there's an index error, try without orderBy
+            try {
+                let q = query(collection(db, 'leaveTypes'));
+                if (companyId) {
+                    q = query(q, where('companyId', '==', companyId));
+                }
+                const querySnapshot = await getDocs(q);
+                // Include document ID from Firestore
+                let leaveTypes = querySnapshot.docs.map(doc => ({
+                    ...this.convertFirestoreToLeaveType(doc.data()),
+                    id: doc.id // Ensure ID is set from Firestore document ID
+                }));
+                // Filter active and sort in memory
+                leaveTypes = leaveTypes.filter(lt => lt.isActive !== false);
+                leaveTypes.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                return leaveTypes;
+            } catch (fallbackError) {
+                console.error('Error in fallback leave types query:', fallbackError);
+                throw error; // Throw original error
+            }
         }
     }
 

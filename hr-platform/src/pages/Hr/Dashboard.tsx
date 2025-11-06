@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getEmployeeService } from "../../services/employeeService";
 import { leaveRequestService } from "./CoreHr/LeaveManagement/services/leaveService";
-import { jobBoardService } from "../../services/jobBoardService";
-import { recruitmentService } from "../../services/recruitmentService";
+import { getJobBoardService } from "../../services/jobBoardService";
+import { getRecruitmentService } from "../../services/recruitmentService";
 import { useCompany } from "../../context/CompanyContext";
 import {
 	Users,
@@ -129,10 +129,11 @@ function useLiveStats(companyId: string | null) {
 
 				// Load job postings (filtered by company at service level)
 				try {
-					const companyJobs = await jobBoardService.getJobPostings(companyId);
+					const jobBoardSvc = await getJobBoardService();
+					const companyJobs = await jobBoardSvc.getJobPostings(companyId);
 					const publishedJobs = companyJobs.filter(job => job.status === 'published');
 					setOpenPositions(publishedJobs.length);
-					console.log('✅ Open positions:', publishedJobs.length, 'of', companyJobs.length, 'company jobs (', jobs.length, 'total)');
+					console.log('✅ Open positions:', publishedJobs.length, 'of', companyJobs.length, 'company jobs');
 				} catch (err) {
 					console.log('⚠️ Error loading job postings, using 0');
 					setOpenPositions(0);
@@ -140,10 +141,11 @@ function useLiveStats(companyId: string | null) {
 
 				// Load recruitment candidates (filtered by company at service level)
 				try {
-					const companyCandidates = await recruitmentService.getCandidates(companyId);
+					const recruitmentSvc = await getRecruitmentService();
+					const companyCandidates = await recruitmentSvc.getCandidates(companyId);
 					const hired = companyCandidates.filter(c => c.status === 'hired');
 					setHiredCandidates(hired.length);
-					console.log('✅ Hired candidates:', hired.length, 'of', companyCandidates.length, 'company candidates (', candidates.length, 'total)');
+					console.log('✅ Hired candidates:', hired.length, 'of', companyCandidates.length, 'company candidates');
 				} catch (err) {
 					console.log('⚠️ Error loading candidates, using 0');
 					setHiredCandidates(0);
@@ -521,7 +523,8 @@ function RecentActivity() {
 
 				// Load hired candidates
 				try {
-					const candidates = await recruitmentService.getCandidates();
+					const recruitmentSvc = await getRecruitmentService();
+					const candidates = await recruitmentSvc.getCandidates();
 					const recentHired = candidates
 						.filter(c => c.status === 'hired')
 						.slice(0, 2)
@@ -698,7 +701,8 @@ function UpcomingEvents() {
 
 				// Load recruitment interviews (filtered by company)
 				try {
-					const interviews = await recruitmentService.getInterviews(companyId);
+					const recruitmentSvc = await getRecruitmentService();
+					const interviews = await recruitmentSvc.getInterviews(companyId);
 					console.log('🎤 All interviews loaded:', interviews.length);
 					console.log('🎤 Interview details:', interviews.map((i: any) => ({
 						id: i.id,
@@ -709,7 +713,7 @@ function UpcomingEvents() {
 					})));
 
 					// Get candidates for name lookup (filtered by company)
-					const candidates = await recruitmentService.getCandidates(companyId);
+					const candidates = await recruitmentSvc.getCandidates(companyId);
 					const candidateMap = new Map(candidates.map((c: any) => [c.id, c.name]));
 
 					const upcomingInterviews = interviews

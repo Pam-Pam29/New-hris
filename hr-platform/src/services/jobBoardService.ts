@@ -292,17 +292,38 @@ export class JobBoardServiceFactory {
     }
 }
 
-// Initialize the service based on config
+// Async function to get the properly configured job board service
+export const getJobBoardService = async (): Promise<IJobBoardService> => {
+    try {
+        console.log('Getting job board service...');
+        const { initializeFirebase } = await import('../config/firebase');
+        await initializeFirebase(); // Wait for Firebase to be ready
+        const config = await getServiceConfig();
+        console.log('Service config check:', config);
+
+        if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
+            console.log('Using Firebase JobBoard Service');
+            return JobBoardServiceFactory.createService('firebase', config.firebase.db);
+        } else {
+            console.log('Using Mock JobBoard Service');
+            return JobBoardServiceFactory.createService('mock');
+        }
+    } catch (error) {
+        console.warn('Failed to initialize Firebase JobBoard Service, falling back to Mock:', error);
+        return new MockJobBoardService();
+    }
+};
+
+// For backwards compatibility - but this will start as mock until Firebase is ready
 let jobBoardService: IJobBoardService = new MockJobBoardService();
 
-getServiceConfig().then((config: { defaultService: 'firebase' | 'mock'; firebase: { enabled: boolean; db: Firestore | null }; mock: { enabled: boolean } }) => {
-    if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-        console.log('Using Firebase JobBoard Service');
-        jobBoardService = JobBoardServiceFactory.createService('firebase', config.firebase.db);
-    } else {
-        console.log('Using Mock JobBoard Service');
-        jobBoardService = JobBoardServiceFactory.createService('mock');
+// Initialize the service asynchronously
+(async () => {
+    try {
+        jobBoardService = await getJobBoardService();
+    } catch (error) {
+        console.error('Error initializing job board service:', error);
     }
-});
+})();
 
 export { jobBoardService };

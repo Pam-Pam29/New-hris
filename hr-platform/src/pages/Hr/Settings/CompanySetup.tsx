@@ -6,7 +6,7 @@ import { CheckCircle, AlertTriangle, Building, Users, RefreshCw, Sparkles, Calen
 import { getCompanyService } from '../../../services/companyService';
 import { useCompany } from '../../../context/CompanyContext';
 import { getFirebaseDb } from '../../../config/firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, Timestamp, deleteField, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, Timestamp, deleteField, deleteDoc, query, where } from 'firebase/firestore';
 import { jobBoardService } from '../../../services/jobBoardService';
 
 export default function CompanySetup() {
@@ -161,7 +161,14 @@ export default function CompanySetup() {
                 return;
             }
 
-            // Create default leave types
+            // Check existing leave types for this company first
+            const existingLeaveTypesQuery = query(leaveTypesRef, where('companyId', '==', companyId));
+            const existingLeaveTypesSnapshot = await getDocs(existingLeaveTypesQuery);
+            const existingLeaveTypeNames = existingLeaveTypesSnapshot.docs.map(doc => doc.data().name);
+
+            console.log('📋 [CompanySetup] Existing leave types for company:', existingLeaveTypeNames);
+
+            // Create default leave types (only if they don't already exist)
             const defaultLeaveTypes = [
                 {
                     companyId: companyId,
@@ -201,12 +208,24 @@ export default function CompanySetup() {
                 }
             ];
 
-            // Add leave types to Firestore
+            // Add leave types to Firestore (only if they don't already exist)
+            let createdCount = 0;
             for (const leaveType of defaultLeaveTypes) {
-                await addDoc(leaveTypesRef, leaveType);
+                // Check if a leave type with this name already exists for this company
+                if (!existingLeaveTypeNames.includes(leaveType.name)) {
+                    await addDoc(leaveTypesRef, leaveType);
+                    createdCount++;
+                    console.log(`✅ [CompanySetup] Created leave type: ${leaveType.name}`);
+                } else {
+                    console.log(`⏭️ [CompanySetup] Leave type already exists, skipping: ${leaveType.name}`);
+                }
             }
 
-            setUpdateSuccess(`✅ Created ${defaultLeaveTypes.length} default leave types for ${company.displayName}!\n\n💡 Employees can now submit leave requests!`);
+            if (createdCount > 0) {
+                setUpdateSuccess(`✅ Created ${createdCount} new leave type(s) for ${company.displayName}!\n\n💡 ${existingLeaveTypeNames.length > 0 ? `(${existingLeaveTypeNames.length} leave type(s) already existed)` : ''} Employees can now submit leave requests!`);
+            } else {
+                setUpdateSuccess(`✅ All default leave types already exist for ${company.displayName}!\n\n💡 No new leave types were created.`);
+            }
 
         } catch (err: any) {
             console.error('Error creating leave types:', err);

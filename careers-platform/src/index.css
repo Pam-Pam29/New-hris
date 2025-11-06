@@ -54,6 +54,12 @@
         --chart-5: 0 84% 60%;
 
         --radius: 0.75rem;
+        
+        /* Company Branding Colors - Default to theme colors if not set */
+        --company-primary: var(--primary);
+        --company-secondary: var(--secondary);
+        --company-primary-hex: hsl(var(--primary));
+        --company-secondary-hex: hsl(var(--secondary));
     }
 
     .dark {
@@ -102,6 +108,10 @@
         --chart-3: 38 92% 50%;
         --chart-4: 262 83% 68%;
         --chart-5: 0 63% 31%;
+        
+        /* Company Branding in Dark Mode */
+        --company-primary: var(--company-primary, 217 91% 60%);
+        --company-secondary: var(--company-secondary, 262 83% 68%);
     }
 }
 

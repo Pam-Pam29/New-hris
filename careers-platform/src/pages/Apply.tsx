@@ -75,7 +75,7 @@ export default function ApplyPage() {
 
                     // Load job
                     if (jobId) {
-                        const { collection, doc, getDoc } = await import('firebase/firestore');
+                        const { doc, getDoc } = await import('firebase/firestore');
                         const { getFirebaseDb } = await import('../config/firebase');
                         const db = getFirebaseDb();
 

@@ -56,6 +56,12 @@
         --radius: 0.75rem;
     }
 
+    /* Company Branding Colors - Default to theme colors if not set */
+    --company-primary: var(--primary);
+    --company-secondary: var(--secondary);
+    --company-primary-hex: hsl(var(--primary));
+    --company-secondary-hex: hsl(var(--secondary));
+
     .dark {
         /* Modern Dark Theme - Professional Dark Mode */
         --background: 224 71% 4%;
@@ -102,6 +108,10 @@
         --chart-3: 38 92% 50%;
         --chart-4: 262 83% 68%;
         --chart-5: 0 63% 31%;
+
+        /* Company Branding in Dark Mode - Use adjusted colors if available */
+        --company-primary: var(--company-primary, 217 91% 60%);
+        --company-secondary: var(--company-secondary, 262 83% 68%);
     }
 }
 
@@ -112,6 +122,15 @@
 
     html {
         font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        color-scheme: light dark;
+    }
+    
+    html.dark {
+        color-scheme: dark;
+    }
+    
+    html:not(.dark) {
+        color-scheme: light;
     }
 
     body {
@@ -119,6 +138,13 @@
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
         transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         line-height: 1.6;
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+    
+    /* Ensure all elements inherit theme properly */
+    * {
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
 
     /* Typography Improvements */
@@ -161,6 +187,51 @@
     pre,
     .font-mono {
         font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+    }
+
+    /* Company Branding Utility Classes */
+    .bg-company-primary {
+        background-color: hsl(var(--company-primary));
+    }
+    
+    .text-company-primary {
+        color: hsl(var(--company-primary));
+    }
+    
+    .border-company-primary {
+        border-color: hsl(var(--company-primary));
+    }
+    
+    .bg-company-secondary {
+        background-color: hsl(var(--company-secondary));
+    }
+    
+    .text-company-secondary {
+        color: hsl(var(--company-secondary));
+    }
+    
+    .border-company-secondary {
+        border-color: hsl(var(--company-secondary));
+    }
+    
+    /* Ensure buttons and interactive elements use company colors with proper contrast */
+    .btn-company-primary {
+        background-color: hsl(var(--company-primary));
+        color: hsl(var(--company-primary-foreground, var(--primary-foreground)));
+        border-color: hsl(var(--company-primary));
+    }
+    
+    .btn-company-primary:hover {
+        background-color: hsl(var(--company-primary) / 0.9);
+    }
+    
+    /* Dark mode adjustments for company colors */
+    .dark .bg-company-primary {
+        background-color: hsl(var(--company-primary));
+    }
+    
+    .dark .text-company-primary {
+        color: hsl(var(--company-primary));
     }
 
     /* Smooth transitions for interactive elements */
