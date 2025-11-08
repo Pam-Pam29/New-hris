@@ -13,6 +13,7 @@ import {
 } from '../../../../components/ui/select';
 import { Calendar, Clock, Plus, Trash2, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { hrAvailabilityService, AvailabilitySlot } from '../../../../services/hrAvailabilityService';
+import { useCompany } from '../../../../context/CompanyContext';
 
 const DAYS_OF_WEEK = [
     { value: 0, label: 'Sunday' },
@@ -28,6 +29,7 @@ export default function AvailabilitySettings() {
     const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
+    const { companyId } = useCompany();
     const [showBookingPageSection, setShowBookingPageSection] = useState(false);
     const [bookingPageUrl, setBookingPageUrl] = useState('');
     const [savingUrl, setSavingUrl] = useState(false);
@@ -41,8 +43,16 @@ export default function AvailabilitySettings() {
 
     useEffect(() => {
         loadAvailability();
-        loadBookingPageUrl();
     }, []);
+
+    useEffect(() => {
+        if (!companyId) {
+            setBookingPageUrl('');
+            setCareersPortalUrl('');
+            return;
+        }
+        loadCompanySettings(companyId);
+    }, [companyId]);
 
     const loadAvailability = async () => {
         setLoading(true);
@@ -56,34 +66,54 @@ export default function AvailabilitySettings() {
         }
     };
 
-    const loadBookingPageUrl = async () => {
+    const loadCompanySettings = async (targetCompanyId: string) => {
         try {
             const { getFirebaseDb } = await import('../../../../config/firebase');
-            const { collection, getDocs, query, limit } = await import('firebase/firestore');
+            const { doc, getDoc, collection, getDocs, query, limit } = await import('firebase/firestore');
             const db = getFirebaseDb();
-            const settingsQuery = query(collection(db, 'hrSettings'), limit(1));
-            const snapshot = await getDocs(settingsQuery);
 
-            if (!snapshot.empty) {
-                const settings = snapshot.docs[0].data();
-                if (settings.bookingPageUrl) {
-                    setBookingPageUrl(settings.bookingPageUrl);
-                    setShowBookingPageSection(true); // Auto-expand if URL exists
+            let settingsData: Record<string, any> | null = null;
+
+            // Prefer company-scoped settings document
+            const companySettingsRef = doc(db, 'hrSettings', targetCompanyId);
+            const companySettingsSnap = await getDoc(companySettingsRef);
+
+            if (companySettingsSnap.exists()) {
+                settingsData = companySettingsSnap.data();
+            } else {
+                // Fallback to legacy global document (first document in collection)
+                const legacyQuery = query(collection(db, 'hrSettings'), limit(1));
+                const legacySnapshot = await getDocs(legacyQuery);
+                if (!legacySnapshot.empty) {
+                    settingsData = legacySnapshot.docs[0].data();
                 }
             }
+
+            if (settingsData?.bookingPageUrl) {
+                setBookingPageUrl(settingsData.bookingPageUrl);
+                setShowBookingPageSection(true); // Auto-expand if URL exists
+            } else {
+                setBookingPageUrl('');
+            }
         } catch (error) {
-            console.log('No booking page URL configured yet');
+            console.log('No HR settings configured yet');
+            setBookingPageUrl('');
         }
     };
 
     const saveBookingPageUrl = async () => {
+        if (!companyId) {
+            alert('Company context not loaded yet. Please try again in a moment.');
+            return;
+        }
         setSavingUrl(true);
         try {
             const { getFirebaseDb } = await import('../../../../config/firebase');
             const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
             const db = getFirebaseDb();
 
-            await setDoc(doc(db, 'hrSettings', 'general'), {
+            await setDoc(doc(db, 'hrSettings', companyId), {
+                companyId,
                 bookingPageUrl: bookingPageUrl,
                 updatedAt: serverTimestamp(),
                 updatedBy: 'hr'
@@ -172,8 +202,10 @@ export default function AvailabilitySettings() {
         <div className="p-8 space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">HR Availability Settings</h1>
-                    <p className="text-gray-600 mt-1">Set when you're available for employee meetings</p>
+                    <h1 className="text-3xl font-bold text-foreground">HR Availability Settings</h1>
+                    <p className="text-muted-foreground mt-2">
+                        Set when you're available for employee meetings
+                    </p>
                 </div>
                 <div className="flex space-x-3">
                     <Button onClick={handleQuickSetup} variant="outline">

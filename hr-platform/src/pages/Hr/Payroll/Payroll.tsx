@@ -938,11 +938,10 @@ export default function Payroll() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <DollarSign className="h-8 w-8 text-primary" />
-            Payroll Management
-          </h1>
-          <p className="text-muted-foreground mt-1">Manage employee payroll with Nigerian tax system (₦)</p>
+          <h1 className="text-3xl font-bold text-foreground">Payroll Management</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage employee payroll with Nigerian tax system (₦)
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">
@@ -1221,7 +1220,7 @@ export default function Payroll() {
                   {financialRequests.map((request) => (
                     <TableRow key={request.id} className="hover:bg-muted/30">
                       <TableCell>
-                        <div className="font-medium">{request.employeeId}</div>
+                        <div className="font-medium">{request.employeeName || request.employeeId}</div>
                         <div className="text-xs text-muted-foreground">ID: {request.employeeId}</div>
                       </TableCell>
                       <TableCell>

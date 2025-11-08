@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Lock, LogOut, AlertCircle, Loader } from 'lucide-react';
-import { useCompany } from '../context/CompanyContext';
 
 /**
  * HR Authentication Guard
@@ -25,15 +24,124 @@ interface HrAuthGuardProps {
 
 export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     const navigate = useNavigate();
-    const { company, loading: companyLoading } = useCompany();
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [email, setEmail] = useState<string>('');
     const [password, setPassword] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+    const [isCompanyReady, setIsCompanyReady] = useState<boolean>(true);
 
     const auth = getAuth();
+
+    const resolveCompanyForUser = useCallback(async (user: User) => {
+        try {
+            setIsCompanyReady(false);
+
+            const { getFirebaseDb } = await import('../config/firebase');
+            const { doc, getDoc, setDoc, updateDoc } = await import('firebase/firestore');
+            const db = getFirebaseDb();
+
+            const userId = user.uid;
+            const hrUserRef = doc(db, 'hrUsers', userId);
+            const hrUserDoc = await getDoc(hrUserRef);
+
+            let companyId: string | null = null;
+
+            if (hrUserDoc.exists()) {
+                const hrUserData = hrUserDoc.data() as { companyId?: string | null };
+                companyId = hrUserData?.companyId ?? null;
+                console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
+            }
+
+            if (!companyId) {
+                const storedCompanyId = localStorage.getItem('companyId');
+                if (storedCompanyId) {
+                    companyId = storedCompanyId;
+                    console.log('✅ [HR Auth] Using company ID from localStorage:', companyId);
+                }
+            }
+
+            if (!companyId || companyId === 'default' || companyId === userId) {
+                await setDoc(
+                    hrUserRef,
+                    {
+                        email: user.email ?? '',
+                        companyId: null,
+                        onboardingCompleted: false,
+                        updatedAt: new Date(),
+                    },
+                    { merge: true }
+                );
+                console.warn('⚠️ [HR Auth] No company linked to this user. Redirecting to onboarding.');
+                setIsCompanyReady(true);
+                navigate('/onboarding', { replace: true });
+                return;
+            }
+
+            console.log('✅ [HR Auth] Setting company ID in localStorage:', companyId);
+            localStorage.setItem('companyId', companyId);
+
+            window.dispatchEvent(new CustomEvent('companyIdChanged'));
+
+            const companyRef = doc(db, 'companies', companyId);
+            const companyDoc = await getDoc(companyRef);
+
+            if (!companyDoc.exists()) {
+                console.error('❌ [HR Auth] Company document not found');
+                setIsCompanyReady(true);
+                navigate('/onboarding', { replace: true });
+                return;
+            }
+
+            const companyData = companyDoc.data() as any;
+            const onboardingCompleted = companyData?.settings?.onboardingCompleted;
+            const hasOnboardingIndicators =
+                (Array.isArray(companyData?.settings?.departments) && companyData.settings.departments.length > 0) ||
+                !!companyData?.displayName ||
+                !!companyData?.settings?.industry;
+
+            if (!onboardingCompleted && hasOnboardingIndicators) {
+                try {
+                    await updateDoc(companyRef, {
+                        'settings.onboardingCompleted': true,
+                        'settings.onboardingCompletedAt': new Date().toISOString(),
+                    });
+                    console.log('✅ [HR Auth] Onboarding flag updated');
+                } catch (updateError) {
+                    console.warn('⚠️ [HR Auth] Could not update onboarding flag:', updateError);
+                }
+            }
+
+            setIsCompanyReady(true);
+
+            const currentPath = window.location.pathname;
+            const shouldRedirectToDashboard =
+                currentPath === '/' ||
+                currentPath === '/login' ||
+                currentPath === '/onboarding' ||
+                currentPath.startsWith('/hr-onboarding');
+
+            if (onboardingCompleted || hasOnboardingIndicators) {
+                console.log('✅ [HR Auth] Onboarding completed, continuing to requested route');
+                if (shouldRedirectToDashboard) {
+                    navigate('/dashboard', { replace: true });
+                }
+            } else {
+                console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
+                if (!currentPath.startsWith('/onboarding') && !currentPath.startsWith('/hr-onboarding')) {
+                    navigate('/onboarding', { replace: true });
+                }
+            }
+        } catch (error) {
+            console.error('❌ [HR Auth] Error resolving company context:', error);
+            setIsCompanyReady(true);
+            const currentPath = window.location.pathname;
+            if (!currentPath.startsWith('/onboarding') && !currentPath.startsWith('/hr-onboarding')) {
+                navigate('/onboarding', { replace: true });
+            }
+        }
+    }, [navigate]);
 
     // Log initialization only once
     useEffect(() => {
@@ -49,16 +157,20 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     // Check authentication state on mount
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            setIsAuthenticated(!!user);
+            const authenticated = !!user;
+            setIsAuthenticated(authenticated);
             setIsLoading(false);
 
             if (user) {
                 console.log('✅ [HR Auth] User authenticated:', user.email);
+                resolveCompanyForUser(user);
+            } else {
+                setIsCompanyReady(true);
             }
         });
 
         return () => unsubscribe();
-    }, [auth]);
+    }, [auth, resolveCompanyForUser]);
 
     // Handle login
     const handleLogin = async (e: React.FormEvent) => {
@@ -79,218 +191,9 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
             console.log('✅ [HR Auth] signInWithEmailAndPassword completed');
             console.log('✅ [HR Auth] Login successful - Starting company ID fetch');
             console.log('🔍 [HR Auth] User ID:', userCredential.user.uid);
+            setIsCompanyReady(false);
 
-            // Load company ID from hrUsers collection
-            const userId = userCredential.user.uid;
-            console.log('🔍 [HR Auth] About to fetch company ID...');
-
-            // Fetch hrUsers document to get companyId
-            console.log('🔍 [HR Auth] Importing Firebase modules...');
-            const { getFirebaseDb } = await import('../config/firebase');
-            const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
-            const db = getFirebaseDb();
-            console.log('🔍 [HR Auth] Firebase DB initialized');
-
-            // Try to find company ID from hrUsers document first
-            console.log('🔍 [HR Auth] Fetching hrUsers document...');
-            const hrUserRef = doc(db, 'hrUsers', userId);
-            const hrUserDoc = await getDoc(hrUserRef);
-            console.log('🔍 [HR Auth] hrUsers document exists:', hrUserDoc.exists());
-
-            let companyId: string | null = null;
-
-            if (hrUserDoc.exists()) {
-                const hrUserData = hrUserDoc.data();
-                companyId = hrUserData.companyId;
-                console.log('✅ [HR Auth] Found company ID from hrUsers:', companyId);
-            }
-
-            // If not in hrUsers or invalid, try to find an existing company by email
-            if (!companyId || companyId === 'default' || companyId === userId) {
-                console.warn('⚠️ [HR Auth] Invalid or missing companyId, searching for existing company...');
-
-                try {
-                    // Get user email
-                    const userEmail = userCredential.user.email;
-                    console.log('🔍 [HR Auth] Searching for company with email:', userEmail);
-
-                    // Try to find company by owner email
-                    const companiesRef = collection(db, 'companies');
-                    let q = query(companiesRef, where('email', '==', userEmail));
-                    let companySnapshot = await getDocs(q);
-
-                    console.log('🔍 [HR Auth] Found', companySnapshot.docs.length, 'companies by exact email match');
-
-                    // If not found by exact email, try to match by email domain
-                    if (companySnapshot.empty && userEmail) {
-                        const emailDomain = userEmail.split('@')[1];
-                        console.log('🔍 [HR Auth] Trying to match by email domain:', emailDomain);
-                        
-                        // Get all companies and check if any have similar email domain
-                        const allCompaniesSnapshot = await getDocs(collection(db, 'companies'));
-                        console.log('🔍 [HR Auth] Total companies in database:', allCompaniesSnapshot.docs.length);
-                        
-                        allCompaniesSnapshot.docs.forEach((doc) => {
-                            const companyData = doc.data();
-                            console.log('  - Company ID:', doc.id, 'Email:', companyData.email);
-                        });
-
-                        // Try to find company with matching email domain
-                        const matchingCompany = allCompaniesSnapshot.docs.find((doc) => {
-                            const companyData = doc.data();
-                            const companyEmail = companyData.email || '';
-                            return companyEmail.includes(emailDomain) || emailDomain.includes(companyEmail.split('@')[1] || '');
-                        });
-
-                        if (matchingCompany) {
-                            companyId = matchingCompany.id;
-                            console.log('✅ [HR Auth] Found company by email domain match:', companyId);
-                            
-                            // Update hrUsers document with the found companyId
-                            try {
-                                const { updateDoc } = await import('firebase/firestore');
-                                await updateDoc(doc(db, 'hrUsers', userId), {
-                                    companyId: companyId,
-                                    updatedAt: new Date()
-                                });
-                                console.log('✅ [HR Auth] Updated hrUsers with companyId');
-                            } catch (updateError) {
-                                console.warn('⚠️ [HR Auth] Could not update hrUsers:', updateError);
-                            }
-                        } else if (allCompaniesSnapshot.docs.length === 1) {
-                            // If there's only one company, use it
-                            companyId = allCompaniesSnapshot.docs[0].id;
-                            console.log('✅ [HR Auth] Found single company in database, using it:', companyId);
-                            
-                            // Update hrUsers document
-                            try {
-                                const { updateDoc } = await import('firebase/firestore');
-                                await updateDoc(doc(db, 'hrUsers', userId), {
-                                    companyId: companyId,
-                                    updatedAt: new Date()
-                                });
-                                console.log('✅ [HR Auth] Updated hrUsers with companyId');
-                            } catch (updateError) {
-                                console.warn('⚠️ [HR Auth] Could not update hrUsers:', updateError);
-                            }
-                        } else {
-                            // Check if a company exists with this userId as ID (legacy case)
-                            const userCompanyDoc = await getDoc(doc(db, 'companies', userId));
-                            if (userCompanyDoc.exists()) {
-                                companyId = userId;
-                                console.log('✅ [HR Auth] Found company with userId as ID:', companyId);
-                            } else {
-                                // Last resort: use the first company (if any exist)
-                                if (allCompaniesSnapshot.docs.length > 0) {
-                                    companyId = allCompaniesSnapshot.docs[0].id;
-                                    console.log('⚠️ [HR Auth] Using first available company:', companyId);
-                                    
-                                    // Update hrUsers document
-                                    try {
-                                        const { updateDoc } = await import('firebase/firestore');
-                                        await updateDoc(doc(db, 'hrUsers', userId), {
-                                            companyId: companyId,
-                                            updatedAt: new Date()
-                                        });
-                                        console.log('✅ [HR Auth] Updated hrUsers with companyId');
-                                    } catch (updateError) {
-                                        console.warn('⚠️ [HR Auth] Could not update hrUsers:', updateError);
-                                    }
-                                } else {
-                                    // No companies exist, use userId
-                                    companyId = userId;
-                                    console.log('⚠️ [HR Auth] No companies found, using userId as company ID:', companyId);
-                                }
-                            }
-                        }
-                    } else if (!companySnapshot.empty) {
-                        companyId = companySnapshot.docs[0].id;
-                        console.log('✅ [HR Auth] Found existing company by email:', companyId);
-                        
-                        // Update hrUsers document
-                        try {
-                            const { updateDoc } = await import('firebase/firestore');
-                            await updateDoc(doc(db, 'hrUsers', userId), {
-                                companyId: companyId,
-                                updatedAt: new Date()
-                            });
-                            console.log('✅ [HR Auth] Updated hrUsers with companyId');
-                        } catch (updateError) {
-                            console.warn('⚠️ [HR Auth] Could not update hrUsers:', updateError);
-                        }
-                    }
-                } catch (searchError) {
-                    console.error('❌ [HR Auth] Error searching for company:', searchError);
-                    companyId = userId;
-                }
-            }
-
-            if (companyId) {
-                console.log('✅ [HR Auth] Setting company ID in localStorage:', companyId);
-                localStorage.setItem('companyId', companyId);
-
-                // Trigger company context reload
-                window.dispatchEvent(new CustomEvent('companyIdChanged'));
-                console.log('✅ [HR Auth] Company context change event dispatched');
-
-                // Wait a bit for context to update, then check onboarding status
-                setTimeout(async () => {
-                    console.log('✅ [HR Auth] setTimeout callback executing after 1 second');
-                    // Try to load company data directly from Firestore to check onboarding
-                    try {
-                        const companyDoc = await getDoc(doc(db, 'companies', companyId));
-                        if (companyDoc.exists()) {
-                            const companyData = companyDoc.data();
-                            console.log('🔍 [HR Auth] Company data loaded directly:', {
-                                companyId: companyId,
-                                onboardingCompleted: companyData.settings?.onboardingCompleted,
-                                displayName: companyData.displayName
-                            });
-
-                            // Check if onboarding is marked as completed
-                            const onboardingCompleted = companyData.settings?.onboardingCompleted;
-                            
-                            // If not explicitly marked, check for indicators that onboarding was done
-                            // (departments, leave types, etc. suggest onboarding was completed)
-                            const hasOnboardingIndicators = companyData.settings?.departments?.length > 0 || 
-                                                           companyData.displayName || 
-                                                           companyData.settings?.industry;
-
-                            if (onboardingCompleted || hasOnboardingIndicators) {
-                                // If onboarding indicators exist but flag is not set, update it
-                                if (!onboardingCompleted && hasOnboardingIndicators) {
-                                    console.log('⚠️ [HR Auth] Company has onboarding indicators but flag not set, updating...');
-                                    try {
-                                        const { updateDoc } = await import('firebase/firestore');
-                                        await updateDoc(doc(db, 'companies', companyId), {
-                                            'settings.onboardingCompleted': true,
-                                            'settings.onboardingCompletedAt': new Date().toISOString()
-                                        });
-                                        console.log('✅ [HR Auth] Onboarding flag updated');
-                                    } catch (updateError) {
-                                        console.warn('⚠️ [HR Auth] Could not update onboarding flag:', updateError);
-                                    }
-                                }
-                                
-                                console.log('✅ [HR Auth] Onboarding completed, showing dashboard');
-                                // Redirect to dashboard to ensure we show the right page
-                                navigate('/dashboard');
-                            } else {
-                                console.log('📋 [HR Auth] Onboarding not completed, redirecting to onboarding');
-                                navigate('/onboarding');
-                            }
-                        } else {
-                            console.error('❌ [HR Auth] Company document not found');
-                            navigate('/onboarding');
-                        }
-                    } catch (error) {
-                        console.error('❌ [HR Auth] Error loading company data:', error);
-                        navigate('/onboarding');
-                    }
-                }, 3000); // Increased to 3 seconds for better reliability
-            } else {
-                console.warn('⚠️ [HR Auth] No company ID found');
-            }
+            await resolveCompanyForUser(userCredential.user);
         } catch (error: any) {
             console.error('❌ [HR Auth] Login error:', error);
 
@@ -308,6 +211,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
             }
 
             setError(errorMessage);
+            setIsCompanyReady(true);
         } finally {
             setIsLoggingIn(false);
         }
@@ -331,12 +235,12 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     // Loading state
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <Card className="w-full max-w-md">
                     <CardContent className="flex items-center justify-center py-8">
                         <div className="text-center">
-                            <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-                            <p className="text-gray-600">Checking authentication...</p>
+                            <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                            <p className="text-muted-foreground">Checking authentication...</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -347,11 +251,11 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
     // Not authenticated - show login page
     if (!isAuthenticated) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
                 <Card className="w-full max-w-md">
                     <CardHeader className="space-y-2 text-center">
-                        <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                            <Lock className="w-8 h-8 text-blue-600" />
+                        <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                            <Lock className="w-8 h-8 text-primary" />
                         </div>
                         <CardTitle className="text-2xl font-bold">HR Platform Login</CardTitle>
                         <CardDescription>
@@ -414,13 +318,13 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                                 )}
                             </Button>
 
-                            <div className="text-sm text-center text-gray-500 mt-4 space-y-2">
+                            <div className="text-sm text-center text-muted-foreground mt-4 space-y-2">
                                 <p>
                                     Don't have an account?{' '}
                                     <button
                                         type="button"
                                         onClick={() => navigate('/onboarding')}
-                                        className="text-blue-600 hover:underline font-medium"
+                                        className="text-primary hover:underline font-medium"
                                     >
                                         Start onboarding
                                     </button>
@@ -428,16 +332,31 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                                     <button
                                         type="button"
                                         onClick={() => navigate('/hr-onboarding-signup')}
-                                        className="text-blue-600 hover:underline font-medium"
+                                        className="text-primary hover:underline font-medium"
                                     >
                                         sign up here
                                     </button>
                                 </p>
-                                <p className="mt-2 text-xs text-gray-400">
+                                <p className="mt-2 text-xs text-muted-foreground/70">
                                     Need help? Contact your system administrator.
                                 </p>
                             </div>
                         </form>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    if (!isCompanyReady) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Card className="w-full max-w-md">
+                    <CardContent className="flex items-center justify-center py-8">
+                        <div className="text-center">
+                            <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                            <p className="text-muted-foreground">Preparing your workspace...</p>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -453,7 +372,7 @@ export const HrAuthGuard: React.FC<HrAuthGuardProps> = ({ children }) => {
                     variant="outline"
                     size="sm"
                     onClick={handleLogout}
-                    className="bg-white shadow-md"
+                    className="bg-card shadow-md"
                 >
                     <LogOut className="w-4 h-4 mr-2" />
                     Logout

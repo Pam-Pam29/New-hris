@@ -355,7 +355,7 @@ function QuickActions() {
 						<div key={i}>
 							{action.href ? (
 								<Link to={action.href}>
-									<Button className={`w-full h-auto p-4 ${action.color} text-white shadow-soft hover:shadow-soft-lg transition-all duration-200 group`}>
+									<Button className={`w-full h-auto p-4 ${action.color} text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200 group`}>
 										<div className="flex flex-col items-center gap-2">
 											<action.icon className="h-6 w-6 group-hover:scale-110 transition-transform" />
 											<div className="text-center">
@@ -368,7 +368,7 @@ function QuickActions() {
 							) : (
 								<Button
 									onClick={action.onClick}
-									className={`w-full h-auto p-4 ${action.color} text-white shadow-soft hover:shadow-soft-lg transition-all duration-200 group`}
+									className={`w-full h-auto p-4 ${action.color} text-primary-foreground shadow-soft hover:shadow-soft-lg transition-all duration-200 group`}
 								>
 									<div className="flex flex-col items-center gap-2">
 										<action.icon className="h-6 w-6 group-hover:scale-110 transition-transform" />
@@ -1161,10 +1161,8 @@ export default function Dashboard() {
 			<div className="mb-8 animate-slide-in">
 				<div className="flex items-center justify-between mb-2">
 					<div>
-						<h1 className="text-4xl font-bold text-gradient mb-2">
-							Welcome to HR Dashboard
-						</h1>
-						<p className="text-muted-foreground text-lg">
+						<h1 className="text-3xl font-bold text-foreground">Welcome to HR Dashboard</h1>
+						<p className="text-muted-foreground mt-2">
 							Manage your workforce efficiently and effectively
 						</p>
 					</div>

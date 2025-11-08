@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/organisms/Sidebar';
 import { Header } from './components/organisms/Header';
 import Dashboard from './pages/Employee/Dashboard';
@@ -17,6 +17,7 @@ import BookMeeting from './pages/Employee/BookMeeting';
 // Authentication components
 import LoginPage from './pages/Employee/LoginPage';
 import PasswordSetup from './pages/Employee/PasswordSetup';
+import PasswordResetConfirmation from './pages/Employee/PasswordResetConfirmation';
 import EmployeeSetup from './pages/Employee/EmployeeSetup';
 import EmployeeOnboardingSignup from './pages/Employee/Auth/EmployeeOnboardingSignup';
 import EmployeeOnboardingSignin from './pages/Employee/Auth/EmployeeOnboardingSignin';
@@ -26,6 +27,7 @@ import CreateTestProfile from './components/CreateTestProfile';
 // Context providers for multi-tenancy and authentication
 import { CompanyProvider } from './context/CompanyContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useCompany } from './context/CompanyContext';
 
 // Employee Layout Component
 const EmployeeLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -69,6 +71,8 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // Protected Route - Requires authentication AND onboarding completion
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isAuthenticated, currentEmployee, loading } = useAuth();
+    const { company, loading: companyLoading } = useCompany();
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -91,7 +95,35 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     //     console.log('📋 [ProtectedRoute] Onboarding not complete, redirecting to onboarding');
     //     return <Navigate to="/onboarding" replace />;
     // }
-    console.log('🚀 [ProtectedRoute] Onboarding bypassed for testing - going to dashboard');
+    if (companyLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading company settings...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Enforce minimum profile completeness for full access
+    const completeness = currentEmployee?.profileCompleteness ?? 0;
+    const requiredThreshold = company?.settings?.profileCompletionThreshold ?? 75;
+    const allowedPathsForIncompleteProfile = ['/', '/dashboard', '/profile'];
+    const normalizedPath = location.pathname.toLowerCase();
+
+    if (completeness < requiredThreshold && !allowedPathsForIncompleteProfile.includes(normalizedPath)) {
+        console.warn(
+            `⚠️ [ProtectedRoute] Profile completeness ${completeness}% < ${requiredThreshold}%. Redirecting to profile from ${location.pathname}`
+        );
+        return (
+            <Navigate
+                to="/profile"
+                replace
+                state={{ from: location.pathname, reason: 'profile_incomplete', required: requiredThreshold }}
+            />
+        );
+    }
 
     return <>{children}</>;
 };
@@ -105,8 +137,10 @@ export default function App() {
                         {/* Public Routes - No authentication required */}
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/setup" element={<EmployeeSetup />} />
+                        <Route path="/employee/:companySlug/setup" element={<EmployeeSetup />} />
                         <Route path="/employee/setup" element={<EmployeeSignup />} />
                         <Route path="/password-setup" element={<PasswordSetup />} />
+                        <Route path="/reset-password" element={<PasswordResetConfirmation />} />
 
                         {/* Employee Onboarding Auth Routes - No authentication required */}
                         <Route path="/employee-onboarding-signup" element={<EmployeeOnboardingSignup />} />

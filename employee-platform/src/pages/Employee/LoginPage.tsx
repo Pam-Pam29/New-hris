@@ -13,10 +13,12 @@ import {
     EyeOff,
     AlertCircle,
     Loader,
-    Building
+    Building,
+    CheckCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCompany } from '../../context/CompanyContext';
+import { authService } from './services/authService';
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
@@ -27,6 +29,8 @@ const LoginPage: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
 
     useEffect(() => {
         // If already logged in, redirect based on onboarding status
@@ -74,19 +78,41 @@ const LoginPage: React.FC = () => {
     const handleForgotPassword = async () => {
         if (!email) {
             setError('Please enter your email address first');
+            setSuccess('');
             return;
         }
 
+        setIsResettingPassword(true);
+        setError('');
+        setSuccess('');
+
         try {
-            // TODO: Implement password reset
-            const success = false; // await authService.resetPassword(email);
+            console.log('🔐 [Password Reset] Sending reset email to:', email);
+            const success = await authService.resetPassword(email);
+            
             if (success) {
-                setError('Password reset email sent. Please check your inbox.');
+                setSuccess('Password reset email sent! Please check your inbox and follow the instructions to reset your password.');
+                console.log('✅ [Password Reset] Email sent successfully');
             } else {
-                setError('Failed to send password reset email');
+                setError('Failed to send password reset email. Please try again.');
             }
-        } catch (error) {
-            setError('Failed to send password reset email');
+        } catch (error: any) {
+            console.error('❌ [Password Reset] Error:', error);
+            let errorMessage = 'Failed to send password reset email. Please try again.';
+            
+            if (error.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email address.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address. Please check and try again.';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMessage = 'Too many requests. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
+        } finally {
+            setIsResettingPassword(false);
         }
     };
 
@@ -124,6 +150,14 @@ const LoginPage: React.FC = () => {
                         <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Success Display */}
+                    {success && (
+                        <Alert variant="default" style={{ backgroundColor: 'hsl(142 76% 36% / 0.1)', borderColor: 'hsl(142 76% 36%)' }}>
+                            <CheckCircle className="h-4 w-4" style={{ color: 'hsl(142 76% 36%)' }} />
+                            <AlertDescription style={{ color: 'hsl(142 76% 36%)' }}>{success}</AlertDescription>
                         </Alert>
                     )}
 
@@ -195,9 +229,17 @@ const LoginPage: React.FC = () => {
                         <button
                             type="button"
                             onClick={handleForgotPassword}
-                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                            disabled={isResettingPassword}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Forgot your password?
+                            {isResettingPassword ? (
+                                <span className="flex items-center justify-center">
+                                    <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                    Sending...
+                                </span>
+                            ) : (
+                                'Forgot your password?'
+                            )}
                         </button>
                     </div>
 
@@ -208,16 +250,6 @@ const LoginPage: React.FC = () => {
                             <span className="text-gray-500">
                                 Contact HR for your setup link
                             </span>
-                        </p>
-                    </div>
-
-                    {/* Help Text */}
-                    <div className="text-center">
-                        <p className="text-xs text-gray-500">
-                            Need help? Contact HR at{' '}
-                            <a href={`mailto:hr@${company?.domain || 'company.com'}`} className="text-blue-600 hover:underline">
-                                hr@{company?.domain || 'company.com'}
-                            </a>
                         </p>
                     </div>
                 </CardContent>

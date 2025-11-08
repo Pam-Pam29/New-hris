@@ -88,6 +88,14 @@ export const EmployeeSetup: React.FC = () => {
 
                 const employeeData = employeeDoc.data();
 
+                const resolvedEmail =
+                    employeeData.auth?.email ||
+                    employeeData.contactInfo?.workEmail ||
+                    employeeData.contactInfo?.personalEmail ||
+                    employeeData.personalEmail ||
+                    employeeData.email ||
+                    '';
+
                 // Check if already set up - but only block if Firebase Auth account actually exists
                 const hasFirebaseAuth = employeeData.auth?.firebaseUid;
                 const isAccountSetup = employeeData.accountSetup === 'completed' || employeeData.auth?.isActive === true;
@@ -117,7 +125,10 @@ export const EmployeeSetup: React.FC = () => {
                 }
 
                 console.log('✅ [Employee Setup] Employee data loaded:', employeeData);
-                setEmployee(employeeData);
+                setEmployee({
+                    ...employeeData,
+                    resolvedEmail
+                });
                 setLoading(false);
             } catch (err: any) {
                 console.error('Error loading employee:', err);
@@ -164,7 +175,12 @@ export const EmployeeSetup: React.FC = () => {
         setError('');
 
         try {
-            const employeeEmail = employee.auth?.email || employee.contactInfo?.workEmail;
+            const employeeEmail =
+                employee.auth?.email ||
+                employee.contactInfo?.workEmail ||
+                employee.contactInfo?.personalEmail ||
+                employee.personalEmail ||
+                employee.email;
             console.log('🔐 [Employee Setup] Creating Firebase Auth account for:', employeeEmail);
 
             let userCredential;
@@ -199,6 +215,7 @@ export const EmployeeSetup: React.FC = () => {
             if (userCredential) {
                 updateData['auth.firebaseUid'] = userCredential.user.uid;
                 updateData['auth.emailVerified'] = userCredential.user.emailVerified;
+                updateData['auth.email'] = employeeEmail;
             }
 
             await updateDoc(employeeRef, updateData);
@@ -296,7 +313,7 @@ export const EmployeeSetup: React.FC = () => {
                                 {isAlreadySetup ? (
                                     <CheckCircle className="w-8 h-8 text-blue-600" />
                                 ) : (
-                                    <AlertCircle className="w-8 h-8 text-red-600" />
+                                <AlertCircle className="w-8 h-8 text-red-600" />
                                 )}
                             </div>
                             <h2 className="text-2xl font-bold mb-2">
@@ -323,8 +340,8 @@ export const EmployeeSetup: React.FC = () => {
                                     className="w-full"
                                     size="lg"
                                 >
-                                    Go to Login
-                                </Button>
+                                Go to Login
+                            </Button>
                                 {isAlreadySetup && (
                                     <p className="text-xs text-gray-500">
                                         Redirecting to login page in 5 seconds...
@@ -355,7 +372,7 @@ export const EmployeeSetup: React.FC = () => {
                 <CardContent>
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                         <p className="text-sm text-blue-800">
-                            <strong>Your Email:</strong> {employee?.email}
+                            <strong>Your Email:</strong> {employee?.resolvedEmail || 'Not available'}
                         </p>
                         <p className="text-sm text-blue-800 mt-1">
                             <strong>Employee ID:</strong> {employee?.employeeId}

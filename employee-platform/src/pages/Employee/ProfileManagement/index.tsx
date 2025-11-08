@@ -207,7 +207,7 @@ export default function ProfileManagement() {
                 setFormData(profile.contactInfo);
                 break;
             case 'banking':
-                setFormData(profile.bankingInfo);
+                setFormData(profile.bankingInfo || {});
                 break;
             default:
                 setFormData({});
@@ -234,7 +234,7 @@ export default function ProfileManagement() {
                     updateData.contactInfo = { ...profile.contactInfo, ...formData };
                     break;
                 case 'banking':
-                    updateData.bankingInfo = { ...profile.bankingInfo, ...formData };
+                    updateData.bankingInfo = { ...(profile.bankingInfo || {}), ...formData };
                     break;
             }
 
@@ -896,29 +896,29 @@ export default function ProfileManagement() {
                                         <div className="space-y-4">
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">Bank Name</Label>
-                                                <p className="text-lg font-semibold">{profile.bankingInfo.bankName}</p>
+                                                <p className="text-lg font-semibold">{profile.bankingInfo?.bankName || 'Not provided'}</p>
                                             </div>
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">Account Number</Label>
-                                                <p className="text-lg font-semibold">{profile.bankingInfo.accountNumber}</p>
+                                                <p className="text-lg font-semibold">{profile.bankingInfo?.accountNumber || 'Not provided'}</p>
                                             </div>
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">Account Type</Label>
-                                                <p className="text-lg font-semibold capitalize">{profile.bankingInfo.accountType}</p>
+                                                <p className="text-lg font-semibold capitalize">{profile.bankingInfo?.accountType || 'Not provided'}</p>
                                             </div>
                                         </div>
                                         <div className="space-y-4">
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">Routing Number</Label>
-                                                <p className="text-lg font-semibold">{profile.bankingInfo.routingNumber || 'Not provided'}</p>
+                                                <p className="text-lg font-semibold">{profile.bankingInfo?.routingNumber || 'Not provided'}</p>
                                             </div>
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">SWIFT Code</Label>
-                                                <p className="text-lg font-semibold">{profile.bankingInfo.swiftCode || 'Not provided'}</p>
+                                                <p className="text-lg font-semibold">{profile.bankingInfo?.swiftCode || 'Not provided'}</p>
                                             </div>
                                             <div>
                                                 <Label className="text-sm font-medium text-muted-foreground">IBAN</Label>
-                                                <p className="text-lg font-semibold">{profile.bankingInfo.iban || 'Not provided'}</p>
+                                                <p className="text-lg font-semibold">{profile.bankingInfo?.iban || 'Not provided'}</p>
                                             </div>
                                         </div>
                                     </div>

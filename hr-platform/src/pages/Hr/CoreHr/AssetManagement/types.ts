@@ -22,6 +22,7 @@ export interface Asset {
   warrantyExpiration?: string;
   priority: 'Critical' | 'High' | 'Medium' | 'Low';
   isEssential?: boolean; // For new employee starter kit
+  companyId?: string;
 }
 
 export interface AssetAssignment {

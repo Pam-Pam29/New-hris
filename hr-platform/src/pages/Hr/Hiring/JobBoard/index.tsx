@@ -33,6 +33,7 @@ import {
 // Import Firebase services
 import { getServiceConfig } from '../../../../config/firebase';
 import { JobPosting, JobApplication } from '../../../../services/jobBoardService';
+import { useCompany } from '../../../../context/CompanyContext';
 
 // Firebase service instances
 const { db } = getServiceConfig();
@@ -223,19 +224,14 @@ export default function JobBoard() {
     };
 
     return (
-        <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+        <div className="p-8 min-h-screen bg-background dark:bg-[hsl(224_71%_6%)]">
             {/* Header Section */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                        <TypographyH2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                            Job Board
-                        </TypographyH2>
-                        <p className="text-muted-foreground text-sm">Manage job postings and applications</p>
-                    </div>
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold" style={{ color: 'hsl(224 71% 4%)' }}>Job Board</h1>
+                    <p className="mt-2" style={{ color: 'hsl(224 71% 20%)' }}>
+                        Manage job postings and applications
+                    </p>
                 </div>
             </div>
 

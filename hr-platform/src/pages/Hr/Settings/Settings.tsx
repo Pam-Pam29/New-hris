@@ -29,7 +29,9 @@ import {
     AlertCircle,
     Edit,
     Save,
-    X
+    X,
+    Link2,
+    Copy
 } from 'lucide-react';
 import { useTheme } from '../../../components/atoms/ThemeProvider';
 import { getPlatformConfig, updatePlatformConfig } from '../../../services/platformConfigService';
@@ -53,6 +55,15 @@ const SettingsPage: React.FC = () => {
         employeePlatformUrl: '',
         careersPlatformUrl: '',
         hrPlatformUrl: ''
+    });
+    const [portalLinks, setPortalLinks] = useState({
+        careersPortalUrl: '',
+        employeePortalUrl: ''
+    });
+    const [loadingPortalLinks, setLoadingPortalLinks] = useState(false);
+    const [copyStatus, setCopyStatus] = useState({
+        careers: false,
+        employee: false
     });
 
     // Profile state
@@ -141,7 +152,8 @@ const SettingsPage: React.FC = () => {
         const loadConfig = async () => {
             setLoadingConfig(true);
             try {
-                const config = await getPlatformConfig();
+                // Load company-specific platform config
+                const config = await getPlatformConfig(company?.id);
                 setPlatformConfig({
                     employeePlatformUrl: config.employeePlatformUrl || '',
                     careersPlatformUrl: config.careersPlatformUrl || '',
@@ -156,17 +168,68 @@ const SettingsPage: React.FC = () => {
         loadConfig();
     }, []);
 
+    useEffect(() => {
+        const loadPortalLinks = async () => {
+            if (!company?.id) {
+                setPortalLinks({
+                    careersPortalUrl: '',
+                    employeePortalUrl: ''
+                });
+                return;
+            }
+
+            setLoadingPortalLinks(true);
+            try {
+                const { getFirebaseDb } = await import('../../../config/firebase');
+                const { doc, getDoc, collection, getDocs, query, limit } = await import('firebase/firestore');
+                const db = getFirebaseDb();
+
+                let settingsData: Record<string, any> | null = null;
+
+                const companySettingsRef = doc(db, 'hrSettings', company.id);
+                const companySettingsSnap = await getDoc(companySettingsRef);
+
+                if (companySettingsSnap.exists()) {
+                    settingsData = companySettingsSnap.data();
+                } else {
+                    const legacyQuery = query(collection(db, 'hrSettings'), limit(1));
+                    const legacySnapshot = await getDocs(legacyQuery);
+                    if (!legacySnapshot.empty) {
+                        settingsData = legacySnapshot.docs[0].data();
+                    }
+                }
+
+                setPortalLinks({
+                    careersPortalUrl: settingsData?.careersPortalUrl || '',
+                    employeePortalUrl: settingsData?.employeePortalUrl || ''
+                });
+            } catch (error) {
+                console.error('Error loading portal links:', error);
+                setPortalLinks({
+                    careersPortalUrl: '',
+                    employeePortalUrl: ''
+                });
+            } finally {
+                setLoadingPortalLinks(false);
+            }
+        };
+
+        loadPortalLinks();
+    }, [company?.id]);
+
     const handleSavePlatformUrls = async () => {
         setSavingConfig(true);
         setConfigMessage(null);
         try {
+            // Save platform URLs per company
             await updatePlatformConfig(
                 {
                     employeePlatformUrl: platformConfig.employeePlatformUrl.trim(),
                     careersPlatformUrl: platformConfig.careersPlatformUrl.trim(),
                     hrPlatformUrl: platformConfig.hrPlatformUrl.trim()
                 },
-                company?.displayName || 'HR Admin'
+                company?.id, // Pass company ID to save per-company config
+                company?.displayName || 'HR Admin' // Pass display name as updatedBy
             );
             setConfigMessage({ type: 'success', text: 'Platform URLs updated successfully!' });
             toast({
@@ -184,6 +247,35 @@ const SettingsPage: React.FC = () => {
             });
         } finally {
             setSavingConfig(false);
+        }
+    };
+
+    const handleCopyPortalLink = async (type: 'careers' | 'employee') => {
+        const url = type === 'careers' ? portalLinks.careersPortalUrl : portalLinks.employeePortalUrl;
+        if (!url) {
+            toast({
+                title: 'Link not available',
+                description: 'Complete company onboarding to generate this link.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(url);
+            setCopyStatus(prev => ({ ...prev, [type]: true }));
+            toast({
+                title: 'Link copied',
+                description: 'The portal link has been copied to your clipboard.'
+            });
+            setTimeout(() => setCopyStatus(prev => ({ ...prev, [type]: false })), 2000);
+        } catch (error) {
+            console.error('Error copying link:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to copy the link. Please try again.',
+                variant: 'destructive'
+            });
         }
     };
 
@@ -416,12 +508,6 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('companyId');
-        window.location.href = '/';
-    };
 
     return (
         <div className="min-h-screen bg-background p-6">
@@ -429,21 +515,11 @@ const SettingsPage: React.FC = () => {
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-                            <SettingsIcon className="w-8 h-8 text-primary" />
-                            Settings
-                        </h1>
+                        <h1 className="text-3xl font-bold text-foreground">Settings</h1>
                         <p className="text-muted-foreground mt-2">
                             Manage your HR platform preferences and configurations
                         </p>
                     </div>
-                    <Button
-                        variant="outline"
-                        onClick={handleLogout}
-                        className="hover:bg-destructive/10 text-destructive hover:text-destructive"
-                    >
-                        Logout
-                    </Button>
                 </div>
 
                 {/* Settings Tabs */}
@@ -569,7 +645,7 @@ const SettingsPage: React.FC = () => {
                                                     ...platformConfig,
                                                     employeePlatformUrl: e.target.value
                                                 })}
-                                                placeholder="https://hris-employee-platform-xxx.vercel.app"
+                                                placeholder="https://hris-employee-platform.vercel.app"
                                                 className="font-mono text-sm"
                                             />
                                             <p className="text-xs text-muted-foreground">
@@ -587,7 +663,7 @@ const SettingsPage: React.FC = () => {
                                                     ...platformConfig,
                                                     careersPlatformUrl: e.target.value
                                                 })}
-                                                placeholder="https://hris-careers-platform-xxx.vercel.app"
+                                                placeholder="https://hris-careers-platform.vercel.app"
                                                 className="font-mono text-sm"
                                             />
                                         </div>
@@ -622,6 +698,104 @@ const SettingsPage: React.FC = () => {
                                             )}
                                         </Button>
                                     </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Link2 className="w-5 h-5" />
+                                    Portal Links
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Share these links with your team. They are generated automatically from your company settings.
+                                </p>
+
+                                {loadingPortalLinks ? (
+                                    <div className="flex items-center justify-center py-6 text-muted-foreground">
+                                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                        Loading portal links...
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <Label className="text-sm font-medium">Careers Portal</Label>
+                                            <div className="mt-2 flex flex-col md:flex-row gap-2">
+                                                <Input
+                                                    readOnly
+                                                    value={portalLinks.careersPortalUrl}
+                                                    placeholder="Generated after company onboarding"
+                                                    className="flex-1"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() => handleCopyPortalLink('careers')}
+                                                        disabled={!portalLinks.careersPortalUrl}
+                                                    >
+                                                        <Copy className="h-4 w-4 mr-2" />
+                                                        {copyStatus.careers ? 'Copied!' : 'Copy'}
+                                                    </Button>
+                                                    {portalLinks.careersPortalUrl && (
+                                                        <Button asChild variant="ghost">
+                                                            <a href={portalLinks.careersPortalUrl} target="_blank" rel="noopener noreferrer">
+                                                                Open
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {!portalLinks.careersPortalUrl && (
+                                                <p className="text-xs text-muted-foreground mt-2">
+                                                    Complete company onboarding to auto-generate your careers portal link.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <Label className="text-sm font-medium">Employee Portal</Label>
+                                            <div className="mt-2 flex flex-col md:flex-row gap-2">
+                                                <Input
+                                                    readOnly
+                                                    value={portalLinks.employeePortalUrl}
+                                                    placeholder="Generated after company onboarding"
+                                                    className="flex-1"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() => handleCopyPortalLink('employee')}
+                                                        disabled={!portalLinks.employeePortalUrl}
+                                                    >
+                                                        <Copy className="h-4 w-4 mr-2" />
+                                                        {copyStatus.employee ? 'Copied!' : 'Copy'}
+                                                    </Button>
+                                                    {portalLinks.employeePortalUrl && (
+                                                        <Button asChild variant="ghost">
+                                                            <a href={portalLinks.employeePortalUrl} target="_blank" rel="noopener noreferrer">
+                                                                Open
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {company?.settings?.employeeSlug && (
+                                                <p className="text-xs text-muted-foreground mt-2">
+                                                    Slug: <code className="font-mono">/employee/{company.settings.employeeSlug}</code> (used for setup links)
+                                                </p>
+                                            )}
+                                            {!portalLinks.employeePortalUrl && (
+                                                <p className="text-xs text-muted-foreground mt-2">
+                                                    This link is generated automatically when the employee platform URL is configured.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
                             </CardContent>
                         </Card>

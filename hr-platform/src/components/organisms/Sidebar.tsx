@@ -10,6 +10,7 @@ import { useTheme } from '../atoms/ThemeProvider';
 import { TypographyH2, TypographySmall, TypographyMuted } from '../ui/typography';
 import { useLocation } from 'react-router-dom';
 import { useCompany } from '../../context/CompanyContext';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 const navStructure = [
   {
@@ -48,13 +49,41 @@ export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const { companyId, company, setCompany } = useCompany();
   const [mounted, setMounted] = React.useState(false);
+  const [user, setUser] = useState<{ displayName: string | null; email: string | null }>({ displayName: null, email: null });
   React.useEffect(() => setMounted(true), []);
   const location = useLocation();
+  
+  // Get current user from Firebase Auth
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser({
+          displayName: currentUser.displayName || 'HR Manager',
+          email: currentUser.email || 'hr@acme.com'
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    const auth = getAuth();
+    const { signOut } = await import('firebase/auth');
+    try {
+      await signOut(auth);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('companyId');
+      window.location.href = '/hr-onboarding-signin';
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Fallback to old method if Firebase signOut fails
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('companyId');
+      window.location.href = '/hr-onboarding-signin';
+    }
   };
   const [collapsed, setCollapsed] = useState(false);
   const dashboardLink = { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
@@ -69,7 +98,7 @@ export function Sidebar() {
           <Building2 className="w-6 h-6 text-primary" />
           {!collapsed && (
             <div className="flex flex-col items-start">
-              <span className="font-bold text-lg text-gradient">
+              <span className="font-bold text-lg text-foreground">
                 {company?.displayName || 'Loading...'}
               </span>
               <span className="text-xs text-muted-foreground">HRIS System</span>
@@ -97,7 +126,7 @@ export function Sidebar() {
           {navStructure.map((section) => (
             <div key={section.heading} className="flex flex-col gap-1">
               {!collapsed && (
-                <TypographyH2 className="text-xs font-semibold uppercase mb-1 tracking-wider border-none p-0 text-left text-muted-foreground">
+                <TypographyH2 className="text-xs font-semibold uppercase mb-1 tracking-wider border-none p-0 text-left" style={{ color: 'hsl(224 71% 20%)' }}>
                   {section.heading}
                 </TypographyH2>
               )}
@@ -126,18 +155,18 @@ export function Sidebar() {
       {/* User info and dark mode toggle */}
       <div className={`p-4 flex flex-col gap-2 border-t border-border mt-auto ${collapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 justify-between w-full ${collapsed ? 'flex-col gap-2' : ''}`}>
-          <div className={`flex items-center gap-3 flex-1 ${collapsed ? 'justify-center' : ''}`}>
-            <Avatar className="border border-border dark:border-accent/30">
+          <div className={`flex items-center gap-3 flex-1 min-w-0 ${collapsed ? 'justify-center' : ''}`}>
+            <Avatar className="border border-border dark:border-accent/30 flex-shrink-0">
               <User className="w-6 h-6" />
             </Avatar>
             {!collapsed && (
-              <div className="flex-1">
-                <TypographySmall className="font-medium">HR Manager</TypographySmall>
-                <TypographyMuted className="dark:text-muted-foreground">hr@acme.com</TypographyMuted>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <TypographySmall className="font-medium truncate">{user.displayName || 'HR Manager'}</TypographySmall>
+                <TypographyMuted className="dark:text-muted-foreground truncate text-xs">{user.email || 'hr@acme.com'}</TypographyMuted>
               </div>
             )}
           </div>
-          <div className={`flex gap-2 ${collapsed ? 'flex-col' : ''}`}>
+          <div className={`flex gap-2 flex-shrink-0 ${collapsed ? 'flex-col' : ''}`}>
             {mounted && (
               <Button
                 variant="outline"

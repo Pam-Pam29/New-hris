@@ -150,28 +150,49 @@ export default function PerformanceManagement() {
         };
 
         const loadHrBookingPage = async () => {
+            if (!companyId) {
+                setHrBookingPageUrl('');
+                return;
+            }
             try {
                 // Try to get HR booking page URL from hrSettings collection
                 const { db } = await import('../../../config/firebase');
-                const { collection, getDocs, query, limit } = await import('firebase/firestore');
-                const settingsQuery = query(collection(db, 'hrSettings'), limit(1));
-                const snapshot = await getDocs(settingsQuery);
+                const { doc, getDoc, collection, getDocs, query, limit } = await import('firebase/firestore');
 
-                if (!snapshot.empty) {
-                    const settings = snapshot.docs[0].data();
-                    if (settings.bookingPageUrl) {
-                        setHrBookingPageUrl(settings.bookingPageUrl);
-                        console.log('📅 HR Booking Page URL loaded:', settings.bookingPageUrl);
+                let bookingUrl = '';
+
+                // Prefer company-specific settings document
+                const settingsRef = doc(db, 'hrSettings', companyId);
+                const settingsSnapshot = await getDoc(settingsRef);
+
+                if (settingsSnapshot.exists()) {
+                    const settings = settingsSnapshot.data();
+                    bookingUrl = settings.bookingPageUrl || '';
+                } else {
+                    // Fallback to legacy global settings
+                    const legacyQuery = query(collection(db, 'hrSettings'), limit(1));
+                    const legacySnapshot = await getDocs(legacyQuery);
+                    if (!legacySnapshot.empty) {
+                        const legacySettings = legacySnapshot.docs[0].data();
+                        bookingUrl = legacySettings.bookingPageUrl || '';
                     }
+                }
+
+                if (bookingUrl) {
+                    setHrBookingPageUrl(bookingUrl);
+                    console.log('📅 HR Booking Page URL loaded:', bookingUrl);
+                } else {
+                    setHrBookingPageUrl('');
                 }
             } catch (error) {
                 console.log('No HR booking page configured (this is optional)');
+                setHrBookingPageUrl('');
             }
         };
 
         loadEmployeeName();
         loadHrBookingPage();
-    }, [employeeId]);
+    }, [employeeId, companyId]);
 
     // Check for extension decisions that need acknowledgment
     useEffect(() => {
@@ -820,14 +841,34 @@ export default function PerformanceManagement() {
 
                     {/* Meetings Tab */}
                     <TabsContent value="meetings" className="space-y-4">
-                        <div className="flex justify-end">
-                            <Button
-                                onClick={() => setShowScheduleForm(true)}
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Schedule Meeting
-                            </Button>
+                        <div className="flex justify-end gap-3">
+                            {hrBookingPageUrl ? (
+                                <>
+                                    <Button
+                                        onClick={() => window.open(hrBookingPageUrl, '_blank', 'noopener')}
+                                        className="bg-green-600 hover:bg-green-700"
+                                    >
+                                        <Calendar className="h-4 w-4 mr-2" />
+                                        Book with HR
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setShowScheduleForm(true)}
+                                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Manual Request
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button
+                                    onClick={() => setShowScheduleForm(true)}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Schedule Meeting
+                                </Button>
+                            )}
                         </div>
 
                         <Tabs defaultValue="upcoming" className="space-y-4">

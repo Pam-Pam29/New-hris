@@ -967,16 +967,16 @@ export default function RecruitmentPage() {
   }
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="p-8 min-h-screen bg-background dark:bg-[hsl(224_71%_6%)]">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-3">
-          <TypographyH2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Recruitment Management
-          </TypographyH2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Streamlined hiring workflow - focus on what matters most
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold" style={{ color: 'hsl(224 71% 4%)' }}>Recruitment Management</h1>
+            <p className="mt-2" style={{ color: 'hsl(224 71% 20%)' }}>
+              Streamlined hiring workflow - focus on what matters most
+            </p>
+          </div>
         </div>
 
         {/* Error and Success Messages */}

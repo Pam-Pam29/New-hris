@@ -89,7 +89,7 @@ interface AssetDetailsDrawerProps {
 
 export default function AssetManagement() {
   const { toast } = useToast();
-  const { companyId } = useCompany();
+  const { companyId, company } = useCompany();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [starterKits, setStarterKits] = useState<any[]>([]);
@@ -139,7 +139,7 @@ export default function AssetManagement() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const service = await getAssetService();
+        const service = await getAssetService(companyId || undefined);
 
         // Load employees from comprehensive data flow service instead (filtered by company)
         const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
@@ -242,7 +242,7 @@ export default function AssetManagement() {
   // Handle asset assignment
   const handleAssignAsset = async (assetId: string, employeeId: string) => {
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       const asset = assets.find(a => a.id === assetId);
 
       if (!asset) {
@@ -321,7 +321,7 @@ export default function AssetManagement() {
         return;
       }
 
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
 
       // Auto-assign starter kit based on job title
       // Try multiple possible fields for job title
@@ -391,7 +391,7 @@ export default function AssetManagement() {
     }
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
 
       // Check if selected asset is available
       const selectedAsset = assets.find(a => a.id === selectedAssetForFulfillment);
@@ -466,7 +466,7 @@ export default function AssetManagement() {
     }
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       await service.updateAssetRequest(selectedRequest.id, {
         status: 'Rejected',
         rejectedReason: rejectReason
@@ -505,7 +505,7 @@ export default function AssetManagement() {
     }
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
 
       const kitData = {
         name: starterKitForm.name,
@@ -558,7 +558,7 @@ export default function AssetManagement() {
     if (!confirm('Are you sure you want to delete this starter kit?')) return;
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       await service.deleteStarterKit(kitId);
       const updatedKits = await service.getStarterKits();
       setStarterKits(updatedKits);
@@ -642,7 +642,17 @@ export default function AssetManagement() {
         return;
       }
 
-      const service = await getAssetService();
+      if (!companyId) {
+        toast({
+          title: 'Company not set',
+          description: 'Please complete company onboarding before managing assets.',
+          variant: 'destructive',
+        });
+        setSending(false);
+        return;
+      }
+
+      const service = await getAssetService(companyId || undefined);
       console.log('Calling createAsset with:', form); // Add logging
 
       const assetData: Omit<Asset, 'id'> = {
@@ -655,7 +665,8 @@ export default function AssetManagement() {
         purchasePrice: form.purchasePrice,
         location: form.location,
         condition: form.condition as Asset['condition'],
-        priority: 'Medium' as Asset['priority']
+        priority: 'Medium' as Asset['priority'],
+        companyId: companyId
       };
 
       // Only add nextMaintenance if it has a value (Firebase doesn't accept undefined)
@@ -753,7 +764,7 @@ export default function AssetManagement() {
     }
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       await service.deleteAsset(assetId);
 
       setAssets(prev => prev.filter(a => a.id !== assetId));
@@ -777,7 +788,7 @@ export default function AssetManagement() {
     }
 
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       const asset = assets.find(a => a.id === assetId);
 
       if (!asset) return;
@@ -811,7 +822,7 @@ export default function AssetManagement() {
 
   async function handleTransferAsset(assetId: string, newEmployeeName: string) {
     try {
-      const service = await getAssetService();
+      const service = await getAssetService(companyId || undefined);
       await service.updateAsset(assetId, {
         assignedTo: newEmployeeName
       });
@@ -1084,10 +1095,10 @@ export default function AssetManagement() {
               <Package className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-gradient mb-1">
-                Asset Management
-              </h1>
-              <p className="text-muted-foreground">Track, manage, and optimize your company assets</p>
+              <h1 className="text-3xl font-bold text-foreground">Asset Management</h1>
+              <p className="text-muted-foreground mt-2">
+                Track, manage, and optimize your company assets
+              </p>
             </div>
           </div>
           <div className="flex gap-3">

@@ -365,28 +365,45 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             console.log('🔄 updateEmployeeProfile called with:', employeeId, profileData);
             console.log('📄 Document reference:', `employees/${employeeId}`);
             const docRef = doc(db, 'employees', employeeId);
-            const updateData = {
-                ...profileData,
-                updatedAt: serverTimestamp(),
+
+            // Load current profile to merge with updates
+            let existingProfile: EmployeeProfile | null = null;
+            const existingSnapshot = await getDoc(docRef);
+            if (existingSnapshot.exists()) {
+                existingProfile = this.convertFirestoreToEmployeeProfile(existingSnapshot.data(), existingSnapshot.id);
+            }
+
+            const mergedProfile = this.mergeEmployeeProfiles(existingProfile, profileData, employeeId);
+            const completeness = this.calculateProfileCompleteness(mergedProfile);
+            const statusFromCompleteness = completeness >= 80
+                ? 'approved'
+                : completeness >= 50
+                    ? 'pending_review'
+                    : 'needs_update';
+
+            const updatedProfile: EmployeeProfile = {
+                ...mergedProfile,
                 profileStatus: {
-                    ...profileData.profileStatus,
-                    lastUpdated: serverTimestamp(),
-                    completeness: this.calculateProfileCompleteness(profileData as EmployeeProfile)
-                }
+                    ...mergedProfile.profileStatus,
+                    completeness,
+                    status: profileData.profileStatus?.status ?? mergedProfile.profileStatus.status ?? statusFromCompleteness,
+                    updatedBy: profileData.profileStatus?.updatedBy ?? mergedProfile.profileStatus.updatedBy ?? 'employee',
+                    lastUpdated: new Date()
+                },
+                updatedAt: new Date()
             };
 
             console.log('📝 Converting to Firestore format...');
-            console.log('📝 Update data before conversion:', updateData);
-            console.log('📝 Date of birth before conversion:', updateData.personalInfo?.dateOfBirth, typeof updateData.personalInfo?.dateOfBirth);
-            console.log('📝 Hire date before conversion:', updateData.workInfo?.hireDate, typeof updateData.workInfo?.hireDate);
-            console.log('📝 Last updated before conversion:', updateData.profileStatus?.lastUpdated, typeof updateData.profileStatus?.lastUpdated);
-            console.log('📝 Personal info structure:', updateData.personalInfo);
-            console.log('📝 Work info structure:', updateData.workInfo);
-            const firestoreData = this.convertToFirestore(updateData);
+            console.log('📝 Profile before conversion:', updatedProfile);
+            const firestoreData = this.convertToFirestore({
+                ...updatedProfile,
+                updatedAt: serverTimestamp(),
+                profileStatus: {
+                    ...updatedProfile.profileStatus,
+                    lastUpdated: serverTimestamp()
+                }
+            });
             console.log('📝 Firestore data:', firestoreData);
-            console.log('📝 Date of birth after conversion:', firestoreData.personalInfo?.dateOfBirth, typeof firestoreData.personalInfo?.dateOfBirth);
-            console.log('📝 Hire date after conversion:', firestoreData.workInfo?.hireDate, typeof firestoreData.workInfo?.hireDate);
-            console.log('📝 Last updated after conversion:', firestoreData.profileStatus?.lastUpdated, typeof firestoreData.profileStatus?.lastUpdated);
 
             // Use setDoc with merge to create document if it doesn't exist
             console.log('💾 Saving to Firestore...');
@@ -397,13 +414,13 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             await this.createNotification({
                 employeeId: 'hr-system',
                 title: 'Profile Updated',
-                message: `Employee ${employeeId} has updated their profile`,
+                message: `Employee ${employeeId} has updated their profile (completeness: ${completeness}%)`,
                 type: 'info',
                 category: 'profile',
                 isRead: false,
                 actionUrl: `/hr/employee/${employeeId}`,
                 actionText: 'View Profile',
-                metadata: { employeeId, updateType: 'profile_update' }
+                metadata: { employeeId, updateType: 'profile_update', completeness }
             });
 
             return await this.getEmployeeProfile(employeeId) as EmployeeProfile;
@@ -435,7 +452,7 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             }
             
             const querySnapshot = await getDocs(q);
-            
+
             // Get all leave types and sort in memory to avoid index requirement
             // Include document ID from Firestore (it's stored separately, not in doc.data())
             let leaveTypes = querySnapshot.docs.map(doc => ({
@@ -871,6 +888,122 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Utility methods
+    private mergeEmployeeProfiles(
+        existing: EmployeeProfile | null,
+        updates: Partial<EmployeeProfile>,
+        employeeId: string
+    ): EmployeeProfile {
+        const base: EmployeeProfile = existing ?? {
+            id: employeeId,
+            employeeId,
+            companyId: updates.companyId || '',
+            personalInfo: {
+                firstName: '',
+                lastName: '',
+                dateOfBirth: new Date(),
+                middleName: '',
+                gender: '',
+                maritalStatus: '',
+                nationality: '',
+                otherNationality: '',
+                identificationNumber: ''
+            },
+            contactInfo: {
+                personalEmail: '',
+                workEmail: '',
+                personalPhone: '',
+                workPhone: '',
+                address: {
+                    street: '',
+                    city: '',
+                    state: '',
+                    zipCode: '',
+                    country: ''
+                },
+                emergencyContacts: []
+            },
+            workInfo: {
+                position: '',
+                department: '',
+                hireDate: new Date(),
+                employmentType: '',
+                workLocation: '',
+                workSchedule: '',
+                salary: {
+                    baseSalary: 0,
+                    currency: 'USD',
+                    payFrequency: 'Monthly'
+                }
+            },
+            bankingInfo: {
+                bankName: '',
+                accountNumber: '',
+                routingNumber: '',
+                accountType: '',
+                salaryPaymentMethod: ''
+            },
+            skills: [],
+            familyInfo: {
+                spouse: undefined,
+                dependents: [],
+                beneficiaries: []
+            },
+            profileStatus: {
+                completeness: 0,
+                lastUpdated: new Date(),
+                updatedBy: 'system',
+                status: 'needs_update'
+            },
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        return {
+            ...base,
+            ...updates,
+            id: base.id || employeeId,
+            employeeId: base.employeeId || employeeId,
+            companyId: updates.companyId ?? base.companyId,
+            personalInfo: {
+                ...base.personalInfo,
+                ...(updates.personalInfo || {})
+            },
+            contactInfo: {
+                ...base.contactInfo,
+                ...(updates.contactInfo || {}),
+                address: {
+                    ...base.contactInfo.address,
+                    ...(updates.contactInfo?.address || {})
+                },
+                emergencyContacts: updates.contactInfo?.emergencyContacts ?? base.contactInfo.emergencyContacts
+            },
+            workInfo: {
+                ...base.workInfo,
+                ...(updates.workInfo || {}),
+                salary: {
+                    ...base.workInfo.salary,
+                    ...(updates.workInfo?.salary || {})
+                }
+            },
+            bankingInfo: {
+                ...base.bankingInfo,
+                ...(updates.bankingInfo || {})
+            },
+            skills: updates.skills ?? base.skills,
+            familyInfo: {
+                spouse: updates.familyInfo?.spouse ?? base.familyInfo.spouse,
+                dependents: updates.familyInfo?.dependents ?? base.familyInfo.dependents,
+                beneficiaries: updates.familyInfo?.beneficiaries ?? base.familyInfo.beneficiaries
+            },
+            profileStatus: {
+                ...base.profileStatus,
+                ...(updates.profileStatus || {})
+            },
+            createdAt: base.createdAt,
+            updatedAt: base.updatedAt
+        };
+    }
+
     private calculateProfileCompleteness(profile: Partial<EmployeeProfile>): number {
         let completeness = 0;
         const totalFields = 10;

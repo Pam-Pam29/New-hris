@@ -41,9 +41,25 @@ export class GoalOverdueService {
 
             for (const goalDoc of snapshot.docs) {
                 const goal = goalDoc.data() as PerformanceGoal;
-                const endDate = goal.endDate instanceof Date
-                    ? goal.endDate
-                    : (goal.endDate as any).toDate();
+                const rawEndDate: any = goal.endDate;
+                let endDate: Date | null = null;
+
+                if (rawEndDate instanceof Date) {
+                    endDate = rawEndDate;
+                } else if (rawEndDate && typeof rawEndDate.toDate === 'function') {
+                    endDate = rawEndDate.toDate();
+                } else if (typeof rawEndDate === 'string' || typeof rawEndDate === 'number') {
+                    const parsed = new Date(rawEndDate);
+                    if (!isNaN(parsed.getTime())) {
+                        endDate = parsed;
+                    }
+                }
+
+                // Skip if end date is missing or invalid
+                if (!endDate) {
+                    console.warn('⚠️ [GoalOverdueService] Skipping goal without valid endDate:', goalDoc.id, rawEndDate);
+                    continue;
+                }
 
                 // Check if goal is overdue
                 if (currentDate > endDate) {

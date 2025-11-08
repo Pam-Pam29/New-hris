@@ -21,6 +21,8 @@ export interface Company {
     allowPublicApplications: boolean;
     timezone: string;
     industry?: string;
+    supportEmail?: string;
+    profileCompletionThreshold?: number;
   };
   
   // Subscription

@@ -427,11 +427,11 @@ export function ScheduleManager() {
 
     const getShiftColor = (shiftType: string) => {
         switch (shiftType) {
-            case 'morning': return 'bg-blue-100 text-blue-800';
+            case 'morning': return 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary';
             case 'afternoon': return 'bg-orange-100 text-orange-800';
             case 'night': return 'bg-purple-100 text-purple-800';
             case 'flexible': return 'bg-green-100 text-green-800';
-            default: return 'bg-gray-100 text-gray-800';
+            default: return 'bg-muted text-muted-foreground';
         }
     };
 
@@ -526,7 +526,7 @@ export function ScheduleManager() {
                             {schedules.filter(s => s.isActive).map(schedule => (
                                 <div key={schedule.id} className="flex items-center justify-between p-4 border rounded-lg">
                                     <div className="flex items-start gap-3 flex-1">
-                                        <div className="p-2 bg-blue-50 rounded-lg">
+                                        <div className="p-2 bg-primary/10 dark:bg-primary/20 rounded-lg">
                                             {getShiftIcon(schedule.shiftType)}
                                         </div>
                                         <div className="flex-1">
@@ -1002,8 +1002,8 @@ export function ScheduleManager() {
                                     <div
                                         key={emp.id}
                                         className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedEmployeeIds.includes(emp.id.toString())
-                                            ? 'bg-blue-50 border-2 border-blue-200'
-                                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                                            ? 'bg-primary/10 dark:bg-primary/20 border-2 border-primary/30 dark:border-primary/40'
+                                            : 'bg-card border border-border hover:bg-accent/50 dark:hover:bg-accent/30'
                                             }`}
                                         onClick={() => toggleEmployeeSelection(emp.id.toString())}
                                     >
@@ -1013,7 +1013,7 @@ export function ScheduleManager() {
                                                 <p className="text-sm text-muted-foreground">{emp.department} - {emp.role}</p>
                                             </div>
                                             {selectedEmployeeIds.includes(emp.id.toString()) && (
-                                                <CheckCircle className="h-5 w-5 text-blue-600" />
+                                                <CheckCircle className="h-5 w-5 text-primary" />
                                             )}
                                         </div>
                                     </div>

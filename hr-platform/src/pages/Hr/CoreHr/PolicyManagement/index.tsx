@@ -432,8 +432,8 @@ export default function HRPolicyManagement() {
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-              <p>Loading policy management...</p>
+              <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-foreground">Loading policy management...</p>
             </div>
           </div>
         </div>
@@ -447,8 +447,8 @@ export default function HRPolicyManagement() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Policy Management</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-3xl font-bold text-foreground">Policy Management</h1>
+            <p className="text-muted-foreground mt-2">
               Create, update, and manage company policies
             </p>
           </div>
@@ -462,7 +462,7 @@ export default function HRPolicyManagement() {
             </Button>
             <Button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700"
+              className="flex items-center space-x-2"
             >
               <Plus className="h-4 w-4" />
               <span>Create Policy</span>
@@ -494,7 +494,7 @@ export default function HRPolicyManagement() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center">
-                  <Users className="h-4 w-4 text-blue-600" />
+                  <Users className="h-4 w-4 text-primary" />
                   <div className="ml-2">
                     <p className="text-sm font-medium text-muted-foreground">Total Employees</p>
                     <p className="text-2xl font-bold">{statistics.totalEmployees}</p>
@@ -655,9 +655,9 @@ export default function HRPolicyManagement() {
                           <span className="text-sm text-muted-foreground">Rate:</span>
                           <span className="font-medium">{stat.acknowledgmentRate.toFixed(1)}%</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                        <div className="w-full bg-muted rounded-full h-2 mt-3">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-primary h-2 rounded-full"
                             style={{ width: `${stat.acknowledgmentRate}%` }}
                           />
                         </div>
@@ -730,15 +730,15 @@ export default function HRPolicyManagement() {
                 </div>
 
                 {/* Content Input Method Toggle */}
-                <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <Label className="text-sm font-medium">Policy Content Input Method</Label>
+                <div className="flex flex-col gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <Label className="text-sm font-medium text-foreground">Policy Content Input Method</Label>
                   <div className="flex gap-4">
                     <button
                       type="button"
                       onClick={() => setInputMethod('type')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'type'
-                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        ? 'border-primary bg-primary/10 text-primary font-semibold'
+                        : 'border-border bg-background text-foreground hover:border-primary/50'
                         }`}
                     >
                       <Type className="h-5 w-5" />
@@ -748,8 +748,8 @@ export default function HRPolicyManagement() {
                       type="button"
                       onClick={() => setInputMethod('upload')}
                       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${inputMethod === 'upload'
-                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        ? 'border-primary bg-primary/10 text-primary font-semibold'
+                        : 'border-border bg-background text-foreground hover:border-primary/50'
                         }`}
                     >
                       <Upload className="h-5 w-5" />
@@ -777,14 +777,14 @@ export default function HRPolicyManagement() {
                   <div className="flex flex-col gap-3">
                     <Label>Upload Policy Document</Label>
 
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <div className="border-2 border-dashed border-border rounded-lg p-6 bg-muted/30 hover:bg-muted/50 transition-colors">
                       <div className="flex flex-col items-center gap-3">
-                        <FileText className="h-12 w-12 text-gray-400" />
+                        <FileText className="h-12 w-12 text-muted-foreground" />
                         <div className="text-center">
-                          <p className="text-sm font-medium text-gray-700 mb-1">
+                          <p className="text-sm font-medium text-foreground mb-1">
                             Click to upload or drag and drop
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             PDF, DOCX, DOC, or TXT (max 10MB)
                           </p>
                         </div>
@@ -817,12 +817,12 @@ export default function HRPolicyManagement() {
 
                     {/* File Preview */}
                     {uploadedFile && (
-                      <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                      <div className="p-4 bg-card border border-border rounded-lg">
                         <div className="flex items-start gap-3">
-                          <FileText className="h-5 w-5 text-blue-600 mt-1" />
+                          <FileText className="h-5 w-5 text-primary mt-1" />
                           <div className="flex-1">
-                            <p className="font-medium text-gray-900">{uploadedFile.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="font-medium text-foreground">{uploadedFile.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
                               {(uploadedFile.size / 1024).toFixed(2)} KB · {uploadedFile.type}
                             </p>
                           </div>
@@ -833,7 +833,7 @@ export default function HRPolicyManagement() {
                               setUploadStatus('');
                               setPolicyForm(prev => ({ ...prev, content: '' }));
                             }}
-                            className="text-red-600 hover:text-red-700 text-sm font-medium"
+                            className="text-destructive hover:text-destructive/80 text-sm font-medium"
                           >
                             Remove
                           </button>
@@ -841,18 +841,18 @@ export default function HRPolicyManagement() {
                       </div>
                     )}
 
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       💡 <strong>Tip:</strong> For TXT files, content will be extracted automatically. For PDF/DOCX files, the document will be referenced and stored for employee download.
                     </p>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div>
-                    <Label htmlFor="requiresAcknowledgment" className="text-base font-medium cursor-pointer">
+                    <Label htmlFor="requiresAcknowledgment" className="text-base font-medium cursor-pointer text-foreground">
                       Requires Employee Acknowledgment
                     </Label>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       If enabled, employees must acknowledge reading this policy
                     </p>
                   </div>
@@ -861,7 +861,7 @@ export default function HRPolicyManagement() {
                     type="checkbox"
                     checked={policyForm.requiresAcknowledgment}
                     onChange={(e) => setPolicyForm(prev => ({ ...prev, requiresAcknowledgment: e.target.checked }))}
-                    className="h-5 w-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    className="h-5 w-5 text-primary rounded border-border focus:ring-primary cursor-pointer"
                   />
                 </div>
 
@@ -963,12 +963,12 @@ export default function HRPolicyManagement() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div>
-                    <Label htmlFor="edit-requiresAcknowledgment" className="text-base font-medium cursor-pointer">
+                    <Label htmlFor="edit-requiresAcknowledgment" className="text-base font-medium cursor-pointer text-foreground">
                       Requires Employee Acknowledgment
                     </Label>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       If enabled, employees must acknowledge reading this policy
                     </p>
                   </div>
@@ -977,7 +977,7 @@ export default function HRPolicyManagement() {
                     type="checkbox"
                     checked={policyForm.requiresAcknowledgment}
                     onChange={(e) => setPolicyForm(prev => ({ ...prev, requiresAcknowledgment: e.target.checked }))}
-                    className="h-5 w-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    className="h-5 w-5 text-primary rounded border-border focus:ring-primary cursor-pointer"
                   />
                 </div>
 

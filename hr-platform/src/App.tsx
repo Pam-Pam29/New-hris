@@ -28,6 +28,7 @@ import { HrAuthGuard } from './components/HrAuthGuard';
 import { HrSignUp } from './components/HrSignUp';
 import HrOnboardingSignup from './pages/Hr/Auth/HrOnboardingSignup';
 import HrOnboardingSignin from './pages/Hr/Auth/HrOnboardingSignin';
+import PasswordResetConfirmation from './pages/Hr/Auth/PasswordResetConfirmation';
 import HrSignup from './pages/Hr/HrSignup';
 // Employee routes temporarily removed due to import issues
 
@@ -60,7 +61,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
     // Check if onboarding is completed
     const onboardingCompleted = company?.settings?.onboardingCompleted;
-    
+
     // If company exists but onboarding flag not set, check for indicators
     // (same logic as HrAuthGuard)
     const hasOnboardingIndicators = company?.settings?.departments?.length > 0 || 
@@ -72,7 +73,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     if (!onboardingCompleted && !hasOnboardingIndicators) {
         // Only redirect if we're not already on onboarding or auth pages
         if (!location.includes('onboarding') && !location.includes('signin') && !location.includes('signup')) {
-            return <Navigate to="/onboarding" replace />;
+        return <Navigate to="/onboarding" replace />;
         }
     }
 
@@ -103,6 +104,7 @@ export default function App() {
                         {/* HR Onboarding Auth Routes - No Protection */}
                         <Route path="/hr-onboarding-signup" element={<HrOnboardingSignup />} />
                         <Route path="/hr-onboarding-signin" element={<HrOnboardingSignin />} />
+                        <Route path="/reset-password" element={<PasswordResetConfirmation />} />
 
                         {/* Company Signup Route - No Protection */}
                         <Route path="/hr-signup" element={<HrSignup />} />

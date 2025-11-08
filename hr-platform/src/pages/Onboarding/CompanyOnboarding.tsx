@@ -28,9 +28,10 @@ import {
 import { useCompany } from '../../context/CompanyContext';
 import { getCompanyService } from '../../services/companyService';
 import { getFirebaseDb } from '../../config/firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { applyBrandingColors } from '../../utils/brandingUtils';
+import { getCareersPlatformUrl, getEmployeePlatformUrl } from '../../services/platformConfigService';
 import { useTheme } from '../../components/atoms/ThemeProvider';
 
 interface OnboardingData {
@@ -48,6 +49,7 @@ interface OnboardingData {
     timezone: string;
     phone: string;
     email: string;
+    supportEmail: string;
 
     // Step 3: Branding
     primaryColor: string;
@@ -88,6 +90,7 @@ interface OnboardingData {
         passwordPolicy: string;
         sessionTimeout: number;
     };
+    profileCompletionThreshold: number;
 }
 
 const STEPS = [
@@ -229,7 +232,7 @@ function detectTimezone(country: string, city: string): string {
 
 export default function CompanyOnboarding() {
     const navigate = useNavigate();
-    const { company, companyId } = useCompany();
+    const { company, companyId, setCompany } = useCompany();
     const { theme } = useTheme();
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -294,6 +297,7 @@ export default function CompanyOnboarding() {
         timezone: getInitialTimezone(),
         phone: '',
         email: '',
+        supportEmail: company?.settings?.supportEmail || company?.email || '',
         primaryColor: '#3B82F6',
         secondaryColor: '#8B5CF6',
         logo: '',
@@ -318,8 +322,76 @@ export default function CompanyOnboarding() {
             twoFactorAuth: false,
             passwordPolicy: 'medium',
             sessionTimeout: 8
-        }
+        },
+        profileCompletionThreshold: company?.settings?.profileCompletionThreshold ?? 75
     });
+    const [isPrefilled, setIsPrefilled] = useState(false);
+
+    useEffect(() => {
+        if (!company || isPrefilled) {
+            return;
+        }
+
+        const resolvedAddressParts = company.address?.split(',').map((part) => part.trim()) ?? [];
+        const streetAddress = resolvedAddressParts[0] ?? '';
+        const cityFromAddress = resolvedAddressParts[1] ?? '';
+        const countryFromAddress = resolvedAddressParts[resolvedAddressParts.length - 1] ?? '';
+
+        setFormData((prev) => ({
+            ...prev,
+            displayName: company.displayName ?? company.name ?? prev.displayName,
+            domain: company.domain ?? prev.domain,
+            website: company.website ?? prev.website,
+            phone: company.phone ?? prev.phone,
+            email: company.email ?? prev.email,
+            supportEmail: company.settings?.supportEmail ?? company.email ?? prev.supportEmail,
+            address: streetAddress || prev.address,
+            city: cityFromAddress || prev.city,
+            country: countryFromAddress || prev.country,
+            primaryColor: company.primaryColor ?? prev.primaryColor,
+            secondaryColor: company.secondaryColor ?? prev.secondaryColor,
+            logo: company.logo ?? prev.logo,
+            industry: company.settings?.industry ?? prev.industry,
+            companySize: company.settings?.companySize ?? prev.companySize,
+            timezone: company.settings?.timezone ?? prev.timezone,
+            departments:
+                company.settings?.departments?.length
+                    ? [...company.settings.departments]
+                    : prev.departments,
+            profileCompletionThreshold: company.settings?.profileCompletionThreshold ?? prev.profileCompletionThreshold ?? 75
+        }));
+
+        setIsPrefilled(true);
+    }, [company, isPrefilled]);
+
+    const linkHrUserToCompany = async (companyId: string, userId: string, userEmail: string | null | undefined, displayName: string) => {
+        try {
+            const db = getFirebaseDb();
+            const hrUserRef = doc(db, 'hrUsers', userId);
+            const existingHrUser = await getDoc(hrUserRef);
+            const payload = {
+                companyId,
+                email: userEmail ?? '',
+                displayName,
+                onboardingCompleted: true,
+                onboardingCompletedAt: new Date().toISOString(),
+                updatedAt: Timestamp.now(),
+            };
+
+            if (existingHrUser.exists()) {
+                await updateDoc(hrUserRef, payload);
+                console.log('✅ Linked existing HR user to company:', companyId);
+            } else {
+                await setDoc(hrUserRef, {
+                    ...payload,
+                    createdAt: Timestamp.now(),
+                });
+                console.log('✅ Created HR user record linked to company:', companyId);
+            }
+        } catch (error) {
+            console.error('❌ Failed to link HR user to company:', error);
+        }
+    };
     
     // Apply initial branding colors when component mounts or theme changes
     useEffect(() => {
@@ -386,7 +458,9 @@ export default function CompanyOnboarding() {
                         industry: formData.industry,
                         companySize: formData.companySize,
                         departments: [],
-                        onboardingCompleted: false
+                        onboardingCompleted: false,
+                        supportEmail: formData.supportEmail || formData.email,
+                        profileCompletionThreshold: Number(formData.profileCompletionThreshold) || 75
                     },
                     plan: 'free',
                     status: 'active'
@@ -401,10 +475,26 @@ export default function CompanyOnboarding() {
                 if (newCompany) {
                     setCompany(newCompany);
                 }
+
+        await linkHrUserToCompany(newCompanyId, currentUser.uid, currentUser.email, formData.displayName);
             } else {
                 companyId = company.id;
                 console.log('✅ Using existing company:', companyId);
+
+                await linkHrUserToCompany(companyId, currentUser.uid, currentUser.email, formData.displayName || company.displayName || company.name || '');
             }
+
+            const rawDomain = (formData.domain || company?.domain || '').trim();
+            const normalizedCareersSlug = rawDomain
+                ? rawDomain
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^a-z0-9-]/g, '-')
+                    .replace(/-+/g, '-')
+                    .replace(/^-|-$/g, '')
+                : '';
+
+            const normalizedEmployeeSlug = normalizedCareersSlug;
 
             // Step 1: Update company with ALL onboarding data
             const cleanDepartments = formData.departments.filter(d => d.trim() !== '');
@@ -420,6 +510,7 @@ export default function CompanyOnboarding() {
                     primaryColor: formData.primaryColor,
                     secondaryColor: formData.secondaryColor,
                     settings: {
+                        ...company?.settings,
                         industry: formData.industry,
                         companySize: formData.companySize,
                         timezone: formData.timezone,
@@ -427,7 +518,10 @@ export default function CompanyOnboarding() {
                         allowPublicApplications: true,
                         departments: cleanDepartments, // ← Save departments in settings
                         onboardingCompleted: true,
-                        onboardingCompletedAt: new Date().toISOString()
+                        onboardingCompletedAt: new Date().toISOString(),
+                        supportEmail: formData.supportEmail || formData.email,
+                        profileCompletionThreshold: Number(formData.profileCompletionThreshold) || 75,
+                        employeeSlug: normalizedEmployeeSlug || undefined
                     }
                 });
                 console.log('✅ Company profile updated successfully');
@@ -442,6 +536,36 @@ export default function CompanyOnboarding() {
                 departments: cleanDepartments.length,
                 leaveTypes: formData.leaveTypes.length
             });
+
+            // Step 1b: Save company-specific careers portal link in hrSettings
+            try {
+                const baseCareersUrl = (await getCareersPlatformUrl(companyId)) || 'https://hris-careers-platform.vercel.app';
+                const normalizedBaseCareersUrl = baseCareersUrl.replace(/\/$/, '');
+                const careersPortalUrl = normalizedCareersSlug
+                    ? `${normalizedBaseCareersUrl}/careers/${normalizedCareersSlug}`
+                    : normalizedBaseCareersUrl;
+
+                const baseEmployeeUrl = (await getEmployeePlatformUrl(companyId)) || 'https://hris-employee-platform.vercel.app';
+                const normalizedBaseEmployeeUrl = baseEmployeeUrl.replace(/\/$/, '');
+                const employeePortalUrl = normalizedEmployeeSlug
+                    ? `${normalizedBaseEmployeeUrl}/employee/${normalizedEmployeeSlug}`
+                    : normalizedBaseEmployeeUrl;
+
+                await setDoc(doc(db, 'hrSettings', companyId), {
+                    companyId,
+                    careersPortalUrl,
+                    careersSlug: normalizedCareersSlug || null,
+                    employeePortalUrl,
+                    employeeSlug: normalizedEmployeeSlug || null,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: currentUser.email || currentUser.uid || 'system'
+                }, { merge: true });
+
+                console.log('✅ Careers portal URL stored in hrSettings:', careersPortalUrl);
+                console.log('✅ Employee portal URL stored in hrSettings:', employeePortalUrl);
+            } catch (settingsError) {
+                console.warn('⚠️ Failed to store careers portal link in hrSettings:', settingsError);
+            }
 
             // Step 2: Create leave types for this company
             const leaveTypesRef = collection(db, 'leaveTypes');
@@ -644,7 +768,7 @@ export default function CompanyOnboarding() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
             <div className="w-full max-w-4xl">
                 {/* Skip Button - Only show if company exists */}
                 {companyId && (
@@ -684,17 +808,17 @@ export default function CompanyOnboarding() {
                         w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300
                         ${isActive ? 'bg-blue-600 text-white scale-110 shadow-lg' : ''}
                         ${isCompleted ? 'bg-green-600 text-white' : ''}
-                        ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-400' : ''}
+                        ${!isActive && !isCompleted ? 'bg-muted text-muted-foreground' : ''}
                       `}
                                         >
                                             <Icon className="w-6 h-6" />
                                         </div>
-                                        <span className={`text-xs mt-2 font-medium ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                                        <span className={`text-xs mt-2 font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
                                             {step.title}
                                         </span>
                                     </div>
                                     {index < STEPS.length - 1 && (
-                                        <div className={`h-1 flex-1 mx-2 rounded ${isCompleted ? 'bg-green-600' : 'bg-gray-200'}`} />
+                                        <div className={`h-1 flex-1 mx-2 rounded ${isCompleted ? 'bg-green-600' : 'bg-muted'}`} />
                                     )}
                                 </div>
                             );
@@ -720,24 +844,24 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
                 <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                     Welcome to Your HRIS Platform!
                 </h1>
-                <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+                <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                     Let's get your company set up in just a few minutes. We'll help you configure everything you need to start managing your team effectively.
                 </p>
                 <div className="grid grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                        <Clock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                    <div className="p-4 bg-primary/10 rounded-lg">
+                        <Clock className="w-8 h-8 text-primary mx-auto mb-2" />
                         <p className="text-sm font-medium">5 Minutes</p>
-                        <p className="text-xs text-gray-500">Quick Setup</p>
+                        <p className="text-xs text-muted-foreground">Quick Setup</p>
                     </div>
                     <div className="p-4 bg-purple-50 rounded-lg">
                         <Users className="w-8 h-8 text-purple-600 mx-auto mb-2" />
                         <p className="text-sm font-medium">Easy Config</p>
-                        <p className="text-xs text-gray-500">No Tech Skills</p>
+                        <p className="text-xs text-muted-foreground">No Tech Skills</p>
                     </div>
                     <div className="p-4 bg-green-50 rounded-lg">
                         <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                         <p className="text-sm font-medium">Ready to Use</p>
-                        <p className="text-xs text-gray-500">Start Instantly</p>
+                        <p className="text-xs text-muted-foreground">Start Instantly</p>
                     </div>
                 </div>
                 <Button
@@ -798,7 +922,7 @@ function CompanyProfileStep({
                             value={formData.domain}
                             onChange={(e) => setFormData({ ...formData, domain: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') })}
                         />
-                        <p className="text-xs text-gray-500">Used for careers page: /careers/{formData.domain || 'yourdomain'}</p>
+                        <p className="text-xs text-muted-foreground">Used for careers page: /careers/{formData.domain || 'yourdomain'}</p>
                     </div>
                 </div>
 
@@ -807,7 +931,7 @@ function CompanyProfileStep({
                         <Label htmlFor="industry">Industry *</Label>
                         <select
                             id="industry"
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border border-input rounded-md bg-background text-foreground"
                             value={formData.industry}
                             onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
                         >
@@ -821,7 +945,7 @@ function CompanyProfileStep({
                         <Label htmlFor="companySize">Company Size *</Label>
                         <select
                             id="companySize"
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border border-input rounded-md bg-background text-foreground"
                             value={formData.companySize}
                             onChange={(e) => setFormData({ ...formData, companySize: e.target.value })}
                         >
@@ -920,7 +1044,7 @@ function BusinessDetailsStep({
                             value={formData.city}
                             onChange={(e) => handleCityChange(e.target.value)}
                         />
-                        <p className="text-xs text-gray-500">Timezone will auto-detect based on your location</p>
+                        <p className="text-xs text-muted-foreground">Timezone will auto-detect based on your location</p>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="country">Country *</Label>
@@ -938,7 +1062,7 @@ function BusinessDetailsStep({
                     <div className="flex gap-2 items-center">
                         <select
                             id="timezone"
-                            className="flex-1 p-2 border rounded-md"
+                            className="flex-1 p-2 border border-input rounded-md bg-background text-foreground"
                             value={formData.timezone}
                             onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
                         >
@@ -959,7 +1083,7 @@ function BusinessDetailsStep({
                             <Globe className="w-4 h-4" />
                         </Button>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                         {formData.country || formData.city 
                             ? `Detected from ${formData.city ? formData.city : ''}${formData.city && formData.country ? ', ' : ''}${formData.country || ''}`
                             : 'Enter your city or country to auto-detect timezone'}
@@ -1492,7 +1616,7 @@ function HrTeamStep({
                                     <Label htmlFor={`role-${index}`}>Role</Label>
                                     <select
                                         id={`role-${index}`}
-                                        className="w-full p-2 border rounded-md"
+                                        className="w-full p-2 border border-input rounded-md bg-background text-foreground"
                                         value={member.role}
                                         onChange={(e) => updateHrMember(index, 'role', e.target.value)}
                                     >
@@ -1507,7 +1631,7 @@ function HrTeamStep({
                                     <Label htmlFor={`department-${index}`}>Department</Label>
                                     <select
                                         id={`department-${index}`}
-                                        className="w-full p-2 border rounded-md"
+                                        className="w-full p-2 border border-input rounded-md bg-background text-foreground"
                                         value={member.department}
                                         onChange={(e) => updateHrMember(index, 'department', e.target.value)}
                                     >
@@ -1651,6 +1775,56 @@ function SystemConfigStep({
                     </div>
                 </div>
 
+                {/* Employee Experience */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Users className="w-5 h-5 text-purple-600" />
+                        Employee Experience
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="supportEmail">HR Support Email</Label>
+                            <Input
+                                id="supportEmail"
+                                type="email"
+                                placeholder="support@company.com"
+                                value={formData.supportEmail}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        supportEmail: e.target.value,
+                                    })
+                                }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                This email address shows up on the employee login page and help screens.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="profileThreshold">Minimum Profile Completion (%)</Label>
+                            <Input
+                                id="profileThreshold"
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={formData.profileCompletionThreshold}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        profileCompletionThreshold: Math.max(
+                                            0,
+                                            Math.min(100, parseInt(e.target.value || '0', 10))
+                                        ),
+                                    })
+                                }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Employees must reach at least this percentage before accessing other modules (default 75%).
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Security */}
                 <div className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -1675,7 +1849,7 @@ function SystemConfigStep({
                             <Label htmlFor="passwordPolicy">Password Policy</Label>
                             <select
                                 id="passwordPolicy"
-                                className="w-full p-2 border rounded-md"
+                                className="w-full p-2 border border-input rounded-md bg-background text-foreground"
                                 value={formData.security.passwordPolicy}
                                 onChange={(e) => setFormData({
                                     ...formData,
@@ -1755,7 +1929,7 @@ function CompleteStep({
                     {/* Company Profile */}
                     <div className="mb-4">
                         <h4 className="font-semibold text-sm text-blue-800 mb-2">📋 Company Profile Document:</h4>
-                        <div className="space-y-1 text-sm bg-white p-3 rounded border">
+                        <div className="space-y-1 text-sm bg-card p-3 rounded border border-border">
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Name:</span>
                                 <span className="font-medium">{formData.displayName}</span>
@@ -1781,8 +1955,16 @@ function CompleteStep({
                                 <span className="font-medium">{formData.email}</span>
                             </div>
                             <div className="flex justify-between">
+                                <span className="text-gray-600">Support Email:</span>
+                                <span className="font-medium">{formData.supportEmail || formData.email}</span>
+                            </div>
+                            <div className="flex justify-between">
                                 <span className="text-gray-600">Timezone:</span>
                                 <span className="font-medium">{formData.timezone}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Profile Threshold:</span>
+                                <span className="font-medium">{formData.profileCompletionThreshold || 75}%</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-600">Colors:</span>
@@ -1815,7 +1997,7 @@ function CompleteStep({
                         </h4>
                         <div className="space-y-2">
                             {formData.leaveTypes.map((type, i) => (
-                                <div key={i} className="bg-white border border-blue-200 px-3 py-2 rounded text-xs flex justify-between items-center">
+                                <div key={i} className="bg-card border border-border px-3 py-2 rounded text-xs flex justify-between items-center text-foreground">
                                     <span className="font-medium">{type.name}</span>
                                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">{type.days} days/year</span>
                                 </div>

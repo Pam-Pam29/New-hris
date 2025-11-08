@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../../components/ui/card';
 import { TypographyH2, TypographyH3 } from '../../../../components/ui/typography';
@@ -77,8 +77,46 @@ export default function TimeManagement() {
   const [employeeService, setEmployeeService] = useState<IEmployeeService | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Get unique employees from attendance records (for filtering)
-  const attendanceEmployees = Array.from(new Set(attendanceRecords.map(record => record.employee)));
+  // Build a quick lookup map for employee names
+  const employeeNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach(emp => map.set(emp.id.toString(), emp.name));
+    return map;
+  }, [employees]);
+
+  // Helper to resolve employee display names
+  const resolveEmployeeName = useCallback(
+    (employeeId?: string, fallback?: string) => {
+      if (employeeId && employeeNameById.has(employeeId)) {
+        return employeeNameById.get(employeeId)!;
+      }
+      if (fallback && fallback.trim() !== '' && fallback.trim().toLowerCase() !== 'loading...') {
+        return fallback;
+      }
+      return 'Employee';
+    },
+    [employeeNameById]
+  );
+
+  // Enrich attendance records with latest employee names
+  const enrichAttendanceRecords = useCallback(
+    (records: AttendanceRecord[]) =>
+      records.map((record) => {
+        const displayName = resolveEmployeeName(record.employeeId, record.employeeName || record.employee);
+        return {
+          ...record,
+          employee: displayName,
+          employeeName: displayName,
+        };
+      }),
+    [resolveEmployeeName]
+  );
+
+  // Get unique employee IDs from attendance records (for filtering)
+  const attendanceEmployeeIds = useMemo(
+    () => Array.from(new Set(attendanceRecords.map(record => record.employeeId).filter(Boolean))),
+    [attendanceRecords]
+  );
 
   // Adjust popup state
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
@@ -138,7 +176,7 @@ export default function TimeManagement() {
     };
 
     initializeService();
-  }, []);
+  }, [enrichAttendanceRecords]);
 
   // Load employees using Employee Service (filtered by company)
   const fetchEmployees = async () => {
@@ -157,16 +195,17 @@ export default function TimeManagement() {
     try {
       const timeService = await getTimeService();
       const records = await timeService.getAttendanceRecords();
+      const enriched = enrichAttendanceRecords(records);
 
-      console.log('📊 Loaded real time entries:', records.length);
+      console.log('📊 Loaded real time entries:', enriched.length);
       console.log('📋 First record has location?:', {
-        hasLocation: !!records[0]?.location,
-        location: records[0]?.location,
-        recordId: records[0]?.id
+        hasLocation: !!enriched[0]?.location,
+        location: enriched[0]?.location,
+        recordId: enriched[0]?.id
       });
 
-      setAttendanceRecords(records);
-      setFilteredAttendanceRecords(records);
+      setAttendanceRecords(enriched);
+      setFilteredAttendanceRecords(enriched);
 
       // Check after setting state
       setTimeout(() => {
@@ -314,7 +353,12 @@ export default function TimeManagement() {
   // Load attendance records on component mount
   useEffect(() => {
     loadAttendanceRecords();
-  }, []);
+  }, [enrichAttendanceRecords]);
+
+  useEffect(() => {
+    setAttendanceRecords(prev => enrichAttendanceRecords(prev));
+    setFilteredAttendanceRecords(prev => enrichAttendanceRecords(prev));
+  }, [enrichAttendanceRecords]);
 
   // Set up Firebase real-time subscriptions
   useEffect(() => {
@@ -388,8 +432,9 @@ export default function TimeManagement() {
             });
 
             console.log('📡 Real-time: Converted entries with location data');
-            setAttendanceRecords(records);
-            setFilteredAttendanceRecords(records);
+            const enriched = enrichAttendanceRecords(records);
+            setAttendanceRecords(enriched);
+            setFilteredAttendanceRecords(enriched);
           }
         );
 
@@ -563,10 +608,13 @@ export default function TimeManagement() {
     try {
       // Get employee name from the employees list
       const selectedEmployeeData = employees.find(emp => emp.id.toString() === newAttendance.employee);
-      const employeeName = selectedEmployeeData ? selectedEmployeeData.name : newAttendance.employee;
+      const employeeIdForRecord = selectedEmployeeData ? selectedEmployeeData.id.toString() : newAttendance.employee;
+      const employeeName = resolveEmployeeName(employeeIdForRecord, newAttendance.employee);
 
       const timeService = await getTimeService();
       const created = await timeService.createAttendanceRecord({
+        employeeId: employeeIdForRecord,
+        employeeName,
         employee: employeeName,
         date: newAttendance.date,
         status: newAttendance.status as any,
@@ -682,13 +730,13 @@ export default function TimeManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Time Management (HR)</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-3xl font-bold" style={{ color: 'hsl(224 71% 4%)' }}>Time Management (HR)</h1>
+            <p className="mt-2" style={{ color: 'hsl(224 71% 20%)' }}>
               Monitor employee attendance, approve adjustments, track work hours, and manage schedules
             </p>
           </div>
@@ -954,9 +1002,17 @@ export default function TimeManagement() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all_employees">All Employees</SelectItem>
-                        {attendanceEmployees.filter(employee => employee && employee !== '').map(employee => (
-                          <SelectItem key={employee} value={employee!}>{employee}</SelectItem>
-                        ))}
+                        {attendanceEmployeeIds.map((employeeId) => {
+                          const name = resolveEmployeeName(
+                            employeeId,
+                            attendanceRecords.find(record => record.employeeId === employeeId)?.employee
+                          );
+                          return (
+                            <SelectItem key={employeeId} value={employeeId}>
+                              {name}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <Select value={selectedStatus || 'all_statuses'} onValueChange={(value) => setSelectedStatus(value === 'all_statuses' ? null : value)}>
@@ -980,7 +1036,7 @@ export default function TimeManagement() {
                       variant="outline"
                       onClick={() => {
                         const filteredRecords = attendanceRecords.filter(row =>
-                          (!selectedEmployee || row.employee === selectedEmployee) &&
+                          (!selectedEmployee || row.employeeId === selectedEmployee) &&
                           (!selectedStatus || row.status === selectedStatus) &&
                           (!selectedDate || row.date === selectedDate)
                         );
@@ -1040,7 +1096,9 @@ export default function TimeManagement() {
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
-                                <h3 className="text-lg font-semibold">{row.employee}</h3>
+                                <h3 className="text-lg font-semibold">
+                                  {resolveEmployeeName(row.employeeId, row.employee)}
+                                </h3>
                                 <Badge className={`${row.status === 'Present' ? 'bg-green-100 text-green-800' :
                                   row.status === 'Late' ? 'bg-yellow-100 text-yellow-800' :
                                     'bg-red-100 text-red-800'

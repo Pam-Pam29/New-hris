@@ -35,7 +35,7 @@
         --destructive: 0 84% 60%;
         --destructive-foreground: 210 40% 98%;
         --success: 142 76% 36%;
-        --success-foreground: 210 40% 98%;
+        --success-foreground: 0 0% 100%;
         --warning: 38 92% 50%;
         --warning-foreground: 224 71% 4%;
         --info: 199 89% 48%;
@@ -54,68 +54,71 @@
         --chart-5: 0 84% 60%;
 
         --radius: 0.75rem;
+
+        /* Company Branding Colors - Default to theme colors if not set */
+        --company-primary: var(--primary);
+        --company-secondary: var(--secondary);
+        --company-primary-hex: hsl(var(--primary));
+        --company-secondary-hex: hsl(var(--secondary));
     }
 
-    /* Company Branding Colors - Default to theme colors if not set */
-    --company-primary: var(--primary);
-    --company-secondary: var(--secondary);
-    --company-primary-hex: hsl(var(--primary));
-    --company-secondary-hex: hsl(var(--secondary));
-
-    .dark {
+    /* Dark Mode Variables - Must be outside :root to override */
+    html.dark,
+    html[data-theme="dark"] {
         /* Modern Dark Theme - Professional Dark Mode */
-        --background: 224 71% 4%;
-        --foreground: 210 40% 98%;
-        --card: 224 71% 4%;
-        --card-foreground: 210 40% 98%;
-        --popover: 224 71% 4%;
-        --popover-foreground: 210 40% 98%;
+        --background: 224 71% 4% !important;
+        --foreground: 210 40% 98% !important;
+        --card: 224 71% 4% !important;
+        --card-foreground: 210 40% 98% !important;
+        --popover: 224 71% 4% !important;
+        --popover-foreground: 210 40% 98% !important;
 
         /* Primary - Bright Blue for Dark Mode */
-        --primary: 217 91% 60%;
-        --primary-foreground: 224 71% 4%;
+        --primary: 217 91% 60% !important;
+        --primary-foreground: 224 71% 4% !important;
 
         /* Secondary - Bright Purple */
-        --secondary: 262 83% 68%;
-        --secondary-foreground: 224 71% 4%;
+        --secondary: 262 83% 68% !important;
+        --secondary-foreground: 224 71% 4% !important;
 
         /* Muted - Dark Gray */
-        --muted: 215 28% 17%;
-        --muted-foreground: 217 11% 65%;
+        --muted: 215 28% 17% !important;
+        --muted-foreground: 217 11% 65% !important;
 
         /* Accent - Darker Blue */
-        --accent: 215 28% 17%;
-        --accent-foreground: 210 40% 98%;
+        --accent: 215 28% 17% !important;
+        --accent-foreground: 210 40% 98% !important;
 
         /* Status Colors - Adjusted for Dark Mode */
-        --destructive: 0 63% 31%;
-        --destructive-foreground: 210 40% 98%;
-        --success: 142 71% 45%;
-        --success-foreground: 224 71% 4%;
-        --warning: 38 92% 50%;
-        --warning-foreground: 224 71% 4%;
-        --info: 199 89% 48%;
-        --info-foreground: 224 71% 4%;
+        --destructive: 0 63% 31% !important;
+        --destructive-foreground: 210 40% 98% !important;
+        --success: 142 71% 45% !important;
+        --success-foreground: 0 0% 100% !important;
+        --warning: 38 92% 50% !important;
+        --warning-foreground: 0 0% 100% !important;
+        --info: 199 89% 48% !important;
+        --info-foreground: 224 71% 4% !important;
 
         /* UI Elements */
-        --border: 215 28% 17%;
-        --input: 215 28% 17%;
-        --ring: 217 91% 60%;
+        --border: 215 28% 17% !important;
+        --input: 215 28% 17% !important;
+        --ring: 217 91% 60% !important;
 
         /* Chart Colors - Dark Mode Optimized */
-        --chart-1: 217 91% 60%;
-        --chart-2: 142 71% 45%;
-        --chart-3: 38 92% 50%;
-        --chart-4: 262 83% 68%;
-        --chart-5: 0 63% 31%;
+        --chart-1: 217 91% 60% !important;
+        --chart-2: 142 71% 45% !important;
+        --chart-3: 38 92% 50% !important;
+        --chart-4: 262 83% 68% !important;
+        --chart-5: 0 63% 31% !important;
 
         /* Company Branding in Dark Mode - Use adjusted colors if available */
-        --company-primary: var(--company-primary, 217 91% 60%);
-        --company-secondary: var(--company-secondary, 262 83% 68%);
+        --company-primary: var(--company-primary, 217 91% 60%) !important;
+        --company-secondary: var(--company-secondary, 262 83% 68%) !important;
+        
+        /* Ensure color scheme is dark */
+        color-scheme: dark;
     }
-}
 
-@layer base {
     * {
         @apply border-border;
     }
@@ -134,17 +137,69 @@
     }
 
     body {
-        @apply bg-background text-foreground font-sans antialiased;
+        @apply font-sans antialiased;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-        transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                    color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         line-height: 1.6;
-        background-color: hsl(var(--background));
-        color: hsl(var(--foreground));
+        background-color: hsl(var(--background)) !important;
+        color: hsl(var(--foreground)) !important;
+    }
+    
+    /* Force dark mode background on body */
+    html.dark body,
+    html[data-theme="dark"] body {
+        background-color: hsl(var(--background)) !important;
+        color: hsl(var(--foreground)) !important;
+    }
+    
+    
+    /* Force root element background in dark mode */
+    html.dark,
+    html[data-theme="dark"] {
+        background-color: hsl(var(--background)) !important;
+    }
+    
+    /* Ensure all common elements use CSS variables */
+    div, section, article, aside, nav, header, footer, main {
+        transition: background-color 0.2s ease, color 0.2s ease;
     }
     
     /* Ensure all elements inherit theme properly */
     * {
         transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    
+    /* Ensure select dropdowns and options are visible in dark mode */
+    select {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+    
+    select option {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+    
+    /* Dark mode select adjustments */
+    html.dark select,
+    html[data-theme="dark"] select {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+    
+    html.dark select option,
+    html[data-theme="dark"] select option {
+        background-color: hsl(var(--card));
+        color: hsl(var(--foreground));
+    }
+    
+    /* Force card backgrounds to use CSS variables */
+    .card-modern,
+    [class*="card"] {
+        background-color: hsl(var(--card));
+        color: hsl(var(--card-foreground));
     }
 
     /* Typography Improvements */
@@ -156,6 +211,47 @@
     h6 {
         @apply font-semibold tracking-tight;
         line-height: 1.2;
+        /* Dark text in light mode */
+        color: hsl(224 71% 4%);
+    }
+    
+    /* In dark mode, headings should be dark but visible - use a lighter shade that's still "dark" */
+    html.dark h1,
+    html[data-theme="dark"] h1,
+    html.dark h2,
+    html[data-theme="dark"] h2,
+    html.dark h3,
+    html[data-theme="dark"] h3,
+    html.dark h4,
+    html[data-theme="dark"] h4,
+    html.dark h5,
+    html[data-theme="dark"] h5,
+    html.dark h6,
+    html[data-theme="dark"] h6 {
+        /* Use a lighter dark shade (25% lightness) that's clearly visible on dark background but still "dark" */
+        color: hsl(224 71% 25%) !important;
+    }
+    
+    /* Force headings with inline styles to be visible in dark mode - override inline styles */
+    html.dark h1[style*="color"],
+    html[data-theme="dark"] h1[style*="color"],
+    html.dark h1[style*="224 71% 4%"],
+    html[data-theme="dark"] h1[style*="224 71% 4%"],
+    html.dark h1[style*="hsl(224 71% 4%)"],
+    html[data-theme="dark"] h1[style*="hsl(224 71% 4%)"] {
+        /* Override inline style with a visible dark color */
+        color: hsl(224 71% 25%) !important;
+    }
+    
+    /* Ensure paragraphs with inline styles are also visible in dark mode */
+    html.dark p[style*="color"],
+    html[data-theme="dark"] p[style*="color"],
+    html.dark p[style*="224 71% 20%"],
+    html[data-theme="dark"] p[style*="224 71% 20%"],
+    html.dark p[style*="hsl(224 71% 20%)"],
+    html[data-theme="dark"] p[style*="hsl(224 71% 20%)"] {
+        /* Use a lighter shade for subtitles too */
+        color: hsl(224 71% 40%) !important;
     }
 
     h1 {
@@ -180,6 +276,93 @@
 
     h6 {
         @apply text-sm lg:text-base;
+    }
+    
+    /* Ensure headings with text-foreground class also use dark text in both modes */
+    h1.text-foreground,
+    h2.text-foreground,
+    h3.text-foreground,
+    h4.text-foreground,
+    h5.text-foreground,
+    h6.text-foreground {
+        color: hsl(224 71% 4%);
+    }
+    
+    /* In dark mode, text-foreground headings should be visible */
+    html.dark h1.text-foreground,
+    html[data-theme="dark"] h1.text-foreground,
+    html.dark h2.text-foreground,
+    html[data-theme="dark"] h2.text-foreground,
+    html.dark h3.text-foreground,
+    html[data-theme="dark"] h3.text-foreground,
+    html.dark h4.text-foreground,
+    html[data-theme="dark"] h4.text-foreground,
+    html.dark h5.text-foreground,
+    html[data-theme="dark"] h5.text-foreground,
+    html.dark h6.text-foreground,
+    html[data-theme="dark"] h6.text-foreground {
+        color: hsl(224 71% 25%) !important;
+    }
+    
+    /* Force all h1 headings to use dark text in both modes - override any other styles */
+    h1 {
+        color: hsl(224 71% 4%);
+    }
+    
+    /* In dark mode, h1 headings should be visible */
+    html.dark h1,
+    html[data-theme="dark"] h1 {
+        color: hsl(224 71% 25%) !important;
+    }
+    
+    /* Force inline style headings to be visible in dark mode - override inline styles */
+    html.dark h1[style*="color"],
+    html[data-theme="dark"] h1[style*="color"],
+    html.dark h1[style*="224 71% 4%"],
+    html[data-theme="dark"] h1[style*="224 71% 4%"],
+    html.dark h1[style*="hsl(224 71% 4%)"],
+    html[data-theme="dark"] h1[style*="hsl(224 71% 4%)"] {
+        color: hsl(224 71% 25%) !important;
+    }
+    
+    /* Subtitles and descriptions - dark text in both modes */
+    p.text-muted-foreground,
+    .text-muted-foreground,
+    html.dark p.text-muted-foreground,
+    html[data-theme="dark"] p.text-muted-foreground,
+    html.dark .text-muted-foreground,
+    html[data-theme="dark"] .text-muted-foreground {
+        color: hsl(224 71% 20%) !important;
+    }
+    
+    /* Force paragraphs with inline styles to use dark text in dark mode */
+    html.dark p[style*="color"],
+    html[data-theme="dark"] p[style*="color"] {
+        color: hsl(224 71% 20%) !important;
+    }
+    
+    /* Ensure all paragraphs and text elements that follow headings use dark text */
+    html.dark p,
+    html[data-theme="dark"] p,
+    html.dark .text-muted-foreground,
+    html[data-theme="dark"] .text-muted-foreground {
+        color: hsl(224 71% 20%) !important;
+    }
+    
+    /* Sidebar section headings - ensure visible in dark mode */
+    aside nav h2,
+    aside nav .text-xs.uppercase,
+    html.dark aside nav h2,
+    html[data-theme="dark"] aside nav h2,
+    html.dark aside nav .text-xs.uppercase,
+    html[data-theme="dark"] aside nav .text-xs.uppercase {
+        color: hsl(224 71% 20%) !important;
+    }
+    
+    /* Force sidebar section headings with inline styles */
+    html.dark aside nav h2[style*="color"],
+    html[data-theme="dark"] aside nav h2[style*="color"] {
+        color: hsl(224 71% 20%) !important;
     }
 
     /* Code and Monospace */
@@ -274,134 +457,51 @@
         @apply bg-muted-foreground/50;
     }
 
-    /* Selection styling */
-    ::selection {
-        @apply bg-primary/20 text-primary-foreground;
+    /* Dark mode scrollbar */
+    .dark ::-webkit-scrollbar-track {
+        @apply bg-muted/50;
     }
 
-    /* Custom utility classes */
-    .text-gradient {
-        @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+    .dark ::-webkit-scrollbar-thumb {
+        @apply bg-muted-foreground/40;
     }
 
-    .glass-effect {
-        @apply bg-background/80 backdrop-blur-sm border border-border/50;
-    }
-
-    .shadow-soft {
-        box-shadow: 0 2px 8px -2px hsl(var(--foreground) / 0.1);
-    }
-
-    .shadow-soft-lg {
-        box-shadow: 0 4px 16px -4px hsl(var(--foreground) / 0.1);
-    }
-
-    /* Animation improvements */
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes slideIn {
-        from {
-            opacity: 0;
-            transform: translateX(-10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    .animate-fade-in {
-        animation: fadeIn 0.3s ease-out;
-    }
-
-    .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-    }
-
-    /* Status color utilities */
-    .text-success {
-        color: hsl(var(--success));
-    }
-
-    .text-warning {
-        color: hsl(var(--warning));
-    }
-
-    .text-info {
-        color: hsl(var(--info));
-    }
-
-    .bg-success {
-        background-color: hsl(var(--success));
-    }
-
-    .bg-warning {
-        background-color: hsl(var(--warning));
-    }
-
-    .bg-info {
-        background-color: hsl(var(--info));
-    }
-
-    .border-success {
-        border-color: hsl(var(--success));
-    }
-
-    .border-warning {
-        border-color: hsl(var(--warning));
-    }
-
-    .border-info {
-        border-color: hsl(var(--info));
+    .dark ::-webkit-scrollbar-thumb:hover {
+        @apply bg-muted-foreground/60;
     }
 }
 
 @layer components {
-
-    /* Card improvements */
+    /* Modern Card Styles */
     .card-modern {
-        @apply bg-card border border-border rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200;
+        @apply bg-card text-card-foreground rounded-xl border border-border shadow-soft;
+        padding: 1.5rem;
+        transition: all 0.2s ease;
     }
 
-    .card-glass {
-        @apply glass-effect rounded-xl shadow-soft;
+    .card-modern:hover {
+        @apply shadow-soft-lg;
     }
 
-    /* Button improvements */
-    .btn-gradient {
-        @apply bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90;
-    }
-
-    /* Input improvements */
-    .input-modern {
-        @apply bg-background border border-input rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all;
-    }
-
-    /* Table improvements */
+    /* Modern Table Styles */
     .table-modern {
         @apply w-full border-collapse;
     }
 
     .table-modern th {
-        @apply bg-muted/50 text-muted-foreground font-medium text-sm px-4 py-3 text-left border-b border-border;
+        @apply text-left font-semibold text-sm text-muted-foreground uppercase tracking-wider px-4 py-3 border-b border-border bg-muted/30;
     }
 
     .table-modern td {
-        @apply px-4 py-3 border-b border-border/50 text-sm;
+        @apply px-4 py-3 border-b border-border/50;
     }
 
-    .table-modern tr:hover {
-        @apply bg-muted/30;
+    .table-modern tbody tr {
+        @apply transition-colors hover:bg-muted/30;
+    }
+
+    /* Gradient Text */
+    .text-gradient {
+        @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
     }
 }

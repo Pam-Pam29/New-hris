@@ -52,16 +52,66 @@ export interface IAssetService {
 
 export class FirebaseAssetService implements IAssetService {
   private db: Firestore;
+  private companyId?: string;
 
-  constructor(db: Firestore) {
+  constructor(db: Firestore, companyId?: string) {
     this.db = db;
+    this.companyId = companyId;
   }
   // Asset Management
   async getAssets(): Promise<Asset[]> {
     const assetsRef = collection(this.db, 'assets');
-    const q = query(assetsRef, orderBy('name'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+    
+    try {
+      let q: any = query(assetsRef);
+      
+      // Filter by companyId if provided
+      if (this.companyId) {
+        q = query(assetsRef, where('companyId', '==', this.companyId));
+      }
+      
+      const snapshot = await getDocs(q);
+      let assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      
+      // Sort in memory to avoid index requirement
+      assets.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      return assets;
+    } catch (error: any) {
+      // If query fails (e.g., index missing or permission denied), try fetching all and filtering in memory
+      if (error?.code === 'failed-precondition' || error?.code === 'permission-denied') {
+        console.warn(`⚠️ Query failed (${error?.code}) for assets with companyId filter, trying fallback...`);
+        console.warn(`   Error details:`, error.message);
+        try {
+          // Try fetching without the where clause
+          const snapshot = await getDocs(query(assetsRef));
+          let assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+          
+          console.log(`   ✅ Fallback successful: fetched ${assets.length} assets total`);
+          
+          // Filter by companyId in memory if needed
+          if (this.companyId) {
+            const beforeFilter = assets.length;
+            assets = assets.filter(asset => asset.companyId === this.companyId);
+            console.log(`   ✅ Filtered to ${assets.length} assets for companyId: ${this.companyId} (from ${beforeFilter} total)`);
+          }
+          
+          // Sort in memory
+          assets.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          return assets;
+        } catch (fallbackError: any) {
+          console.error('❌ Fallback query also failed:', fallbackError);
+          console.error(`   Fallback error code: ${fallbackError?.code}`);
+          console.error(`   Fallback error message: ${fallbackError?.message}`);
+          // If even the fallback fails, return empty array (collection might not exist or have no permissions)
+          console.warn('   Returning empty array - collection may not exist or user may not have read permissions');
+          return [];
+        }
+      }
+      // For other errors, log and rethrow
+      console.error('❌ Unexpected error in getAssets:', error);
+      throw error;
+    }
   }
 
   async getAssetById(id: string): Promise<Asset | null> {
@@ -75,9 +125,10 @@ export class FirebaseAssetService implements IAssetService {
     console.log('FirebaseAssetService.createAsset called with:', asset); // Add logging
     const docRef = await addDoc(assetsRef, {
       ...asset,
+      companyId: this.companyId || asset.companyId, // Ensure companyId is set
       createdAt: Timestamp.now(),
     });
-    return { id: docRef.id, ...asset };
+    return { id: docRef.id, ...asset, companyId: this.companyId || asset.companyId };
   }
 
   async updateAsset(id: string, asset: Partial<Asset>): Promise<Asset> {
@@ -220,9 +271,69 @@ export class FirebaseAssetService implements IAssetService {
   // Asset Requests
   async getAssetRequests(): Promise<AssetRequest[]> {
     const requestsRef = collection(this.db, 'assetRequests');
-    const q = query(requestsRef, orderBy('requestedDate', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetRequest));
+    
+    try {
+      let q: any = query(requestsRef);
+      
+      // Filter by companyId if provided
+      if (this.companyId) {
+        q = query(requestsRef, where('companyId', '==', this.companyId));
+      }
+      
+      const snapshot = await getDocs(q);
+      let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetRequest));
+      
+      // Sort in memory to avoid index requirement
+      requests.sort((a, b) => {
+        const aDate = a.requestedDate instanceof Date ? a.requestedDate.getTime() : 
+                     (a.requestedDate as any)?.seconds ? (a.requestedDate as any).seconds * 1000 : 0;
+        const bDate = b.requestedDate instanceof Date ? b.requestedDate.getTime() : 
+                     (b.requestedDate as any)?.seconds ? (b.requestedDate as any).seconds * 1000 : 0;
+        return bDate - aDate; // Descending order
+      });
+      
+      return requests;
+    } catch (error: any) {
+      // If query fails (e.g., index missing or permission denied), try fetching all and filtering in memory
+      if (error?.code === 'failed-precondition' || error?.code === 'permission-denied') {
+        console.warn(`⚠️ Query failed (${error?.code}) for assetRequests with companyId filter, trying fallback...`);
+        console.warn(`   Error details:`, error.message);
+        try {
+          // Try fetching without the where clause
+          const snapshot = await getDocs(query(requestsRef));
+          let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetRequest));
+          
+          console.log(`   ✅ Fallback successful: fetched ${requests.length} requests total`);
+          
+          // Filter by companyId in memory if needed
+          if (this.companyId) {
+            const beforeFilter = requests.length;
+            requests = requests.filter(req => req.companyId === this.companyId);
+            console.log(`   ✅ Filtered to ${requests.length} requests for companyId: ${this.companyId} (from ${beforeFilter} total)`);
+          }
+          
+          // Sort in memory
+          requests.sort((a, b) => {
+            const aDate = a.requestedDate instanceof Date ? a.requestedDate.getTime() : 
+                         (a.requestedDate as any)?.seconds ? (a.requestedDate as any).seconds * 1000 : 0;
+            const bDate = b.requestedDate instanceof Date ? b.requestedDate.getTime() : 
+                         (b.requestedDate as any)?.seconds ? (b.requestedDate as any).seconds * 1000 : 0;
+            return bDate - aDate;
+          });
+          return requests;
+        } catch (fallbackError: any) {
+          console.error('❌ Fallback query also failed:', fallbackError);
+          console.error(`   Fallback error code: ${fallbackError?.code}`);
+          console.error(`   Fallback error message: ${fallbackError?.message}`);
+          // If even the fallback fails, return empty array (collection might not exist or have no permissions)
+          console.warn('   Returning empty array - collection may not exist or user may not have read permissions');
+          return [];
+        }
+      }
+      // For other errors, log and rethrow
+      console.error('❌ Unexpected error in getAssetRequests:', error);
+      throw error;
+    }
   }
 
   async getAssetRequestById(id: string): Promise<AssetRequest | null> {
@@ -235,10 +346,11 @@ export class FirebaseAssetService implements IAssetService {
     const requestsRef = collection(this.db, 'assetRequests');
     const docRef = await addDoc(requestsRef, {
       ...request,
+      companyId: this.companyId || request.companyId, // Ensure companyId is set
       requestedDate: Timestamp.now(),
     });
     console.log('✅ Asset request created:', docRef.id);
-    return { id: docRef.id, ...request };
+    return { id: docRef.id, ...request, companyId: this.companyId || request.companyId };
   }
 
   async updateAssetRequest(id: string, request: Partial<AssetRequest>): Promise<AssetRequest> {
@@ -281,9 +393,57 @@ export class FirebaseAssetService implements IAssetService {
   // Starter Kits
   async getStarterKits(): Promise<StarterKit[]> {
     const kitsRef = collection(this.db, 'starterKits');
-    const q = query(kitsRef, orderBy('name'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StarterKit));
+    
+    try {
+      let q: any = query(kitsRef);
+      
+      // Filter by companyId if provided
+      if (this.companyId) {
+        q = query(kitsRef, where('companyId', '==', this.companyId));
+      }
+      
+      const snapshot = await getDocs(q);
+      let kits = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StarterKit));
+      
+      // Sort in memory to avoid index requirement
+      kits.sort((a, b) => (a.jobTitle || '').localeCompare(b.jobTitle || ''));
+      
+      return kits;
+    } catch (error: any) {
+      // If query fails (e.g., index missing or permission denied), try fetching all and filtering in memory
+      if (error?.code === 'failed-precondition' || error?.code === 'permission-denied') {
+        console.warn(`⚠️ Query failed (${error?.code}) for starterKits with companyId filter, trying fallback...`);
+        console.warn(`   Error details:`, error.message);
+        try {
+          // Try fetching without the where clause
+          const snapshot = await getDocs(query(kitsRef));
+          let kits = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StarterKit));
+          
+          console.log(`   ✅ Fallback successful: fetched ${kits.length} starter kits total`);
+          
+          // Filter by companyId in memory if needed
+          if (this.companyId) {
+            const beforeFilter = kits.length;
+            kits = kits.filter(kit => kit.companyId === this.companyId);
+            console.log(`   ✅ Filtered to ${kits.length} starter kits for companyId: ${this.companyId} (from ${beforeFilter} total)`);
+          }
+          
+          // Sort in memory
+          kits.sort((a, b) => (a.jobTitle || '').localeCompare(b.jobTitle || ''));
+          return kits;
+        } catch (fallbackError: any) {
+          console.error('❌ Fallback query also failed:', fallbackError);
+          console.error(`   Fallback error code: ${fallbackError?.code}`);
+          console.error(`   Fallback error message: ${fallbackError?.message}`);
+          // If even the fallback fails, return empty array (collection might not exist or have no permissions)
+          console.warn('   Returning empty array - collection may not exist or user may not have read permissions');
+          return [];
+        }
+      }
+      // For other errors, log and rethrow
+      console.error('❌ Unexpected error in getStarterKits:', error);
+      throw error;
+    }
   }
 
   async getStarterKitById(id: string): Promise<StarterKit | null> {
@@ -296,11 +456,12 @@ export class FirebaseAssetService implements IAssetService {
     const kitsRef = collection(this.db, 'starterKits');
     const docRef = await addDoc(kitsRef, {
       ...kit,
+      companyId: this.companyId || kit.companyId, // Ensure companyId is set
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
     console.log('✅ Starter kit created:', docRef.id);
-    return { id: docRef.id, ...kit };
+    return { id: docRef.id, ...kit, companyId: this.companyId || kit.companyId };
   }
 
   async updateStarterKit(id: string, kit: Partial<StarterKit>): Promise<StarterKit> {
@@ -609,21 +770,23 @@ export class MockAssetService implements IAssetService {
 }
 
 export class AssetServiceFactory {
-  static async createAssetService(): Promise<IAssetService> {
+  static async createAssetService(companyId?: string): Promise<IAssetService> {
     await initializeFirebase();
     const config = await getServiceConfig();
     if (config.defaultService === 'firebase' && config.firebase.enabled && config.firebase.db) {
-      return new FirebaseAssetService(config.firebase.db as Firestore);
+      return new FirebaseAssetService(config.firebase.db as Firestore, companyId);
     }
     return new MockAssetService();
   }
 }
 
-let assetServiceInstance: IAssetService | null = null;
+// Cache instances per companyId
+const assetServiceInstances: Map<string, IAssetService> = new Map();
 
-export async function getAssetService(): Promise<IAssetService> {
-  if (!assetServiceInstance) {
-    assetServiceInstance = await AssetServiceFactory.createAssetService();
+export async function getAssetService(companyId?: string): Promise<IAssetService> {
+  const cacheKey = companyId || 'global';
+  if (!assetServiceInstances.has(cacheKey)) {
+    assetServiceInstances.set(cacheKey, await AssetServiceFactory.createAssetService(companyId));
   }
-  return assetServiceInstance;
+  return assetServiceInstances.get(cacheKey)!;
 }

@@ -25,6 +25,9 @@ export interface Company {
         departments?: string[];
         onboardingCompleted?: boolean;
         onboardingCompletedAt?: string;
+        supportEmail?: string;
+        profileCompletionThreshold?: number;
+        employeeSlug?: string;
     };
 
     // Subscription

@@ -305,127 +305,172 @@ export default function EmployeeDashboard() {
                     })));
 
                     // Try to get actual leave balances from Firebase first
-                    let balances: LeaveBalance[] = [];
+                    const balanceMap = new Map<string, {
+                        id: string;
+                        employeeId: string;
+                        leaveTypeId: string;
+                        leaveTypeName: string;
+                        totalEntitlement: number;
+                        used: number;
+                        pending: number;
+                        remaining: number;
+                        accrued: number;
+                        year: number;
+                    }>();
+
                     try {
                         const actualBalances = await dataFlowService.getLeaveBalances(currentEmployeeId, companyId || undefined);
                         if (actualBalances && actualBalances.length > 0) {
                             console.log('✅ [Dashboard] Using actual leave balances from Firebase');
-                            balances = actualBalances.map(bal => {
-                                // Calculate remaining days from stored balance data
-                                // remainingDays is already stored, but we can also calculate it
-                                const totalDays = bal.totalDays || 0;
-                                const usedDays = bal.usedDays || 0;
-                                const pendingDays = bal.pendingDays || 0;
-                                const storedRemaining = bal.remainingDays || 0;
+                            actualBalances.forEach(bal => {
+                                const key = bal.leaveTypeId || bal.leaveTypeName || `${bal.employeeId}_${bal.id}`;
+                                const relatedType = uniqueLeaveTypes.find(t => t.id === bal.leaveTypeId || t.name === bal.leaveTypeName);
+                                const totalDays = bal.totalDays ?? relatedType?.maxDays ?? relatedType?.daysAllowed ?? 0;
+                                const usedDays = bal.usedDays ?? 0;
+                                const pendingDays = bal.pendingDays ?? 0;
+                                const storedRemaining = bal.remainingDays ?? 0;
                                 const calculatedRemaining = totalDays - usedDays - pendingDays;
                                 const remaining = storedRemaining > 0 ? storedRemaining : calculatedRemaining;
 
-                                return {
-                                    id: bal.id || `${bal.employeeId}_${bal.leaveTypeId}`,
+                                balanceMap.set(key, {
+                                    id: bal.id || `${bal.employeeId}_${key}`,
                                     employeeId: bal.employeeId,
-                                    leaveTypeId: bal.leaveTypeId,
-                                    leaveTypeName: uniqueLeaveTypes.find(t => t.id === bal.leaveTypeId)?.name || 'Unknown',
+                                    leaveTypeId: key,
+                                    leaveTypeName: relatedType?.name || bal.leaveTypeName || 'Unknown',
                                     totalEntitlement: totalDays,
                                     used: usedDays,
                                     pending: pendingDays,
                                     remaining: remaining,
                                     accrued: bal.accruedDays || totalDays,
                                     year: bal.year || new Date().getFullYear()
-                                };
+                                });
                             });
                         }
                     } catch (balanceError) {
                         console.warn('⚠️ [Dashboard] Could not load actual balances, calculating from types:', balanceError);
                     }
 
-                    // If no actual balances exist in Firebase, calculate from leave types
-                    // This ensures we show balances for all leave types even if they haven't been initialized in leaveBalances collection
-                    if (balances.length === 0) {
-                        console.log('📊 [Dashboard] No actual balances found, calculating from leave types...');
-                        balances = uniqueLeaveTypes.map(type => {
-                            // Match leave requests by leaveTypeId or by name if ID doesn't match
-                            const matchingRequests = leaveRequests.filter(r => 
-                                r.leaveTypeId === type.id || 
-                                r.leaveTypeId === type.name ||
-                                r.leaveTypeName === type.name
-                            );
-                            
-                            const usedDays = matchingRequests
-                                .filter(r => r.status === 'approved' || r.status === 'Approved')
-                                .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+                    // Ensure every leave type has a balance entry and sync entitlements/remaining totals
+                    uniqueLeaveTypes.forEach(type => {
+                        const key = type.id || type.name || `type-${type.color}-${type.maxDays}`;
+                        const totalEntitlement = Number(type.maxDays ?? (type as any).daysAllowed ?? 0) || 0;
 
-                            const pendingDays = matchingRequests
-                                .filter(r => r.status === 'pending' || r.status === 'Pending')
-                                .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+                        // Aggregate used/pending days from existing leave requests as a fallback
+                        const typeRequests = leaveRequests.filter(r =>
+                            r.leaveTypeId === type.id ||
+                            r.leaveTypeName === type.name ||
+                            r.leaveTypeId === key
+                        );
+                        const usedDaysFromRequests = typeRequests
+                            .filter(r => r.status === 'approved' || r.status === 'Approved')
+                            .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+                        const pendingDaysFromRequests = typeRequests
+                            .filter(r => r.status === 'pending' || r.status === 'Pending')
+                            .reduce((sum, r) => sum + (r.totalDays || 0), 0);
 
-                            // Use maxDays from leave type (don't cap it - show actual entitlement)
-                            const totalEntitlement = type.maxDays || type.daysAllowed || 15;
-
-                            return {
-                                id: `${type.id || type.name || 'unknown'}_${currentEmployeeId}`,
+                        const existingBalance = balanceMap.get(key);
+                        if (existingBalance) {
+                            const used = existingBalance.used ?? usedDaysFromRequests;
+                            const pending = existingBalance.pending ?? pendingDaysFromRequests;
+                            const remaining = Math.max(0, (totalEntitlement || existingBalance.totalEntitlement || 0) - used - pending);
+                            balanceMap.set(key, {
+                                ...existingBalance,
+                                leaveTypeId: key,
+                                leaveTypeName: type.name || existingBalance.leaveTypeName || 'Unknown',
+                                totalEntitlement: totalEntitlement || existingBalance.totalEntitlement || 0,
+                                used,
+                                pending,
+                                remaining,
+                                accrued: existingBalance.accrued || totalEntitlement || existingBalance.totalEntitlement || 0,
+                                year: existingBalance.year || new Date().getFullYear()
+                            });
+                        } else {
+                            const remaining = Math.max(0, totalEntitlement - usedDaysFromRequests - pendingDaysFromRequests);
+                            balanceMap.set(key, {
+                                id: `${key}_${currentEmployeeId}`,
                                 employeeId: currentEmployeeId,
-                                leaveTypeId: type.id || type.name || 'unknown',
+                                leaveTypeId: key,
                                 leaveTypeName: type.name || 'Unknown',
-                                totalEntitlement: totalEntitlement,
-                                used: usedDays,
-                                pending: pendingDays,
-                                remaining: totalEntitlement - usedDays - pendingDays,
+                                totalEntitlement,
+                                used: usedDaysFromRequests,
+                                pending: pendingDaysFromRequests,
+                                remaining,
                                 accrued: totalEntitlement,
                                 year: new Date().getFullYear()
-                            };
-                        });
-                        console.log('📊 [Dashboard] Calculated balances from types:', balances.map(b => ({
-                            name: b.leaveTypeName,
-                            total: b.totalEntitlement,
-                            used: b.used,
-                            pending: b.pending,
-                            remaining: b.remaining
-                        })));
-                    } else {
-                        // If we have actual balances, also ensure we include all leave types that might not have balances yet
-                        const balanceLeaveTypeIds = new Set(balances.map(b => b.leaveTypeId));
-                        const missingLeaveTypes = uniqueLeaveTypes.filter(type => !balanceLeaveTypeIds.has(type.id));
-                        
-                        if (missingLeaveTypes.length > 0) {
-                            console.log('📊 [Dashboard] Adding balances for leave types without Firebase entries:', missingLeaveTypes.map(t => t.name));
-                            const additionalBalances = missingLeaveTypes.map(type => {
-                                const usedDays = leaveRequests
-                                    .filter(r => r.leaveTypeId === type.id && (r.status === 'approved' || r.status === 'Approved'))
-                                    .reduce((sum, r) => sum + r.totalDays, 0);
-
-                                const pendingDays = leaveRequests
-                                    .filter(r => r.leaveTypeId === type.id && (r.status === 'pending' || r.status === 'Pending'))
-                                    .reduce((sum, r) => sum + r.totalDays, 0);
-
-                                const totalEntitlement = type.maxDays || type.daysAllowed || 15;
-
-                                return {
-                                    id: type.id,
-                                    employeeId: currentEmployeeId,
-                                    leaveTypeId: type.id,
-                                    leaveTypeName: type.name,
-                                    totalEntitlement: totalEntitlement,
-                                    used: usedDays,
-                                    pending: pendingDays,
-                                    remaining: totalEntitlement - usedDays - pendingDays,
-                                    accrued: totalEntitlement,
-                                    year: new Date().getFullYear()
-                                };
                             });
-                            balances = [...balances, ...additionalBalances];
                         }
-                    }
+                    });
 
-                    setLeaveBalances(balances.length > 0 ? balances : mockLeaveBalances);
-                    const totalRemaining = balances.reduce((sum, b) => sum + (b.remaining || 0), 0);
-                    console.log('✅ [Dashboard] Loaded leave balances:', balances.length);
+                    // If we still have no balances (no leave types), fallback to mock data
+                    const mergedBalancesArray = Array.from(balanceMap.values());
+                    const mergedBalances = mergedBalancesArray.length > 0 ? mergedBalancesArray : mockLeaveBalances;
+                    const normalizeTypeKey = (balance: typeof mergedBalances[number]) => {
+                        const rawName = balance.leaveTypeName || '';
+                        const simplifiedName = rawName
+                            .toLowerCase()
+                            .replace(/\(.*?\)/g, '')
+                            .replace(/-.*/g, '')
+                            .trim();
+                        const rawId = (balance.leaveTypeId || '').toLowerCase();
+                        return simplifiedName || rawId || balance.id;
+                    };
+
+                    const clampedBalances = mergedBalances.map(balance => ({
+                        ...balance,
+                        remaining: Math.max(
+                            0,
+                            Math.min(
+                                balance.totalEntitlement,
+                                balance.remaining ?? 0
+                            )
+                        ),
+                        used: Math.min(balance.totalEntitlement, balance.used ?? 0),
+                        pending: Math.min(balance.totalEntitlement, balance.pending ?? 0)
+                    }));
+
+                    // Deduplicate balances that may exist multiple times per leave type
+                    const dedupedBalanceMap = new Map<string, typeof clampedBalances[number]>();
+                    clampedBalances.forEach(balance => {
+                        const key = normalizeTypeKey(balance);
+                        if (!dedupedBalanceMap.has(key)) {
+                            dedupedBalanceMap.set(key, balance);
+                        } else {
+                            const existing = dedupedBalanceMap.get(key)!;
+                            dedupedBalanceMap.set(key, {
+                                ...existing,
+                                totalEntitlement: Math.max(existing.totalEntitlement, balance.totalEntitlement),
+                                used: Math.max(existing.used, balance.used),
+                                pending: Math.max(existing.pending, balance.pending),
+                                remaining: Math.max(existing.remaining, balance.remaining),
+                                accrued: Math.max(existing.accrued ?? 0, balance.accrued ?? 0)
+                            });
+                        }
+                    });
+
+                    const finalBalances = Array.from(dedupedBalanceMap.values()).map(balance => {
+                        const totalEntitlement = balance.totalEntitlement ?? 0;
+                        const used = Math.min(totalEntitlement, balance.used ?? 0);
+                        const pending = Math.min(totalEntitlement - used, balance.pending ?? 0);
+                        const remaining = Math.max(0, totalEntitlement - used - pending);
+                        return {
+                            ...balance,
+                            totalEntitlement,
+                            used,
+                            pending,
+                            remaining
+                        };
+                    });
+
+                    setLeaveBalances(finalBalances);
+                    const totalRemaining = finalBalances.reduce((sum, b) => sum + (b.remaining || 0), 0);
+                    console.log('✅ [Dashboard] Loaded leave balances:', finalBalances.length);
                     console.log('📊 [Dashboard] Total remaining days (calculated):', totalRemaining);
-                    console.log('📊 [Dashboard] Balance breakdown:', balances.map(b => ({ 
-                        name: b.leaveTypeName, 
-                        total: b.totalEntitlement, 
-                        used: b.used, 
-                        pending: b.pending, 
-                        remaining: b.remaining 
+                    console.log('📊 [Dashboard] Balance breakdown:', finalBalances.map(b => ({
+                        name: b.leaveTypeName,
+                        total: b.totalEntitlement,
+                        used: b.used,
+                        pending: b.pending,
+                        remaining: b.remaining
                     })));
 
                     // Build activities from leave requests

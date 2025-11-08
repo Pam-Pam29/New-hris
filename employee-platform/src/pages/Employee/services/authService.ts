@@ -2,6 +2,7 @@ import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     sendPasswordResetEmail,
+    confirmPasswordReset as firebaseConfirmPasswordReset,
     updatePassword,
     signOut,
     User
@@ -257,7 +258,7 @@ class AuthService {
         }
     }
 
-    // Password reset
+    // Password reset - send email
     async resetPassword(email: string): Promise<boolean> {
         try {
             await sendPasswordResetEmail(auth, email);
@@ -265,6 +266,29 @@ class AuthService {
         } catch (error) {
             console.error('Error resetting password:', error);
             return false;
+        }
+    }
+
+    // Password reset - confirm with code
+    async confirmPasswordReset(oobCode: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+        try {
+            await firebaseConfirmPasswordReset(auth, oobCode, newPassword);
+            return { success: true };
+        } catch (error: any) {
+            console.error('Error confirming password reset:', error);
+            let errorMessage = 'Failed to reset password. Please try again.';
+            
+            if (error.code === 'auth/expired-action-code') {
+                errorMessage = 'The password reset link has expired. Please request a new one.';
+            } else if (error.code === 'auth/invalid-action-code') {
+                errorMessage = 'The password reset link is invalid or has already been used.';
+            } else if (error.code === 'auth/weak-password') {
+                errorMessage = 'Password is too weak. Please choose a stronger password.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            return { success: false, error: errorMessage };
         }
     }
 

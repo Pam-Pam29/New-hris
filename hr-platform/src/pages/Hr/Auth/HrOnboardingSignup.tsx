@@ -139,16 +139,16 @@ const HrOnboardingSignup: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
                     <div className="flex items-center justify-center mb-4">
-                        <Building className="w-12 h-12 text-blue-600" />
+                        <Building className="w-12 h-12 text-primary" />
                     </div>
-                    <CardTitle className="text-2xl font-bold text-gray-900">
+                    <CardTitle className="text-2xl font-bold text-foreground">
                         HR Onboarding Signup
                     </CardTitle>
-                    <CardDescription className="text-gray-600">
+                    <CardDescription className="text-muted-foreground">
                         Create your HR account to get started
                     </CardDescription>
                 </CardHeader>
@@ -190,7 +190,7 @@ const HrOnboardingSignup: React.FC = () => {
                         <div>
                             <Label htmlFor="email">Email Address</Label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="email"
                                     name="email"
@@ -242,7 +242,7 @@ const HrOnboardingSignup: React.FC = () => {
                         <div>
                             <Label htmlFor="password">Password</Label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="password"
                                     name="password"
@@ -255,7 +255,7 @@ const HrOnboardingSignup: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                                    className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
                                 >
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -265,7 +265,7 @@ const HrOnboardingSignup: React.FC = () => {
                         <div>
                             <Label htmlFor="confirmPassword">Confirm Password</Label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="confirmPassword"
                                     name="confirmPassword"
@@ -278,7 +278,7 @@ const HrOnboardingSignup: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                                    className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
                                 >
                                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -287,7 +287,7 @@ const HrOnboardingSignup: React.FC = () => {
 
                         <Button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-full"
                             disabled={isLoading}
                         >
                             {isLoading ? (
@@ -305,11 +305,11 @@ const HrOnboardingSignup: React.FC = () => {
                     </form>
 
                     <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                             Already have an account?{' '}
                             <button
                                 onClick={handleSignIn}
-                                className="text-blue-600 hover:text-blue-700 font-medium"
+                                className="text-primary hover:text-primary/80 font-medium"
                             >
                                 Sign In
                             </button>

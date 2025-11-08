@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -13,7 +14,8 @@ import {
     AlertCircle,
     Loader,
     Building,
-    ArrowRight
+    ArrowRight,
+    CheckCircle
 } from 'lucide-react';
 
 const EmployeeOnboardingSignin: React.FC = () => {
@@ -25,6 +27,8 @@ const EmployeeOnboardingSignin: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -62,9 +66,42 @@ const EmployeeOnboardingSignin: React.FC = () => {
         navigate('/employee-onboarding-signup', { replace: true });
     };
 
-    const handleForgotPassword = () => {
-        console.log('🔐 Forgot password clicked');
-        // TODO: Implement forgot password
+    const handleForgotPassword = async () => {
+        if (!formData.email) {
+            setError('Please enter your email address first');
+            setSuccess('');
+            return;
+        }
+
+        setIsResettingPassword(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            console.log('🔐 [Password Reset] Sending reset email to:', formData.email);
+            const auth = getAuth();
+            await sendPasswordResetEmail(auth, formData.email);
+            
+            setSuccess('Password reset email sent! Please check your inbox and follow the instructions to reset your password.');
+            console.log('✅ [Password Reset] Email sent successfully');
+        } catch (error: any) {
+            console.error('❌ [Password Reset] Error:', error);
+            let errorMessage = 'Failed to send password reset email. Please try again.';
+            
+            if (error.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email address.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address. Please check and try again.';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMessage = 'Too many requests. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
+        } finally {
+            setIsResettingPassword(false);
+        }
     };
 
     return (
@@ -87,6 +124,13 @@ const EmployeeOnboardingSignin: React.FC = () => {
                         <Alert className="mb-4" variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    {success && (
+                        <Alert className="mb-4" variant="default" style={{ backgroundColor: 'hsl(142 76% 36% / 0.1)', borderColor: 'hsl(142 76% 36%)' }}>
+                            <CheckCircle className="h-4 w-4" style={{ color: 'hsl(142 76% 36%)' }} />
+                            <AlertDescription style={{ color: 'hsl(142 76% 36%)' }}>{success}</AlertDescription>
                         </Alert>
                     )}
 
@@ -145,9 +189,17 @@ const EmployeeOnboardingSignin: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleForgotPassword}
-                                className="text-sm text-green-600 hover:text-green-700"
+                                disabled={isResettingPassword}
+                                className="text-sm text-green-600 hover:text-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Forgot password?
+                                {isResettingPassword ? (
+                                    <span className="flex items-center">
+                                        <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                        Sending...
+                                    </span>
+                                ) : (
+                                    'Forgot password?'
+                                )}
                             </button>
                         </div>
 

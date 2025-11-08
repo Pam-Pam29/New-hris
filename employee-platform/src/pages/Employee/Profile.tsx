@@ -13,23 +13,29 @@ import { getComprehensiveDataFlowService, EmployeeProfile } from '../../services
 import { Link, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 import { departmentService } from '../../services/departmentService';
 import EmployeeDocumentUpload from '../../components/EmployeeDocumentUpload';
 import { documentService } from '../../services/documentService';
 import { DocumentMetadata } from '../../services/documentMetadataService';
 import { testCloudinaryConfig } from '../../utils/cloudinaryTest';
 import { testFirestoreDocumentMetadata } from '../../utils/firestoreTest';
+import { Alert, AlertDescription } from '../../components/ui/alert';
 
 // Use the EmployeeProfile interface from the service
 type ComprehensiveProfile = EmployeeProfile;
 
 export default function EmployeeProfilePage() {
-    const { currentEmployee } = useAuth(); // Get logged-in employee from auth context
+    const { currentEmployee, setCurrentEmployee } = useAuth(); // Get logged-in employee from auth context
+    const { company } = useCompany();
     const [profile, setProfile] = useState<ComprehensiveProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [editData, setEditData] = useState<Partial<ComprehensiveProfile>>({});
     const [activeTab, setActiveTab] = useState('personal');
+    const [showProfileReminder, setShowProfileReminder] = useState(false);
+    const [requiredCompletion, setRequiredCompletion] = useState<number>(company?.settings?.profileCompletionThreshold ?? 75);
+    const location = useLocation();
 
     // Department options state
     const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: string, label: string }>>([]);
@@ -40,6 +46,15 @@ export default function EmployeeProfilePage() {
     const [loadingDocuments, setLoadingDocuments] = useState(false);
 
     const currentEmployeeId = currentEmployee?.employeeId || '';
+
+    useEffect(() => {
+        if (location.state?.reason === 'profile_incomplete') {
+            setShowProfileReminder(true);
+            setRequiredCompletion(location.state?.required ?? (company?.settings?.profileCompletionThreshold ?? 75));
+            // Clear navigation state so the message doesn't persist on future visits
+            window.history.replaceState({}, '', location.pathname);
+        }
+    }, [location, company?.settings?.profileCompletionThreshold]);
 
     // Test Cloudinary configuration on component mount
     useEffect(() => {
@@ -194,13 +209,13 @@ export default function EmployeeProfilePage() {
                         personalPhone: editData.contactInfo?.personalPhone || profile.contactInfo.personalPhone,
                         workPhone: editData.contactInfo?.workPhone || profile.contactInfo.workPhone,
                         address: {
-                            street: editData.contactInfo?.address?.street || profile.contactInfo.address.street,
-                            city: editData.contactInfo?.address?.city || profile.contactInfo.address.city,
-                            state: editData.contactInfo?.address?.state || profile.contactInfo.address.state,
-                            zipCode: editData.contactInfo?.address?.zipCode || profile.contactInfo.address.zipCode,
-                            country: editData.contactInfo?.address?.country || profile.contactInfo.address.country
+                            street: editData.contactInfo?.address?.street || profile.contactInfo?.address?.street || '',
+                            city: editData.contactInfo?.address?.city || profile.contactInfo?.address?.city || '',
+                            state: editData.contactInfo?.address?.state || profile.contactInfo?.address?.state || '',
+                            zipCode: editData.contactInfo?.address?.zipCode || profile.contactInfo?.address?.zipCode || '',
+                            country: editData.contactInfo?.address?.country || profile.contactInfo?.address?.country || ''
                         },
-                        emergencyContacts: editData.contactInfo?.emergencyContacts || profile.contactInfo.emergencyContacts
+                        emergencyContacts: editData.contactInfo?.emergencyContacts || profile.contactInfo?.emergencyContacts || []
                     },
                     workInfo: {
                         position: editData.workInfo?.position || profile.workInfo.position,
@@ -214,17 +229,17 @@ export default function EmployeeProfilePage() {
                         workLocation: editData.workInfo?.workLocation || profile.workInfo.workLocation,
                         workSchedule: editData.workInfo?.workSchedule || profile.workInfo.workSchedule,
                         salary: {
-                            baseSalary: editData.workInfo?.salary?.baseSalary || profile.workInfo.salary?.baseSalary || 0,
-                            currency: editData.workInfo?.salary?.currency || profile.workInfo.salary?.currency || 'USD',
-                            payFrequency: editData.workInfo?.salary?.payFrequency || profile.workInfo.salary?.payFrequency || 'Monthly'
+                            baseSalary: editData.workInfo?.salary?.baseSalary || profile.workInfo?.salary?.baseSalary || 0,
+                            currency: editData.workInfo?.salary?.currency || profile.workInfo?.salary?.currency || 'USD',
+                            payFrequency: editData.workInfo?.salary?.payFrequency || profile.workInfo?.salary?.payFrequency || 'Monthly'
                         }
                     },
                     bankingInfo: {
-                        bankName: editData.bankingInfo?.bankName || profile.bankingInfo.bankName,
-                        accountNumber: editData.bankingInfo?.accountNumber || profile.bankingInfo.accountNumber,
-                        routingNumber: editData.bankingInfo?.routingNumber || profile.bankingInfo.routingNumber,
-                        accountType: editData.bankingInfo?.accountType || profile.bankingInfo.accountType,
-                        salaryPaymentMethod: editData.bankingInfo?.salaryPaymentMethod || profile.bankingInfo.salaryPaymentMethod
+                        bankName: editData.bankingInfo?.bankName || profile.bankingInfo?.bankName || '',
+                        accountNumber: editData.bankingInfo?.accountNumber || profile.bankingInfo?.accountNumber || '',
+                        routingNumber: editData.bankingInfo?.routingNumber || profile.bankingInfo?.routingNumber || '',
+                        accountType: editData.bankingInfo?.accountType || profile.bankingInfo?.accountType || '',
+                        salaryPaymentMethod: editData.bankingInfo?.salaryPaymentMethod || profile.bankingInfo?.salaryPaymentMethod || ''
                     },
                     skills: (editData.skills || profile.skills || []).map((skill: any) => ({
                         ...skill,
@@ -251,12 +266,21 @@ export default function EmployeeProfilePage() {
                 console.log('Calling updateEmployeeProfile with:', profile.id, profileUpdates);
                 console.log('Converted date of birth:', profileUpdates.personalInfo.dateOfBirth);
                 console.log('Converted hire date:', profileUpdates.workInfo.hireDate);
-                await dataFlowService.updateEmployeeProfile(profile.id, profileUpdates);
+                const savedProfile = await dataFlowService.updateEmployeeProfile(profile.id, profileUpdates);
                 console.log('updateEmployeeProfile completed successfully');
 
-                // Update local state
-                const updatedProfile = { ...profile, ...editData };
-                setProfile(updatedProfile);
+                // Update local state with the authoritative profile from the service
+                if (savedProfile) {
+                    setProfile(savedProfile as any);
+
+                    // Sync profile completeness with auth context for route protection
+                    if (currentEmployee && savedProfile.profileStatus) {
+                        setCurrentEmployee({
+                            ...currentEmployee,
+                            profileCompleteness: savedProfile.profileStatus.completeness ?? currentEmployee.profileCompleteness
+                        });
+                    }
+                }
                 setEditing(false);
                 setEditData({});
 
@@ -267,12 +291,7 @@ export default function EmployeeProfilePage() {
                 console.log('All employees after save:', await dataFlowService.getAllEmployees());
 
                 // Reload the profile to see if it persisted
-                const reloadedProfile = await dataFlowService.getEmployeeProfile(profile.id);
-                console.log('Reloaded profile after save:', reloadedProfile);
-                if (reloadedProfile) {
-                    console.log('Reloaded date of birth:', reloadedProfile.personalInfo?.dateOfBirth, typeof reloadedProfile.personalInfo?.dateOfBirth);
-                    console.log('Reloaded hire date:', reloadedProfile.workInfo?.hireDate, typeof reloadedProfile.workInfo?.hireDate);
-                }
+                console.log('Saved profile after update:', savedProfile);
             } catch (error) {
                 console.error('Error saving profile:', error);
             }
@@ -379,10 +398,19 @@ export default function EmployeeProfilePage() {
                                     <p className="text-sm font-medium text-blue-900">Complete Your Profile Setup</p>
                                     <p className="text-xs text-blue-700 mt-1">
                                         Fill out all profile tabs and upload required documents in the Documents tab to access the full employee portal.
+                                        Employees must reach at least {company?.settings?.profileCompletionThreshold ?? 75}% completeness to unlock all tools.
                                     </p>
                                 </div>
                             </div>
                         </div>
+                        {showProfileReminder && (
+                            <Alert className="mt-4 border-yellow-200 bg-yellow-50">
+                                <AlertDescription className="text-yellow-800 text-sm">
+                                    Your profile is currently {currentData?.profileStatus?.completeness ?? 0}% complete.
+                                    You need at least {requiredCompletion}% to access other sections. Update the details below to continue.
+                                </AlertDescription>
+                            </Alert>
+                        )}
                     </div>
                     <div className="flex space-x-2">
                         {editing ? (

@@ -585,10 +585,10 @@ export default function LeaveManagement() {
               <Calendar className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-gradient mb-1">
-                Leave Management
-              </h1>
-              <p className="text-muted-foreground">Manage employee leave requests and policies with ease</p>
+              <h1 className="text-3xl font-bold text-foreground">Leave Management</h1>
+              <p className="text-muted-foreground mt-2">
+                Manage employee leave requests and policies with ease
+              </p>
             </div>
           </div>
           <Button 

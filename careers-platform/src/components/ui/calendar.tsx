@@ -1,11 +1,46 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import type { ButtonHTMLAttributes } from "react"
 import { DayPicker } from "react-day-picker"
 
 import { cn } from "../../lib/utils"
 import { buttonVariants } from "./button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
+
+const PreviousMonthButton = ({
+    className,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button
+        type="button"
+        {...props}
+        className={cn(
+            buttonVariants({ variant: "outline" }),
+            "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+            className
+        )}
+    >
+        <ChevronLeft className="h-4 w-4" />
+    </button>
+)
+
+const NextMonthButton = ({
+    className,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button
+        type="button"
+        {...props}
+        className={cn(
+            buttonVariants({ variant: "outline" }),
+            "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+            className
+        )}
+    >
+        <ChevronRight className="h-4 w-4" />
+    </button>
+)
 
 function Calendar({
     className,
@@ -52,8 +87,8 @@ function Calendar({
                 ...classNames,
             }}
             components={{
-                IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-                IconRight: () => <ChevronRight className="h-4 w-4" />,
+                PreviousMonthButton,
+                NextMonthButton,
             }}
             {...props}
         />

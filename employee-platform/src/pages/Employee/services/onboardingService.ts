@@ -5,15 +5,6 @@ export type OnboardingStep =
     | 'welcome_video'
     | 'contract_review'
     | 'contract_upload'
-    | 'personal_info'
-    | 'personal_info_extended'
-    | 'emergency_contacts'
-    | 'banking_info'
-    | 'document_upload'
-    | 'equipment_access'
-    | 'work_email_setup'
-    | 'team_introduction'
-    | 'policy_acknowledgment'
     | 'system_training'
     | 'completion';
 
@@ -326,15 +317,6 @@ class OnboardingService {
             'welcome_video',
             'contract_review',
             'contract_upload',
-            'personal_info',
-            'personal_info_extended',
-            'emergency_contacts',
-            'banking_info',
-            'document_upload',
-            'equipment_access',
-            'work_email_setup',
-            'team_introduction',
-            'policy_acknowledgment',
             'system_training',
             'completion'
         ];

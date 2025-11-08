@@ -10,9 +10,11 @@ import {
     Users,
     Clock,
     FileText,
-    Shield,
-    CreditCard
+    Upload,
+    BookOpen,
+    Play
 } from 'lucide-react';
+import { useCompany } from '../../context/CompanyContext';
 
 interface OnboardingCompletionProps {
     employeeId: string;
@@ -23,15 +25,13 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
     employeeId,
     onComplete
 }) => {
+    const { company } = useCompany();
+
     const completedSteps = [
-        { id: 'contract', title: 'Contract Review & Signing', icon: FileText },
-        { id: 'personal', title: 'Personal Information', icon: Users },
-        { id: 'contacts', title: 'Emergency Contacts', icon: Users },
-        { id: 'banking', title: 'Banking Information', icon: CreditCard },
-        { id: 'documents', title: 'Document Upload', icon: FileText },
-        { id: 'email', title: 'Work Email Setup', icon: Mail },
-        { id: 'policies', title: 'Policy Acknowledgment', icon: Shield },
-        { id: 'training', title: 'System Training', icon: Calendar }
+        { id: 'welcome', title: 'Welcome Video Watched', icon: Play },
+        { id: 'contract_review', title: 'Contract Reviewed', icon: FileText },
+        { id: 'contract_upload', title: 'Contract Uploaded', icon: Upload },
+        { id: 'system_overview', title: 'System Overview Completed', icon: BookOpen }
     ];
 
     return (
@@ -153,7 +153,15 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
                     <div className="bg-gray-50 p-4 rounded-lg">
                         <h4 className="font-medium text-gray-900 mb-2">Need Help?</h4>
                         <div className="text-sm text-gray-600 space-y-1">
-                            <p>• HR Department: hr@company.com | (555) 123-4567</p>
+                            <p>
+                                • HR Department:{' '}
+                                <a
+                                    href={`mailto:${company?.settings?.supportEmail ?? `hr@${company?.domain ?? 'company.com'}`}`}
+                                    className="text-blue-600 hover:underline"
+                                >
+                                    {company?.settings?.supportEmail ?? `hr@${company?.domain ?? 'company.com'}`}
+                                </a>
+                            </p>
                             <p>• IT Support: it@company.com | (555) 123-4568</p>
                             <p>• Employee Portal: portal.company.com</p>
                         </div>

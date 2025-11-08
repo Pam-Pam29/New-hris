@@ -281,19 +281,20 @@ export interface IComprehensiveDataFlowService {
     subscribeToAllEmployees(callback: (employees: EmployeeProfile[]) => void, companyId?: string | null): () => void;
 
     // Leave Management
-    getLeaveTypes(): Promise<LeaveType[]>;
+    getLeaveTypes(companyId?: string): Promise<LeaveType[]>;
     createLeaveType(leaveType: Omit<LeaveType, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeaveType>;
     updateLeaveType(id: string, updates: Partial<LeaveType>): Promise<void>;
     deleteLeaveType(id: string): Promise<void>;
 
-    getLeaveRequests(employeeId?: string): Promise<LeaveRequest[]>;
+    getLeaveRequests(employeeId?: string, companyId?: string): Promise<LeaveRequest[]>;
     createLeaveRequest(request: Omit<LeaveRequest, 'id' | 'submittedAt'>): Promise<LeaveRequest>;
     updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<void>;
     approveLeaveRequest(id: string, reviewedBy: string, comments?: string): Promise<void>;
     rejectLeaveRequest(id: string, reviewedBy: string, comments?: string): Promise<void>;
 
-    getLeaveBalances(employeeId?: string): Promise<LeaveBalance[]>;
+    getLeaveBalances(employeeId?: string, companyId?: string): Promise<LeaveBalance[]>;
     updateLeaveBalance(employeeId: string, leaveTypeId: string, updates: Partial<LeaveBalance>): Promise<void>;
+    ensureLeaveBalancesForEmployee(employeeId: string, companyId: string): Promise<void>;
 
     // Policy Management
     getPolicies(activeOnly?: boolean): Promise<Policy[]>;
@@ -461,7 +462,7 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             }
             
             const querySnapshot = await getDocs(q);
-            
+
             // Get all leave types and sort in memory to avoid index requirement
             let leaveTypes = querySnapshot.docs.map(doc => this.convertFirestoreToLeaveType(doc.data()));
             
@@ -688,7 +689,7 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
             if (companyId) {
                 q = query(q, where('companyId', '==', companyId));
             }
-            
+
             if (employeeId) {
                 q = query(q, where('employeeId', '==', employeeId));
             }
@@ -1148,6 +1149,67 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         await setDoc(docRef, updates, { merge: true });
     }
 
+    async ensureLeaveBalancesForEmployee(employeeId: string, companyId: string): Promise<void> {
+        try {
+            const [leaveTypes, existingBalances] = await Promise.all([
+                this.getLeaveTypes(companyId),
+                this.getLeaveBalances(employeeId, companyId)
+            ]);
+
+            if (!leaveTypes || leaveTypes.length === 0) {
+                return;
+            }
+
+            const existingBalanceIds = new Set(
+                existingBalances.map(balance => balance.leaveTypeId || balance.id || '')
+            );
+
+            const db = getFirebaseDb();
+            const batch = writeBatch(db);
+            let writes = 0;
+            const currentYear = new Date().getFullYear();
+
+            leaveTypes.forEach((leaveType) => {
+                const leaveTypeId = leaveType.id || leaveType.name;
+                if (!leaveTypeId) {
+                    return;
+                }
+
+                if (existingBalanceIds.has(leaveTypeId)) {
+                    return;
+                }
+
+                const totalDays = leaveType.maxDays ?? (leaveType as any).daysAllowed ?? 0;
+                const docId = `${employeeId}_${leaveTypeId}`;
+
+                batch.set(doc(db, 'leaveBalances', docId), {
+                    employeeId,
+                    companyId,
+                    leaveTypeId,
+                    leaveTypeName: leaveType.name || 'Leave',
+                    totalDays,
+                    usedDays: 0,
+                    pendingDays: 0,
+                    remainingDays: totalDays,
+                    carryOverDays: 0,
+                    accruedDays: totalDays,
+                    year: currentYear,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+
+                writes++;
+            });
+
+            if (writes > 0) {
+                await batch.commit();
+                console.log(`✅ [LeaveBalances] Seeded ${writes} leave balance(s) for ${employeeId}`);
+            }
+        } catch (error) {
+            console.error(`❌ [LeaveBalances] Failed to ensure balances for ${employeeId}:`, error);
+        }
+    }
+
     async getPolicyAcknowledgments(policyId?: string, employeeId?: string, companyId?: string): Promise<PolicyAcknowledgment[]> {
         let q = query(collection(getFirebaseDb(), 'policyAcknowledgments'), orderBy('acknowledgedAt', 'desc'));
         
@@ -1307,6 +1369,7 @@ class MockComprehensiveDataFlowService implements IComprehensiveDataFlowService 
     async rejectLeaveRequest(id: string, reviewedBy: string, comments?: string): Promise<void> { throw new Error('Mock service not implemented - use Firebase'); }
     async getLeaveBalances(employeeId?: string): Promise<LeaveBalance[]> { throw new Error('Mock service not implemented - use Firebase'); }
     async updateLeaveBalance(employeeId: string, leaveTypeId: string, updates: Partial<LeaveBalance>): Promise<void> { throw new Error('Mock service not implemented - use Firebase'); }
+    async ensureLeaveBalancesForEmployee(): Promise<void> { throw new Error('Mock service not implemented - use Firebase'); }
     async getPolicies(activeOnly?: boolean): Promise<Policy[]> { throw new Error('Mock service not implemented - use Firebase'); }
     async createPolicy(policy: Omit<Policy, 'id' | 'createdAt' | 'lastModified'>): Promise<Policy> { throw new Error('Mock service not implemented - use Firebase'); }
     async updatePolicy(id: string, updates: Partial<Policy>): Promise<void> { throw new Error('Mock service not implemented - use Firebase'); }

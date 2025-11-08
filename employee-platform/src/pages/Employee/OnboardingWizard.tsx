@@ -11,21 +11,11 @@ import {
     AlertCircle,
     ArrowRight,
     ArrowLeft,
-    User,
     FileText,
     Upload,
-    Phone,
-    CreditCard,
-    Mail,
-    Shield,
     BookOpen,
     PartyPopper,
-    Play,
-    Laptop,
-    Users,
-    Camera,
-    GraduationCap,
-    Briefcase
+    Play
 } from 'lucide-react';
 import {
     onboardingService,
@@ -35,15 +25,6 @@ import {
 import WelcomeVideo from './WelcomeVideo';
 import ContractReview from './ContractReview';
 import ContractUpload from './ContractUpload';
-import PersonalInfoForm from './PersonalInfoForm';
-import PersonalInfoExtended from './PersonalInfoExtended';
-import EmergencyContactsForm from './EmergencyContactsForm';
-import BankingInfoForm from './BankingInfoForm';
-import DocumentUploadForm from './DocumentUploadForm';
-import EquipmentAccess from './EquipmentAccess';
-import WorkEmailSetup from './WorkEmailSetup';
-import TeamIntroduction from './TeamIntroduction';
-import PolicyAcknowledgment from './PolicyAcknowledgment';
 import SystemTraining from './SystemTraining';
 import OnboardingCompletion from './OnboardingCompletion';
 import { useAuth } from '../../context/AuthContext';
@@ -82,60 +63,6 @@ const OnboardingWizard: React.FC = () => {
             description: 'Upload your signed employment contract',
             icon: Upload,
             component: ContractUpload
-        },
-        personal_info: {
-            title: 'Personal Information',
-            description: 'Provide your personal details',
-            icon: User,
-            component: PersonalInfoForm
-        },
-        personal_info_extended: {
-            title: 'Extended Profile',
-            description: 'Complete your professional profile',
-            icon: Camera,
-            component: PersonalInfoExtended
-        },
-        emergency_contacts: {
-            title: 'Emergency Contacts',
-            description: 'Add emergency contact information',
-            icon: Phone,
-            component: EmergencyContactsForm
-        },
-        banking_info: {
-            title: 'Banking Information',
-            description: 'Set up direct deposit information',
-            icon: CreditCard,
-            component: BankingInfoForm
-        },
-        document_upload: {
-            title: 'Document Upload',
-            description: 'Upload required documents',
-            icon: Upload,
-            component: DocumentUploadForm
-        },
-        equipment_access: {
-            title: 'Equipment & Access',
-            description: 'Set up your workspace and access',
-            icon: Laptop,
-            component: EquipmentAccess
-        },
-        work_email_setup: {
-            title: 'Work Email Setup',
-            description: 'Your company email address',
-            icon: Mail,
-            component: WorkEmailSetup
-        },
-        team_introduction: {
-            title: 'Meet Your Team',
-            description: 'Get to know your colleagues and schedule',
-            icon: Users,
-            component: TeamIntroduction
-        },
-        policy_acknowledgment: {
-            title: 'Company Policies',
-            description: 'Review and acknowledge company policies',
-            icon: Shield,
-            component: PolicyAcknowledgment
         },
         system_training: {
             title: 'System Overview',
@@ -212,17 +139,11 @@ const OnboardingWizard: React.FC = () => {
                 // Initialize onboarding progress if none exists
                 onboardingProgress = {
                     employeeId,
-                    currentStep: 'contract_review' as OnboardingStep, // Start with contract review
+                    currentStep: 'welcome_video' as OnboardingStep,
                     completedSteps: [],
-                    workEmail: '',
+                    welcomeVideoWatched: false,
                     contractReviewed: false,
                     contractUploaded: false,
-                    personalInfoCompleted: false,
-                    emergencyContactsCompleted: false,
-                    bankingInfoCompleted: false,
-                    documentsUploaded: false,
-                    workEmailSetup: false,
-                    policiesAcknowledged: false,
                     systemTrainingCompleted: false
                 };
 
@@ -231,6 +152,16 @@ const OnboardingWizard: React.FC = () => {
 
                 // Create default contract if none exists
                 await createDefaultContract(employeeId);
+            }
+
+            const availableSteps = Object.keys(onboardingSteps) as OnboardingStep[];
+            onboardingProgress.completedSteps = (onboardingProgress.completedSteps || []).filter(step =>
+                availableSteps.includes(step)
+            );
+
+            if (!availableSteps.includes(onboardingProgress.currentStep)) {
+                const nextUncompleted = availableSteps.find(step => !onboardingProgress!.completedSteps.includes(step));
+                onboardingProgress.currentStep = nextUncompleted || availableSteps[availableSteps.length - 1];
             }
 
             setProgress(onboardingProgress);
@@ -253,13 +184,6 @@ const OnboardingWizard: React.FC = () => {
             );
 
             if (success) {
-                // Special handling for personal info -> work email generation
-                if (progress.currentStep === 'personal_info' && stepData.firstName && stepData.lastName) {
-                    const workEmail = await onboardingService.generateWorkEmail(stepData);
-                    // Update progress state with generated work email
-                    setProgress(prev => prev ? { ...prev, workEmail } : null);
-                }
-
                 const nextStep = onboardingService.getNextOnboardingStep(progress.currentStep);
                 if (nextStep) {
                     setProgress(prev => prev ? {

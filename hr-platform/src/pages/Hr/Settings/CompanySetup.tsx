@@ -213,7 +213,7 @@ export default function CompanySetup() {
             for (const leaveType of defaultLeaveTypes) {
                 // Check if a leave type with this name already exists for this company
                 if (!existingLeaveTypeNames.includes(leaveType.name)) {
-                    await addDoc(leaveTypesRef, leaveType);
+                await addDoc(leaveTypesRef, leaveType);
                     createdCount++;
                     console.log(`✅ [CompanySetup] Created leave type: ${leaveType.name}`);
                 } else {

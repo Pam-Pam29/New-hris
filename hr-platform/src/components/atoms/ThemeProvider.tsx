@@ -27,6 +27,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   // Apply theme to HTML element and re-apply branding colors
   useEffect(() => {
     const root = window.document.documentElement;
+    const body = window.document.body;
     
     // Remove all theme classes first
     root.classList.remove('light', 'dark');
@@ -37,20 +38,60 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     // Also set data-theme attribute for better CSS targeting
     root.setAttribute('data-theme', theme);
     
-    // Force re-render by updating CSS variables
+    // Force re-render by updating CSS variables and triggering repaint
     root.style.colorScheme = theme;
     
+    // Force a repaint to ensure CSS variables are applied
+    void root.offsetHeight; // Trigger reflow
+    
     console.log('🎨 Theme changed to:', theme);
+    console.log('🎨 HTML classes:', root.className);
+    console.log('🎨 Computed background:', window.getComputedStyle(body).backgroundColor);
+    console.log('🎨 CSS variable --background:', getComputedStyle(root).getPropertyValue('--background'));
+    console.log('🎨 CSS variable --foreground:', getComputedStyle(root).getPropertyValue('--foreground'));
+    
+    // Force a re-render by updating body style directly
+    const bgVar = getComputedStyle(root).getPropertyValue('--background').trim();
+    const fgVar = getComputedStyle(root).getPropertyValue('--foreground').trim();
+    
+    // Use the actual HSL values from CSS variables
+    body.style.backgroundColor = bgVar ? `hsl(${bgVar})` : '';
+    body.style.color = fgVar ? `hsl(${fgVar})` : '';
+    
+    setTimeout(() => {
+      const computedBg = window.getComputedStyle(body).backgroundColor;
+      console.log('🎨 Body styles forced:', {
+        background: body.style.backgroundColor,
+        color: body.style.color,
+        computed: computedBg,
+        bgVar: bgVar,
+        fgVar: fgVar
+      });
+      
+      // If still white in dark mode, force it again
+      if (theme === 'dark' && (computedBg.includes('255, 255, 255') || computedBg === 'rgba(0, 0, 0, 0)')) {
+        body.style.setProperty('background-color', `hsl(${bgVar})`, 'important');
+        body.style.setProperty('color', `hsl(${fgVar})`, 'important');
+        console.log('🔧 Forced dark mode background with !important');
+      }
+    }, 10);
     
     // Re-apply branding colors when theme changes
-    const primaryColorHex = root.style.getPropertyValue('--company-primary-hex');
-    const secondaryColorHex = root.style.getPropertyValue('--company-secondary-hex');
+    const primaryColorHex = root.style.getPropertyValue('--company-primary-hex') || 
+                            getComputedStyle(root).getPropertyValue('--company-primary-hex').trim();
+    const secondaryColorHex = root.style.getPropertyValue('--company-secondary-hex') || 
+                              getComputedStyle(root).getPropertyValue('--company-secondary-hex').trim();
     
     if (primaryColorHex && secondaryColorHex && 
         primaryColorHex !== 'hsl(var(--primary))' && 
-        secondaryColorHex !== 'hsl(var(--secondary))') {
+        secondaryColorHex !== 'hsl(var(--secondary))' &&
+        primaryColorHex !== '' &&
+        secondaryColorHex !== '') {
       applyBrandingColors(primaryColorHex, secondaryColorHex, theme === 'dark');
     }
+    
+    // Dispatch a custom event for components that need to react to theme changes
+    window.dispatchEvent(new CustomEvent('theme-change', { detail: { theme } }));
   }, [theme]);
 
   const setTheme = (newTheme: 'light' | 'dark') => {

@@ -16,14 +16,54 @@ service cloud.firestore {
     
     // Helper function to check if user owns the resource
     function isOwner(employeeId) {
-      return isAuthenticated() && 
-        (request.auth.uid == employeeId || 
-         request.auth.token.email == get(/databases/$(database)/documents/employeeProfiles/$(employeeId)).data.auth.email);
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/employees/$(employeeId))
+        && (
+          get(/databases/$(database)/documents/employees/$(employeeId)).data.auth != null
+            && get(/databases/$(database)/documents/employees/$(employeeId)).data.auth.firebaseUid == request.auth.uid
+          ||
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo != null
+            && (
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail == request.auth.token.email
+              )
+              ||
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail == request.auth.token.email
+              )
+            )
+          )
+        );
     }
     
     // Simplified owner check by email (for employee access)
     function isEmployeeOwner(employeeId) {
-      return isAuthenticated(); // Simplified for development - app handles email matching
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/employees/$(employeeId))
+        && (
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.auth != null
+            && get(/databases/$(database)/documents/employees/$(employeeId)).data.auth.firebaseUid == request.auth.uid
+          )
+          ||
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo != null
+            && (
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail == request.auth.token.email
+              )
+              ||
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail == request.auth.token.email
+              )
+            )
+          )
+        );
     }
     
     // Helper function for company isolation (simplified for development)
@@ -275,6 +315,24 @@ service cloud.firestore {
       allow update, delete: if isHROrAdmin();
     }
     
+    // ==========================================
+    // EMPLOYEE BENEFITS
+    // ==========================================
+    match /employeeBenefits/{benefitId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
+    match /benefits/{benefitId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
+    match /benefits_enrollments/{enrollmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
     // ==========================================
     // ACTIVITY LOGS - Admin only
     // ==========================================

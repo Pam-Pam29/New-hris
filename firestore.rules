@@ -16,14 +16,54 @@ service cloud.firestore {
     
     // Helper function to check if user owns the resource
     function isOwner(employeeId) {
-      return isAuthenticated() && 
-        (request.auth.uid == employeeId || 
-         request.auth.token.email == get(/databases/$(database)/documents/employeeProfiles/$(employeeId)).data.auth.email);
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/employees/$(employeeId))
+        && (
+          get(/databases/$(database)/documents/employees/$(employeeId)).data.auth != null
+            && get(/databases/$(database)/documents/employees/$(employeeId)).data.auth.firebaseUid == request.auth.uid
+          ||
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo != null
+            && (
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail == request.auth.token.email
+              )
+              ||
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail == request.auth.token.email
+              )
+            )
+          )
+        );
     }
     
     // Simplified owner check by email (for employee access)
     function isEmployeeOwner(employeeId) {
-      return isAuthenticated(); // Simplified for development - app handles email matching
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/employees/$(employeeId))
+        && (
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.auth != null
+            && get(/databases/$(database)/documents/employees/$(employeeId)).data.auth.firebaseUid == request.auth.uid
+          )
+          ||
+          (
+            get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo != null
+            && (
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.workEmail == request.auth.token.email
+              )
+              ||
+              (
+                get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail != null
+                && get(/databases/$(database)/documents/employees/$(employeeId)).data.contactInfo.personalEmail == request.auth.token.email
+              )
+            )
+          )
+        );
     }
     
     // Helper function for company isolation (simplified for development)
@@ -159,6 +199,18 @@ service cloud.firestore {
       allow read: if isAuthenticated(); // Simplified for development
       allow write: if isHROrAdmin();
     }
+
+    // Employee payroll records stored under camelCase path
+    match /payrollRecords/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
+    // Generic payroll sub-collections (e.g. /payroll/{companyId}/records/{recordId})
+    match /payroll/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
     
     match /financial_requests/{requestId} {
       allow create: if isAuthenticated();
@@ -226,6 +278,12 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow read: if isAuthenticated();
       allow update, delete: if isHROrAdmin();
+    }
+
+    // Office location geofencing data
+    match /officeLocations/{officeId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
     }
     
     // Added: Missing starterKits collection
@@ -301,6 +359,24 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow read: if isAuthenticated();
       allow update, delete: if isHROrAdmin();
+    }
+
+    // ==========================================
+    // EMPLOYEE BENEFITS
+    // ==========================================
+    match /employeeBenefits/{benefitId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
+    match /benefits/{benefitId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
+    }
+
+    match /benefits_enrollments/{enrollmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isHROrAdmin();
     }
     
     // ==========================================
