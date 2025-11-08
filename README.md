@@ -1,311 +1,72 @@
-# 🏢 HRIS (Human Resources Information System)
+New HRIS Platform
+=================
 
-A comprehensive **three-platform** HR management system built with React, TypeScript, and Firebase.
+This repository contains the multi-tenant HRIS suite split across three React applications:
 
----
+- `hr-platform/` – HR admin portal for company setup, employee management, and configuration
+- `employee-platform/` – employee self-service portal
+- `careers-platform/` – public-facing careers site with slugged company routing
 
-## 🎯 Three Platforms
+## Environments
 
-| Platform | Port | Access | Purpose |
-|----------|------|--------|---------|
-| **HR Platform** | 3003 | Internal (Auth) | HR management & recruitment |
-| **Employee Platform** | 3001 | Internal (Auth) | Employee self-service portal |
-| **Careers Platform** | 3004 | **Public** | Public job board for candidates ⭐ |
+Production builds are deployed to Vercel:
 
----
+- HR Admin Portal · https://hr-platform-l54uor6q2-pam-pam29s-projects.vercel.app
+- Employee Portal · https://hris-employee-platform-qg05c29xe-pam-pam29s-projects.vercel.app
+- Careers Portal · https://hris-careers-platform-jyjykiok4-pam-pam29s-projects.vercel.app
 
-## 🚀 Quick Start
+Firebase (project `hris-system-baa22`) powers authentication, Firestore, and storage for all three apps.
 
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- Firebase project (for production) or works with mock data
+## Local Setup
 
-### Initial Setup
-
-1. **Clone and Install Dependencies**
 ```bash
-# HR Platform
-cd hr-platform
 npm install
-
-# Employee Platform
-cd employee-platform
-npm install
-
-# Careers Platform (NEW!)
-cd careers-platform
-npm install
+npm run bootstrap             # if using a workspace manager such as npm workspaces
+npm run dev:hr                # start HR portal
+npm run dev:employee          # start employee portal
+npm run dev:careers           # start careers portal
 ```
 
-2. **Configure Environment Variables**
+Each app reads its Firebase configuration from environment variables. Copy the `example.env` in each sub-project to `.env.local` and fill in the keys from Firebase console.
+
+## Backfill Script
+
+`scripts/backfillPlatformConfig.js` keeps Firestore `systemConfig` and `hrSettings` documents aligned with the latest deployment URLs and slugs. Run it after every production deploy:
+
+```powershell
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\hris-admin.json\hris-system-baa22-firebase-adminsdk-fbsvc-81a3572f70.json"
+node scripts\backfillPlatformConfig.js
+```
+
+## Testing
+
+Refer to `BETA_TEST_GUIDE.md` for a step-by-step beta checklist covering:
+
+- Creating a fresh company and confirming slugged portal links
+- Employee invitation flow and onboarding wizard validation
+- Careers portal slug routing and regression spot checks
+
+Automated tests can be executed via:
+
 ```bash
-# HR Platform
-cp hr-platform/.env.example hr-platform/.env
-# Edit .env with your Firebase credentials
-
-# Employee Platform  
-cp employee-platform/.env.example employee-platform/.env
-# Edit .env with your Firebase credentials
+npm test              # unit tests per workspace
+npm run lint          # lint all packages
 ```
 
-3. **Run Development Servers**
+End-to-end smoke tests are run manually against the deployed environments during the beta cycle.
+
+## Deployment
+
+Deployments rely on Vercel. You can trigger fresh builds with:
+
 ```bash
-# HR Platform (Terminal 1)
-cd hr-platform
-npm run dev
-# Opens on http://localhost:3003
-
-# Employee Platform (Terminal 2)
-cd employee-platform
-npm run dev
-# Opens on http://localhost:3001
-
-# Careers Platform (Terminal 3) - PUBLIC JOB BOARD ⭐
-cd careers-platform
-npm run dev
-# Opens on http://localhost:3004
+cd hr-platform && vercel deploy --prod --yes
+cd ../employee-platform && vercel deploy --prod --yes
+cd ../careers-platform && vercel deploy --prod --yes
 ```
 
----
-
-## 📦 Project Structure
-
-```
-New-hris/
-├── hr-platform/              # HR Management Dashboard
-├── employee-platform/        # Employee Self-Service Portal
-├── shared-types/            # Shared TypeScript types
-├── shared-services/         # Shared service layer (planned)
-├── docs/                    # Documentation
-│   ├── setup/              # Setup and configuration guides
-│   ├── features/           # Feature documentation
-│   ├── troubleshooting/    # Debug and troubleshooting guides
-│   └── archive/            # Historical documentation
-└── README.md               # This file
-```
+After deploying, re-run the backfill script so all companies reference the new canonical URLs.
 
 ---
 
-## 🎯 Platform Overview
-
-### HR Platform (Port 3001)
-**For HR Administrators**
-
-Features:
-- 👥 Employee Management
-- 📅 Leave Management & Approvals
-- 💰 Payroll & Compensation
-- 📊 Performance Management
-- 🎯 Goal Tracking
-- 📋 Asset Management
-- 📝 Policy Management
-- ⏰ Time & Attendance Tracking
-- 👔 Recruitment & Onboarding
-
-### Employee Platform (Port 3002)
-**For Employees**
-
-Features:
-- 👤 Personal Profile Management
-- 📅 Leave Requests
-- 💼 Payroll & Compensation View
-- 🎯 Performance Goals
-- 📋 Asset Requests
-- 📖 Policy Acknowledgment
-- ⏰ Time Clock In/Out
-- 🤝 Meeting Scheduling
-
----
-
-## 🔥 Firebase Integration
-
-Both platforms connect to Firebase for:
-- **Firestore**: Real-time database
-- **Authentication**: User management
-- **Storage**: File uploads
-- **Analytics**: Usage tracking
-
-### Environment Variables Required:
-```env
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASUREMENT_ID=
-```
-
-See [Setup Guide](docs/setup/ENVIRONMENT_SETUP.md) for detailed configuration.
-
----
-
-## 📚 Documentation
-
-### Setup & Configuration
-- [Environment Setup](docs/setup/ENVIRONMENT_SETUP.md)
-- [Firebase Configuration](docs/setup/FIREBASE_SETUP.md)
-- [Google Meet Integration](docs/setup/GOOGLE_MEET_SETUP.md)
-
-### Features
-- [Payroll System](docs/features/PAYROLL_SYSTEM_ANALYSIS.md)
-- [Leave Management](docs/features/LEAVE_MANAGEMENT_COMPLETE.md)
-- [Asset Management](docs/features/ASSET_MANAGEMENT_COMPLETE.md)
-- [Time Tracking](docs/features/TIME_MANAGEMENT_COMPLETE_FINAL.md)
-- [Performance Management](docs/features/PERFORMANCE_MANAGEMENT_COMPLETE.md)
-
-### Troubleshooting
-- [Common Issues](docs/troubleshooting/)
-- [Debugging Guides](docs/troubleshooting/)
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- ⚛️ React 18
-- 📘 TypeScript
-- 🎨 Tailwind CSS
-- 🧩 Radix UI Components
-- 📊 Recharts (Analytics)
-- 🔥 Vite (Build tool)
-
-### Backend
-- 🔥 Firebase Firestore
-- 🔐 Firebase Authentication
-- 📦 Firebase Storage
-
-### State Management
-- React Hooks
-- Real-time Firebase listeners
-
----
-
-## 🔐 Security
-
-### ⚠️ Important Security Notes:
-
-1. **Never commit `.env` files** - They contain sensitive credentials
-2. **Use `.env.example` for templates** - Share structure, not secrets
-3. **`.gitignore` is configured** - Protects sensitive files automatically
-4. **Rotate exposed keys immediately** - If credentials are accidentally committed
-
-See [Security Fix Documentation](SECURITY_FIX_COMPLETE.md) for details.
-
----
-
-## 📊 Key Features
-
-### Real-Time Synchronization
-- Live updates across all platforms
-- Instant notifications
-- Bidirectional data flow
-
-### Comprehensive HR Modules
-- ✅ Employee Management
-- ✅ Leave Management
-- ✅ Payroll & Compensation
-- ✅ Performance Management
-- ✅ Asset Management
-- ✅ Policy Management
-- ✅ Time & Attendance
-- ✅ Recruitment & Onboarding
-
-### Smart Notifications
-- Real-time alerts
-- Action-based notifications
-- Cross-platform sync
-
----
-
-## 🧪 Development
-
-### Available Scripts
-
-**HR Platform:**
-```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
-```
-
-**Employee Platform:**
-```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
-```
-
----
-
-## 📝 Recent Updates
-
-- ✅ Security fixes applied (`.env` files, `.gitignore`)
-- ✅ Documentation organized into `docs/` folder
-- ✅ Real-time Firebase integration complete
-- ✅ Dual platform architecture operational
-- ✅ All core HR modules implemented
-
----
-
-## 🐛 Known Issues & Limitations
-
-- Code duplication between platforms (planned: shared services)
-- Some TypeScript types are duplicated (planned: consolidation)
-- Firebase version mismatch between root and platforms
-- Hardcoded employee IDs in some components (planned: proper auth)
-
-See [Codebase Issues Report](CODEBASE_ISSUES_REPORT.md) for full details.
-
----
-
-## 🚧 Roadmap
-
-### Immediate (Done ✅)
-- [x] Security fixes (`.env`, `.gitignore`)
-- [x] Documentation organization
-- [x] Firebase integration
-
-### Short-term (Planned)
-- [ ] Consolidate shared services
-- [ ] Implement proper authentication
-- [ ] Add input validation
-- [ ] Add error boundaries
-
-### Long-term (Future)
-- [ ] Mobile app versions
-- [ ] Advanced reporting
-- [ ] Multi-company support
-- [ ] API for integrations
-
----
-
-## 📞 Support & Troubleshooting
-
-1. Check [Documentation](docs/)
-2. Review [Troubleshooting Guides](docs/troubleshooting/)
-3. See [Codebase Issues Report](CODEBASE_ISSUES_REPORT.md)
-
----
-
-## 📄 License
-
-[Your License Here]
-
----
-
-## 🤝 Contributing
-
-[Your Contributing Guidelines Here]
-
----
-
-**Last Updated:** October 10, 2025  
-**Version:** 1.0.0  
-**Status:** ✅ Operational
-
-
-
+For additional architectural notes and change logs, see the documents under `/docs/` (e.g., `WHATS_NEXT_COMPREHENSIVE.md`).
