@@ -71,6 +71,12 @@ pnpm-lock.yaml
 .eslintcache
 .parcel-cache
 
+# Python files (not needed for deployment)
+requirements.txt
+*.py
+__pycache__/
+*.pyc
+
 # Test files with API keys
 test-email-now.js
 test-mailgun.js
