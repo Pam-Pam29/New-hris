@@ -260,33 +260,6 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
                                     {hrEmail}
                                 </a>
                             </p>
-                            {itSupport && (
-                                <p>
-                                    • IT Support:{' '}
-                                    {company?.settings?.itSupportEmail && (
-                                        <a
-                                            href={`mailto:${company.settings.itSupportEmail}`}
-                                            className="text-blue-600 hover:underline"
-                                        >
-                                            {company.settings.itSupportEmail}
-                                        </a>
-                                    )}
-                                    {company?.settings?.itSupportPhone && (
-                                        <span> | {company.settings.itSupportPhone}</span>
-                                    )}
-                                </p>
-                            )}
-                            <p>
-                                • Employee Portal:{' '}
-                                <a
-                                    href={employeePortalUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
-                                >
-                                    {employeePortalUrl.replace(/^https?:\/\//, '')}
-                                </a>
-                            </p>
                         </div>
                     </div>
 

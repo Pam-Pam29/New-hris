@@ -129,11 +129,13 @@ export function Sidebar() {
                 <TypographySmall className="font-medium">
                   {currentEmployee?.personalInfo?.firstName && currentEmployee?.personalInfo?.lastName
                     ? `${currentEmployee.personalInfo.firstName} ${currentEmployee.personalInfo.lastName}`
-                    : 'Employee'
+                    : currentEmployee?.firstName && currentEmployee?.lastName
+                    ? `${currentEmployee.firstName} ${currentEmployee.lastName}`
+                    : 'User'
                   }
                 </TypographySmall>
                 <TypographyMuted className="dark:text-muted-foreground">
-                  {currentEmployee?.workInfo?.position || 'Employee'}
+                  {currentEmployee?.workInfo?.position || currentEmployee?.role || 'Staff'}
                 </TypographyMuted>
               </div>
             )}

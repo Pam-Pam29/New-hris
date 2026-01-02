@@ -90,8 +90,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         return <Navigate to="/login" replace />;
     }
 
-    // Check if onboarding completed
-    if (currentEmployee?.onboardingStatus !== 'completed') {
+    // Check if onboarding completed - only redirect if explicitly not completed
+    // Don't redirect if onboardingStatus is undefined/null (still loading)
+    if (currentEmployee?.onboardingStatus && currentEmployee.onboardingStatus !== 'completed') {
         console.log('📋 [ProtectedRoute] Onboarding not complete, redirecting to onboarding');
         return <Navigate to="/onboarding" replace />;
     }

@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                                 lastName: data.personalInfo?.lastName || '',
                                 role: data.workInfo?.position || '',
                                 department: data.workInfo?.department || '',
-                                onboardingStatus: data.onboardingStatus || data.onboardingProgress?.isComplete ? 'completed' : (data.onboardingProgress?.currentStep ? 'in_progress' : 'not_started'),
+                                onboardingStatus: data.onboardingStatus === 'completed' || data.onboardingProgress?.isComplete === true ? 'completed' : (data.onboardingProgress?.currentStep ? 'in_progress' : 'not_started'),
                                 profileCompleteness: data.profileStatus?.completeness || 0
                             });
                             console.log('✅ [Auth] Employee loaded from session');
