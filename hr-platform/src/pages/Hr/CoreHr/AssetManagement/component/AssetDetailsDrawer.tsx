@@ -1,25 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../../../components/ui/sheet';
 import { Button } from '../../../../../components/ui/button';
+import { Badge } from '../../../../../components/ui/badge';
 import { Separator } from '../../../../../components/ui/separator';
-import { Package, User, Calendar, DollarSign, MapPin, Settings, History, Edit, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { Package, User, Calendar, DollarSign, MapPin, Settings, History, Edit, UserPlus, ArrowRightLeft, Wrench, Loader } from 'lucide-react';
 import { TypographyH3, TypographyP } from '../../../../../components/ui/typography';
-
-interface AssetHistoryEntry {
-  id: number;
-  action: 'assigned' | 'unassigned' | 'transferred' | 'created' | 'maintenance' | 'status_change';
-  date: string;
-  fromEmployee?: string;
-  toEmployee?: string;
-  performedBy: string;
-  notes?: string;
-}
-
-import { Asset } from '../types';
-
-interface AssetWithHistory extends Asset {
-  history?: AssetHistoryEntry[];
-}
+import { Asset, AssetHistoryEntry, MaintenanceRecord } from '../types';
+import { getAssetService } from '../services/assetService';
+import { useCompany } from '../../../../../context/CompanyContext';
 
 interface AssetDetailsDrawerProps {
   open: boolean;
@@ -36,6 +24,31 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
   onAssignClick,
   onEditClick
 }) => {
+  const { companyId } = useCompany();
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+  const [loadingMaintenance, setLoadingMaintenance] = useState(false);
+
+  useEffect(() => {
+    if (asset && open) {
+      loadMaintenanceRecords();
+    }
+  }, [asset?.id, open]);
+
+  const loadMaintenanceRecords = async () => {
+    if (!asset?.id) return;
+    
+    setLoadingMaintenance(true);
+    try {
+      const service = await getAssetService(companyId || undefined);
+      const records = await service.getMaintenanceRecordsByAsset(asset.id);
+      setMaintenanceRecords(records);
+    } catch (error) {
+      console.error('Error loading maintenance records:', error);
+    } finally {
+      setLoadingMaintenance(false);
+    }
+  };
+
   if (!asset) return null;
 
   const statusColors = {
@@ -67,51 +80,28 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
   const getActionText = (entry: AssetHistoryEntry) => {
     switch (entry.action) {
       case 'assigned':
-        return `Assigned to ${entry.toEmployee}`;
+        return `Assigned to ${entry.toEmployee || 'employee'}`;
       case 'unassigned':
-        return `Unassigned from ${entry.fromEmployee}`;
+        return `Unassigned from ${entry.fromEmployee || 'employee'}`;
       case 'transferred':
-        return `Transferred from ${entry.fromEmployee} to ${entry.toEmployee}`;
+        return `Transferred from ${entry.fromEmployee || 'employee'} to ${entry.toEmployee || 'employee'}`;
       case 'created':
         return 'Asset created';
       case 'maintenance':
         return 'Maintenance performed';
       case 'status_change':
-        return 'Status updated';
+        return entry.notes || `Status changed from ${entry.oldValue} to ${entry.newValue}`;
+      case 'updated':
+        return entry.notes || 'Asset details updated';
       default:
-        return 'Action performed';
+        return entry.notes || 'Action performed';
     }
   };
 
-  // Mock history data - in real app, this would come from the asset object
-  const mockHistory: AssetHistoryEntry[] = [
-    {
-      id: 1,
-      action: 'created',
-      date: asset.purchaseDate,
-      performedBy: 'HR Admin',
-      notes: 'Asset added to inventory'
-    },
-    {
-      id: 2,
-      action: 'assigned',
-      date: '2023-02-01',
-      toEmployee: 'Jane Doe',
-      performedBy: 'HR Admin',
-      notes: 'Initial assignment for new employee onboarding'
-    },
-    {
-      id: 3,
-      action: 'transferred',
-      date: '2023-08-15',
-      fromEmployee: 'Jane Doe',
-      toEmployee: 'John Smith',
-      performedBy: 'IT Admin',
-      notes: 'Employee role change - transferred to new department'
-    }
-  ];
-
-  const history = asset.history || mockHistory;
+  // Use real history from asset, sorted by date (newest first)
+  const history = (asset.history || []).sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -217,7 +207,7 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
               <div>
                 <TypographyH3 className="flex items-center gap-2 mb-3">
                   <Settings className="h-5 w-5" />
-                  Maintenance
+                  Maintenance Schedule
                 </TypographyH3>
                 <div className="grid grid-cols-2 gap-4">
                   {asset.lastMaintenance && (
@@ -236,6 +226,64 @@ export const AssetDetailsDrawer: React.FC<AssetDetailsDrawerProps> = ({
               </div>
             </>
           )}
+
+          {/* Maintenance Records */}
+          <Separator />
+          <div>
+            <TypographyH3 className="flex items-center gap-2 mb-4">
+              <Wrench className="h-5 w-5" />
+              Maintenance Records
+            </TypographyH3>
+            {loadingMaintenance ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading maintenance records...</span>
+              </div>
+            ) : maintenanceRecords.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No maintenance records found for this asset.</p>
+            ) : (
+              <div className="space-y-3">
+                {maintenanceRecords.map((record) => (
+                  <div key={record.id} className="p-3 bg-muted/50 rounded-lg border border-border">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-medium text-sm">{record.maintenanceType} Maintenance</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(record.date).toLocaleDateString()} • {record.provider}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={
+                          record.status === 'Completed' ? 'default' :
+                          record.status === 'In Progress' ? 'secondary' :
+                          record.status === 'Scheduled' ? 'outline' : 'destructive'
+                        }
+                        className="text-xs"
+                      >
+                        {record.status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-foreground mt-2">{record.description}</p>
+                    {record.cost > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Cost: ₦{record.cost.toLocaleString()}
+                      </p>
+                    )}
+                    {record.notes && (
+                      <p className="text-xs text-muted-foreground mt-2 italic">
+                        {record.notes}
+                      </p>
+                    )}
+                    {record.nextMaintenanceDate && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Next maintenance: {new Date(record.nextMaintenanceDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Assignment History */}
           <Separator />

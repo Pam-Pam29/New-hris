@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, addDoc, Timestamp } from 'firebase/firestore';
 import { getFirebaseDb } from '../config/firebase';
 
 export interface Department {
@@ -169,6 +169,67 @@ export class DepartmentService {
         } catch (error) {
             console.error('❌ [DepartmentService] Error fetching department by ID:', error);
             return null;
+        }
+    }
+
+    /**
+     * Create a new department
+     */
+    async createDepartment(data: {
+        companyId: string;
+        name: string;
+        description?: string;
+        managerId?: string;
+        budget?: number;
+        location?: string;
+    }): Promise<Department> {
+        try {
+            console.log('📋 [DepartmentService] Creating department:', data.name);
+
+            // Check if department with same name already exists for this company
+            const existingDepartments = await this.getDepartmentsByCompany(data.companyId);
+            const duplicate = existingDepartments.find(
+                dept => dept.name.toLowerCase().trim() === data.name.toLowerCase().trim()
+            );
+
+            if (duplicate) {
+                throw new Error(`Department "${data.name}" already exists for this company`);
+            }
+
+            const departmentsRef = collection(this.db, 'departments');
+            const now = Timestamp.now();
+
+            const departmentData = {
+                companyId: data.companyId,
+                name: data.name.trim(),
+                description: data.description?.trim() || `${data.name} department`,
+                managerId: data.managerId || null,
+                budget: data.budget || null,
+                location: data.location?.trim() || null,
+                isActive: true,
+                createdAt: now,
+                updatedAt: now
+            };
+
+            const docRef = await addDoc(departmentsRef, departmentData);
+
+            console.log('✅ [DepartmentService] Department created successfully:', docRef.id);
+
+            return {
+                id: docRef.id,
+                companyId: data.companyId,
+                name: data.name.trim(),
+                description: departmentData.description,
+                managerId: data.managerId,
+                budget: data.budget,
+                location: data.location?.trim(),
+                createdAt: now.toDate(),
+                updatedAt: now.toDate()
+            };
+
+        } catch (error) {
+            console.error('❌ [DepartmentService] Error creating department:', error);
+            throw error;
         }
     }
 }

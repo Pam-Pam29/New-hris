@@ -17,6 +17,7 @@ const navStructure = [
     heading: 'Core HR',
     links: [
       { label: 'Employee Management', href: '/hr/core-hr/employee-management', icon: Users },
+      { label: 'Department Management', href: '/hr/core-hr/department-management', icon: Building2 },
       { label: 'Policy Management', href: '/hr/core-hr/policy-management', icon: FileText },
       { label: 'Asset Management', href: '/hr/core-hr/asset-management', icon: Briefcase },
       { label: 'Performance Management', href: '/hr/core-hr/performance-management', icon: BarChart2 },

@@ -90,11 +90,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         return <Navigate to="/login" replace />;
     }
 
-    // Check if onboarding completed - TEMPORARILY BYPASSED FOR TESTING
-    // if (currentEmployee?.onboardingStatus !== 'completed') {
-    //     console.log('📋 [ProtectedRoute] Onboarding not complete, redirecting to onboarding');
-    //     return <Navigate to="/onboarding" replace />;
-    // }
+    // Check if onboarding completed
+    if (currentEmployee?.onboardingStatus !== 'completed') {
+        console.log('📋 [ProtectedRoute] Onboarding not complete, redirecting to onboarding');
+        return <Navigate to="/onboarding" replace />;
+    }
     if (companyLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">

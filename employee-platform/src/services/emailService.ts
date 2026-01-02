@@ -1,134 +1,122 @@
+/// <reference types="vite/client" />
+
 /**
- * Email Service using SendGrid
+ * Email Service using external email transport (Vercel serverless API)
  * Handles all email communications for the Employee Platform
  */
 
 interface EmailTemplate {
-    subject: string;
-    html: string;
-    text: string;
+  subject: string;
+  html: string;
+  text: string;
 }
 
 interface SendEmailParams {
-    to: string;
-    subject: string;
-    html: string;
-    text?: string;
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 interface PasswordResetData {
-    firstName: string;
-    email: string;
-    resetLink: string;
-    companyName: string;
+  firstName: string;
+  email: string;
+  resetLink: string;
+  companyName: string;
 }
 
 interface LeaveRequestData {
-    employeeName: string;
-    leaveType: string;
-    startDate: string;
-    endDate: string;
-    days: number;
-    reason?: string;
-    hrEmail: string;
-    companyName: string;
+  employeeName: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason?: string;
+  hrEmail: string;
+  companyName: string;
 }
 
 class EmailService {
-    private sendGridApiKey: string;
-    private fromEmail: string;
-    private fromName: string;
+  private emailApiUrl: string;
+  private emailApiKey?: string;
+  private fromEmail: string;
+  private fromName: string;
 
-    constructor() {
-        this.sendGridApiKey = import.meta.env.VITE_SENDGRID_API_KEY || '';
-        this.fromEmail = import.meta.env.VITE_FROM_EMAIL || 'noreply@yourhris.com';
-        this.fromName = import.meta.env.VITE_FROM_NAME || 'Your HRIS';
+  constructor() {
+    this.emailApiUrl = import.meta.env.VITE_EMAIL_API_URL || '/api/send-email';
+    this.emailApiKey = import.meta.env.VITE_EMAIL_API_KEY;
+    this.fromEmail = import.meta.env.VITE_FROM_EMAIL || 'noreply@yourhris.com';
+    this.fromName = import.meta.env.VITE_FROM_NAME || 'Your HRIS';
+  }
+
+  /**
+   * Check if Email API is configured
+   */
+  isConfigured(): boolean {
+    return !!this.emailApiUrl;
+  }
+
+  /**
+   * Send email using external API
+   */
+  private async sendEmail({ to, subject, html, text }: SendEmailParams): Promise<boolean> {
+    if (!this.isConfigured()) {
+      console.warn('⚠️ [Email] Email API not configured. Email not sent:', { to, subject });
+      console.log('📧 [Email] Would have sent:', { to, subject });
+      return false;
     }
 
-    /**
-     * Check if SendGrid is configured
-     */
-    isConfigured(): boolean {
-        return !!this.sendGridApiKey && !!this.fromEmail;
+    try {
+      const response = await fetch(this.emailApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.emailApiKey ? { 'x-api-key': this.emailApiKey } : {})
+        },
+        body: JSON.stringify({
+          to,
+          subject,
+          html,
+          text: text || this.stripHtml(html)
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [Email] API responded with error:', errorText);
+        return false;
+      }
+
+      console.log('✅ [Email] Email sent successfully to:', to);
+      return true;
+    } catch (error) {
+      console.error('❌ [Email] Error calling email API:', error);
+      return false;
     }
+  }
 
-    /**
-     * Send email using SendGrid API
-     */
-    private async sendEmail({ to, subject, html, text }: SendEmailParams): Promise<boolean> {
-        if (!this.isConfigured()) {
-            console.warn('⚠️ [Email] SendGrid not configured. Email not sent:', { to, subject });
-            console.log('📧 [Email] Would have sent:', { to, subject });
-            return false;
-        }
+  /**
+   * Strip HTML tags for plain text version
+   */
+  private stripHtml(html: string): string {
+    return html
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+  }
 
-        try {
-            const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.sendGridApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    personalizations: [
-                        {
-                            to: [{ email: to }],
-                            subject: subject
-                        }
-                    ],
-                    from: {
-                        email: this.fromEmail,
-                        name: this.fromName
-                    },
-                    content: [
-                        {
-                            type: 'text/plain',
-                            value: text || this.stripHtml(html)
-                        },
-                        {
-                            type: 'text/html',
-                            value: html
-                        }
-                    ]
-                })
-            });
+  /**
+   * Send password reset email
+   */
+  async sendPasswordReset(data: PasswordResetData): Promise<boolean> {
+    const { firstName, email, resetLink, companyName } = data;
 
-            if (response.ok) {
-                console.log('✅ [Email] Email sent successfully to:', to);
-                return true;
-            } else {
-                const error = await response.text();
-                console.error('❌ [Email] Failed to send email:', error);
-                return false;
-            }
-        } catch (error) {
-            console.error('❌ [Email] Error sending email:', error);
-            return false;
-        }
-    }
+    const subject = `Password Reset Request - ${companyName}`;
 
-    /**
-     * Strip HTML tags for plain text version
-     */
-    private stripHtml(html: string): string {
-        return html
-            .replace(/<[^>]*>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .trim();
-    }
-
-    /**
-     * Send password reset email
-     */
-    async sendPasswordReset(data: PasswordResetData): Promise<boolean> {
-        const { firstName, email, resetLink, companyName } = data;
-
-        const subject = `Password Reset Request - ${companyName}`;
-
-        const html = `
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -184,18 +172,18 @@ class EmailService {
 </html>
     `;
 
-        return this.sendEmail({ to: email, subject, html });
-    }
+    return this.sendEmail({ to: email, subject, html });
+  }
 
-    /**
-     * Send leave request notification to HR
-     */
-    async sendLeaveRequestNotification(data: LeaveRequestData): Promise<boolean> {
-        const { employeeName, leaveType, startDate, endDate, days, reason, hrEmail, companyName } = data;
+  /**
+   * Send leave request notification to HR
+   */
+  async sendLeaveRequestNotification(data: LeaveRequestData): Promise<boolean> {
+    const { employeeName, leaveType, startDate, endDate, days, reason, hrEmail, companyName } = data;
 
-        const subject = `Leave Request - ${employeeName}`;
+    const subject = `Leave Request - ${employeeName}`;
 
-        const html = `
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -247,25 +235,25 @@ class EmailService {
 </html>
     `;
 
-        return this.sendEmail({ to: hrEmail, subject, html });
-    }
+    return this.sendEmail({ to: hrEmail, subject, html });
+  }
 
-    /**
-     * Send test email to verify configuration
-     */
-    async sendTestEmail(toEmail: string): Promise<boolean> {
-        const subject = 'Test Email - Employee Platform Configuration';
-        const html = `
-      <h1>✅ SendGrid Configuration Successful!</h1>
+  /**
+   * Send test email to verify configuration
+   */
+  async sendTestEmail(toEmail: string): Promise<boolean> {
+    const subject = 'Test Email - Employee Platform Configuration';
+    const html = `
+      <h1>✅ Email API Configuration Successful!</h1>
       <p>This is a test email from your Employee Platform.</p>
       <p>If you received this, your email integration is working correctly.</p>
+      <p><strong>API Endpoint:</strong> ${this.emailApiUrl}</p>
       <p><strong>From:</strong> ${this.fromEmail}</p>
       <p><strong>To:</strong> ${toEmail}</p>
-      <p><strong>SendGrid:</strong> Configured ✅</p>
     `;
 
-        return this.sendEmail({ to: toEmail, subject, html });
-    }
+    return this.sendEmail({ to: toEmail, subject, html });
+  }
 }
 
 // Export singleton instance
@@ -273,9 +261,9 @@ export const emailService = new EmailService();
 
 // Export types
 export type {
-    PasswordResetData,
-    LeaveRequestData,
-    SendEmailParams
+  PasswordResetData,
+  LeaveRequestData,
+  SendEmailParams
 };
 
 

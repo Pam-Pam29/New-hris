@@ -85,36 +85,74 @@ export default function EmployeePolicyManagement() {
 
     useEffect(() => {
         loadData();
-    }, [employeeId]);
+    }, [employeeId, companyId]);
 
     const loadData = async () => {
+        if (!companyId) {
+            console.warn('⚠️ [PolicyManagement] No companyId available, skipping load');
+            return;
+        }
+
         setLoading(true);
         try {
-            // Load all active policies
-            const policiesQuery = query(
+            // Load all active policies filtered by companyId
+            let policiesQuery = query(
                 collection(db, 'policies'),
-                where('active', '==', true)
+                where('companyId', '==', companyId)
             );
+
+            // Try to add active filter, but handle if field name differs
+            try {
+                policiesQuery = query(policiesQuery, where('active', '==', true));
+            } catch (error) {
+                // Try alternative field name
+                try {
+                    policiesQuery = query(policiesQuery, where('isActive', '==', true));
+                } catch (altError) {
+                    console.warn('Could not filter by active status, will filter in memory');
+                }
+            }
+
             const policiesSnapshot = await getDocs(policiesQuery);
-            const policiesData = policiesSnapshot.docs.map(doc => ({
+            let policiesData = policiesSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as Policy));
 
-            // Load employee's acknowledgments
-            const acknowledgementsQuery = query(
+            // Filter by active status in memory if query didn't work
+            policiesData = policiesData.filter(p => {
+                const isActive = (p as any).active !== false && (p as any).isActive !== false && (p as any).status !== 'inactive';
+                return isActive;
+            });
+
+            // Filter by companyId in memory as fallback
+            policiesData = policiesData.filter(p => (p as any).companyId === companyId);
+
+            // Load employee's acknowledgments filtered by companyId
+            let acknowledgementsQuery = query(
                 collection(db, 'policyAcknowledgments'),
                 where('employeeId', '==', employeeId)
             );
+
+            // Try to add companyId filter
+            try {
+                acknowledgementsQuery = query(acknowledgementsQuery, where('companyId', '==', companyId));
+            } catch (error) {
+                console.warn('Could not add companyId filter to acknowledgments query, will filter in memory');
+            }
+
             const acknowledgementsSnapshot = await getDocs(acknowledgementsQuery);
-            const acknowledgementsData = acknowledgementsSnapshot.docs.map(doc => ({
+            let acknowledgementsData = acknowledgementsSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as PolicyAcknowledgment));
 
+            // Filter by companyId in memory as fallback
+            acknowledgementsData = acknowledgementsData.filter(a => (a as any).companyId === companyId);
+
             setPolicies(policiesData);
             setAcknowledgments(acknowledgementsData);
-            console.log('📋 Loaded policies:', policiesData.length, 'Acknowledgments:', acknowledgementsData.length);
+            console.log(`📋 Loaded ${policiesData.length} policies and ${acknowledgementsData.length} acknowledgments for company ${companyId}`);
         } catch (error) {
             console.error('Failed to load policies:', error);
         } finally {
@@ -129,6 +167,7 @@ export default function EmployeePolicyManagement() {
                 policyId,
                 employeeId,
                 employeeName,
+                companyId: companyId, // Add companyId to acknowledgment
                 acknowledgedAt: serverTimestamp(),
                 ipAddress: 'N/A'
             };

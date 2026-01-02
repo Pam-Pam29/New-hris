@@ -12,19 +12,35 @@ export class PerformanceSyncService {
         try {
             console.log('📅 Scheduling performance meeting:', meeting);
 
+            // Validate companyId is present
+            if (!meeting.companyId) {
+                throw new Error('companyId is required for performance meetings');
+            }
+
             const meetingData = {
                 ...meeting,
+                companyId: meeting.companyId, // Ensure companyId is explicitly set
+                createdBy: meeting.createdBy || 'employee', // Ensure createdBy is always set (default to 'employee')
                 status: 'pending' as const,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
 
+            // Log the meeting data being saved (for debugging)
+            console.log('📦 Meeting data being saved:', {
+                companyId: meetingData.companyId,
+                employeeId: meetingData.employeeId,
+                title: meetingData.title,
+                createdBy: meetingData.createdBy || 'not set'
+            });
+
             const docRef = await addDoc(collection(this.db, 'performanceMeetings'), meetingData);
 
-            console.log('✅ Meeting scheduled with ID:', docRef.id);
+            console.log('✅ Meeting scheduled with ID:', docRef.id, 'CompanyId:', meetingData.companyId);
 
             // Create notification for HR if employee scheduled it, or for employee if HR scheduled it
-            await this.createMeetingNotification(docRef.id, meeting);
+            // Pass meetingData instead of meeting to ensure all fields (including createdBy) are included
+            await this.createMeetingNotification(docRef.id, meetingData);
 
             return docRef.id;
         } catch (error) {
@@ -114,31 +130,64 @@ export class PerformanceSyncService {
     // Create notification for meeting
     private async createMeetingNotification(meetingId: string, meeting: any): Promise<void> {
         try {
+            // Ensure createdBy is set (default to 'employee' if not provided)
+            const createdBy = meeting.createdBy || 'employee';
+            const companyId = meeting.companyId;
+            
+            if (!companyId) {
+                console.warn('⚠️ Warning: companyId missing in meeting notification');
+            }
+
             const notification = {
                 id: `meeting-${meetingId}-${Date.now()}`,
-                employeeId: meeting.createdBy === 'employee' ? 'hr-team' : meeting.employeeId,
+                companyId: companyId || undefined, // Include companyId for multi-tenancy (can be undefined if missing)
+                employeeId: createdBy === 'employee' ? 'hr-team' : (meeting.employeeId || 'unknown'),
                 title: 'New Performance Meeting Request',
-                message: meeting.createdBy === 'employee'
-                    ? `${meeting.employeeName} has requested a performance meeting`
+                message: createdBy === 'employee'
+                    ? `${meeting.employeeName || 'An employee'} has requested a performance meeting`
                     : `HR has scheduled a performance meeting for you`,
                 type: 'info',
                 category: 'performance',
                 read: false,
-                actionUrl: meeting.createdBy === 'employee' ? '/hr/performance-management' : '/performance-management',
+                actionUrl: createdBy === 'employee' ? '/hr/performance-management' : '/performance-management',
                 actionText: 'View Meeting',
                 metadata: {
                     meetingId,
-                    meetingType: meeting.meetingType,
-                    scheduledDate: meeting.scheduledDate,
-                    createdBy: meeting.createdBy
+                    meetingType: meeting.meetingType || 'one-on-one',
+                    scheduledDate: meeting.scheduledDate || null,
+                    createdBy: createdBy // Ensure this is never undefined
                 }
             };
 
-            await addDoc(collection(this.db, 'notifications'), {
+            // Remove any undefined values from metadata to prevent Firestore errors
+            if (notification.metadata.scheduledDate === null) {
+                delete notification.metadata.scheduledDate;
+            }
+
+            // Remove undefined values to prevent Firestore errors
+            const notificationData: any = {
                 ...notification,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
+            };
+            
+            // Remove any undefined values
+            Object.keys(notificationData).forEach(key => {
+                if (notificationData[key] === undefined) {
+                    delete notificationData[key];
+                }
             });
+            
+            // Also clean metadata
+            if (notificationData.metadata) {
+                Object.keys(notificationData.metadata).forEach(key => {
+                    if (notificationData.metadata[key] === undefined) {
+                        delete notificationData.metadata[key];
+                    }
+                });
+            }
+
+            await addDoc(collection(this.db, 'notifications'), notificationData);
 
             console.log('📧 Meeting notification created');
         } catch (error) {
@@ -150,15 +199,39 @@ export class PerformanceSyncService {
     async createGoal(goal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
             console.log('🎯 Creating performance goal:', goal);
+            console.log('🔍 Goal companyId check:', goal.companyId);
+
+            // Validate companyId is present
+            if (!goal.companyId) {
+                console.error('❌ companyId is missing from goal:', goal);
+                throw new Error('companyId is required for performance goal creation');
+            }
 
             const goalData = {
                 ...goal,
+                companyId: goal.companyId, // Ensure companyId is explicitly set
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
 
+            console.log('📦 Goal data being saved:', { 
+                companyId: goalData.companyId, 
+                employeeId: goalData.employeeId, 
+                title: goalData.title 
+            });
+
             const docRef = await addDoc(collection(this.db, 'performanceGoals'), goalData);
-            console.log('✅ Goal created with ID:', docRef.id);
+            console.log(`✅ Goal created with ID: ${docRef.id}, companyId: ${goal.companyId}`);
+            
+            // Verify the saved document
+            const savedDoc = await getDoc(docRef);
+            const savedData = savedDoc.data();
+            console.log('🔍 Saved goal data verification:', { 
+                id: docRef.id, 
+                companyId: savedData?.companyId, 
+                employeeId: savedData?.employeeId 
+            });
+            
             return docRef.id;
         } catch (error) {
             console.error('❌ Failed to create goal:', error);

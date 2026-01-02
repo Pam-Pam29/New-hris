@@ -75,6 +75,7 @@ import {
     TabsList,
     TabsTrigger,
 } from './ui/tabs';
+import { useCompany } from '../context/CompanyContext';
 
 interface ComprehensivePolicyManagementProps {
     employeeId: string;
@@ -82,6 +83,7 @@ interface ComprehensivePolicyManagementProps {
 }
 
 export function ComprehensivePolicyManagement({ employeeId, mode }: ComprehensivePolicyManagementProps) {
+    const { companyId } = useCompany();
     const [policies, setPolicies] = useState<Policy[]>([]);
     const [acknowledgments, setAcknowledgments] = useState<PolicyAcknowledgment[]>([]);
     const [pendingPolicies, setPendingPolicies] = useState<Policy[]>([]);
@@ -124,21 +126,21 @@ export function ComprehensivePolicyManagement({ employeeId, mode }: Comprehensiv
 
     useEffect(() => {
         initializePolicyData();
-    }, [employeeId, mode]);
+    }, [employeeId, mode, companyId]);
 
     const initializePolicyData = async () => {
         try {
             setLoading(true);
             const dataFlowService = await getComprehensiveHRDataFlowService();
 
-            // Load policies
-            const policyData = await dataFlowService.getPolicies(true);
+            // Load policies (filtered by companyId)
+            const policyData = await dataFlowService.getPolicies(true, companyId);
             setPolicies(policyData);
 
-            // Load acknowledgments
+            // Load acknowledgments (filtered by companyId)
             const acknowledgmentData = mode === 'hr'
-                ? await dataFlowService.getPolicyAcknowledgments()
-                : await dataFlowService.getPolicyAcknowledgments(undefined, employeeId);
+                ? await dataFlowService.getPolicyAcknowledgments(undefined, undefined, companyId)
+                : await dataFlowService.getPolicyAcknowledgments(undefined, employeeId, companyId);
             setAcknowledgments(acknowledgmentData);
 
             // Load pending policies for employee

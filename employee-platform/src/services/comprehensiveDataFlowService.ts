@@ -289,12 +289,12 @@ export interface IComprehensiveDataFlowService {
     updateLeaveBalance(employeeId: string, leaveTypeId: string, updates: Partial<LeaveBalance>): Promise<void>;
 
     // Policy Management
-    getPolicies(activeOnly?: boolean): Promise<Policy[]>;
+    getPolicies(activeOnly?: boolean, companyId?: string): Promise<Policy[]>;
     createPolicy(policy: Omit<Policy, 'id' | 'createdAt' | 'lastModified'>): Promise<Policy>;
     updatePolicy(id: string, updates: Partial<Policy>): Promise<void>;
     deletePolicy(id: string): Promise<void>;
 
-    getPolicyAcknowledgments(policyId?: string, employeeId?: string): Promise<PolicyAcknowledgment[]>;
+    getPolicyAcknowledgments(policyId?: string, employeeId?: string, companyId?: string): Promise<PolicyAcknowledgment[]>;
     acknowledgePolicy(policyId: string, employeeId: string, acknowledgment: Omit<PolicyAcknowledgment, 'id' | 'acknowledgedAt'>): Promise<void>;
 
     // Performance Management
@@ -395,14 +395,36 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
 
             console.log('📝 Converting to Firestore format...');
             console.log('📝 Profile before conversion:', updatedProfile);
-            const firestoreData = this.convertToFirestore({
+            
+            // Ensure DOB is saved in both new and legacy fields for compatibility
+            const profileForFirestore: any = {
                 ...updatedProfile,
                 updatedAt: serverTimestamp(),
                 profileStatus: {
                     ...updatedProfile.profileStatus,
                     lastUpdated: serverTimestamp()
                 }
-            });
+            };
+
+            // If personalInfo.dateOfBirth exists, also save to legacy fields
+            if (updatedProfile.personalInfo?.dateOfBirth) {
+                const dob = updatedProfile.personalInfo.dateOfBirth;
+                // Save to legacy dob field (string format YYYY-MM-DD)
+                if (dob instanceof Date) {
+                    profileForFirestore.dob = dob.toISOString().split('T')[0];
+                    profileForFirestore.dateOfBirth = dob.toISOString().split('T')[0];
+                } else if (typeof dob === 'string') {
+                    profileForFirestore.dob = dob;
+                    profileForFirestore.dateOfBirth = dob;
+                }
+                console.log('📅 [Employee DataFlow] Saving DOB to legacy fields:', {
+                    dob: profileForFirestore.dob,
+                    dateOfBirth: profileForFirestore.dateOfBirth,
+                    personalInfoDateOfBirth: updatedProfile.personalInfo.dateOfBirth
+                });
+            }
+
+            const firestoreData = this.convertToFirestore(profileForFirestore);
             console.log('📝 Firestore data:', firestoreData);
 
             // Use setDoc with merge to create document if it doesn't exist
@@ -522,14 +544,21 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
 
     async createLeaveRequest(request: Omit<LeaveRequest, 'id' | 'submittedAt'>): Promise<LeaveRequest> {
         try {
+            // Validate companyId is present
+            if (!(request as any).companyId) {
+                throw new Error('companyId is required for leave request creation');
+            }
+
             const docRef = doc(collection(db, 'leaveRequests'));
             const newRequest: LeaveRequest = {
                 id: docRef.id,
                 ...request,
+                companyId: (request as any).companyId, // Ensure companyId is explicitly set
                 submittedAt: new Date()
             };
 
             await setDoc(docRef, this.convertToFirestore(newRequest));
+            console.log(`✅ Leave request created with companyId: ${(request as any).companyId}`);
 
             // Create notification for HR
             await this.createNotification({
@@ -590,16 +619,46 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     // Policy Management
-    async getPolicies(activeOnly: boolean = true): Promise<Policy[]> {
+    async getPolicies(activeOnly: boolean = true, companyId?: string): Promise<Policy[]> {
         try {
-            let q = query(collection(db, 'policies'), orderBy('effectiveDate', 'desc'));
+            let q = query(collection(db, 'policies'));
+
+            // Filter by companyId first if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+                console.log(`🏢 Filtering policies by companyId: ${companyId}`);
+            }
 
             if (activeOnly) {
                 q = query(q, where('isActive', '==', true));
             }
 
+            // Try to add orderBy, but handle if index doesn't exist
+            try {
+                q = query(q, orderBy('effectiveDate', 'desc'));
+            } catch (orderError) {
+                console.warn('Could not order policies by effectiveDate, sorting in memory');
+            }
+
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => this.convertFirestoreToPolicy(doc.data()));
+            let policies = querySnapshot.docs.map(doc => this.convertFirestoreToPolicy(doc.data()));
+
+            // Sort in memory if orderBy failed
+            if (policies.length > 0 && (!policies[0].effectiveDate || policies[0].effectiveDate instanceof Date)) {
+                policies.sort((a, b) => {
+                    const aDate = a.effectiveDate?.getTime() || 0;
+                    const bDate = b.effectiveDate?.getTime() || 0;
+                    return bDate - aDate; // Descending order
+                });
+            }
+
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId && policies.length > 0) {
+                policies = policies.filter(p => p.companyId === companyId);
+            }
+
+            console.log(`📋 Loaded ${policies.length} policies${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return policies;
         } catch (error) {
             console.error('Error getting policies:', error);
             throw error;
@@ -641,16 +700,23 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
 
     async acknowledgePolicy(policyId: string, employeeId: string, acknowledgment: Omit<PolicyAcknowledgment, 'id' | 'acknowledgedAt'>): Promise<void> {
         try {
+            // Validate companyId is present
+            if (!(acknowledgment as any).companyId) {
+                throw new Error('companyId is required for policy acknowledgment');
+            }
+
             const docRef = doc(collection(db, 'policyAcknowledgments'));
             const newAcknowledgment: PolicyAcknowledgment = {
                 id: docRef.id,
                 ...acknowledgment,
+                companyId: (acknowledgment as any).companyId, // Ensure companyId is explicitly set
                 policyId,
                 employeeId,
                 acknowledgedAt: new Date()
             };
 
             await setDoc(docRef, this.convertToFirestore(newAcknowledgment));
+            console.log(`✅ Policy acknowledgment created with companyId: ${(acknowledgment as any).companyId}`);
 
             // Create notification for HR
             await this.createNotification({
@@ -688,15 +754,22 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
 
     async createPerformanceGoal(goal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'updatedAt'>): Promise<PerformanceGoal> {
         try {
+            // Validate companyId is present
+            if (!goal.companyId) {
+                throw new Error('companyId is required for performance goal creation');
+            }
+
             const docRef = doc(collection(db, 'performanceGoals'));
             const newGoal: PerformanceGoal = {
                 id: docRef.id,
                 ...goal,
+                companyId: goal.companyId, // Ensure companyId is explicitly set
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
 
             await setDoc(docRef, this.convertToFirestore(newGoal));
+            console.log(`✅ Performance goal created with companyId: ${goal.companyId}`);
 
             // Create notification for manager if created by employee
             if (goal.createdBy === 'Employee') {
@@ -780,14 +853,31 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
 
     async createNotification(notification: Omit<NotificationData, 'id' | 'createdAt'>): Promise<void> {
         try {
+            // Try to get companyId from notification metadata or employee profile
+            let notificationCompanyId = (notification as any).companyId;
+            
+            // If companyId not in notification, try to get from employee profile
+            if (!notificationCompanyId && notification.employeeId && notification.employeeId !== 'hr-system' && notification.employeeId !== 'all-employees') {
+                try {
+                    const employeeProfile = await this.getEmployeeProfile(notification.employeeId);
+                    notificationCompanyId = (employeeProfile as any)?.companyId;
+                } catch (error) {
+                    console.warn('⚠️ Could not fetch companyId from employee profile for notification');
+                }
+            }
+
             const docRef = doc(collection(db, 'notifications'));
             const newNotification: NotificationData = {
                 id: docRef.id,
                 ...notification,
+                companyId: notificationCompanyId, // Include companyId if available
                 createdAt: new Date()
             };
 
             await setDoc(docRef, this.convertToFirestore(newNotification));
+            if (notificationCompanyId) {
+                console.log(`✅ Notification created with companyId: ${notificationCompanyId}`);
+            }
         } catch (error) {
             console.error('Error creating notification:', error);
             throw error;
@@ -867,23 +957,55 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     }
 
     subscribeToPolicies(callback: (policies: Policy[]) => void, companyId?: string): () => void {
-        const q = query(
-            collection(db, 'policies'),
-            where('isActive', '==', true),
-            orderBy('effectiveDate', 'desc')
-        );
+        let q: any;
+        
+        // Build query with companyId filter if provided
+        if (companyId) {
+            try {
+                q = query(
+                    collection(db, 'policies'),
+                    where('companyId', '==', companyId),
+                    where('isActive', '==', true),
+                    orderBy('effectiveDate', 'desc')
+                );
+                console.log(`🏢 Subscribing to policies filtered by companyId: ${companyId}`);
+            } catch (error) {
+                // If composite index doesn't exist, fall back to filtering in memory
+                console.warn('Could not create composite query for policies, filtering in memory');
+                q = query(
+                    collection(db, 'policies'),
+                    where('isActive', '==', true)
+                );
+            }
+        } else {
+            q = query(
+                collection(db, 'policies'),
+                where('isActive', '==', true)
+            );
+        }
 
         return onSnapshot(q, (querySnapshot) => {
             let policies = querySnapshot.docs.map(doc =>
                 this.convertFirestoreToPolicy(doc.data())
             );
 
-            // Filter by companyId in memory if provided
+            // Filter by companyId in memory if provided (fallback or if query didn't include it)
             if (companyId) {
                 policies = policies.filter(p => p.companyId === companyId);
             }
 
+            // Sort in memory if orderBy wasn't applied
+            if (policies.length > 0 && policies[0].effectiveDate instanceof Date) {
+                policies.sort((a, b) => {
+                    const aDate = a.effectiveDate?.getTime() || 0;
+                    const bDate = b.effectiveDate?.getTime() || 0;
+                    return bDate - aDate; // Descending order
+                });
+            }
+
             callback(policies);
+        }, (error) => {
+            console.error('Error in subscribeToPolicies:', error);
         });
     }
 
@@ -1331,19 +1453,51 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
         await setDoc(docRef, updates, { merge: true });
     }
 
-    async getPolicyAcknowledgments(policyId?: string, employeeId?: string): Promise<PolicyAcknowledgment[]> {
-        let q = query(collection(db, 'policyAcknowledgments'), orderBy('acknowledgedAt', 'desc'));
+    async getPolicyAcknowledgments(policyId?: string, employeeId?: string, companyId?: string): Promise<PolicyAcknowledgment[]> {
+        let q = query(collection(db, 'policyAcknowledgments'));
+
+        // Filter by companyId first if provided
+        if (companyId) {
+            q = query(q, where('companyId', '==', companyId));
+            console.log(`🏢 Filtering policy acknowledgments by companyId: ${companyId}`);
+        }
+
         if (policyId) {
             q = query(q, where('policyId', '==', policyId));
         }
         if (employeeId) {
             q = query(q, where('employeeId', '==', employeeId));
         }
+
+        // Try to add orderBy, but handle if index doesn't exist
+        try {
+            q = query(q, orderBy('acknowledgedAt', 'desc'));
+        } catch (orderError) {
+            console.warn('Could not order policy acknowledgments by acknowledgedAt, sorting in memory');
+        }
+
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
+        let acknowledgments = querySnapshot.docs.map(doc => ({
             ...doc.data(),
             acknowledgedAt: doc.data().acknowledgedAt?.toDate() || new Date()
-        }));
+        } as PolicyAcknowledgment));
+
+        // Sort in memory if orderBy failed
+        if (acknowledgments.length > 0) {
+            acknowledgments.sort((a, b) => {
+                const aDate = a.acknowledgedAt?.getTime() || 0;
+                const bDate = b.acknowledgedAt?.getTime() || 0;
+                return bDate - aDate; // Descending order
+            });
+        }
+
+        // Filter by companyId in memory if not already filtered (fallback)
+        if (companyId && acknowledgments.length > 0) {
+            acknowledgments = acknowledgments.filter(a => a.companyId === companyId);
+        }
+
+        console.log(`📋 Loaded ${acknowledgments.length} policy acknowledgments${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+        return acknowledgments;
     }
 
     async updatePolicy(id: string, updates: Partial<Policy>): Promise<void> {

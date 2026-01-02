@@ -111,28 +111,39 @@ export default function MyAssets() {
         priority: 'Medium' as 'Urgent' | 'High' | 'Medium' | 'Low'
     });
 
-    // Real-time sync for assets, assignments, and requests
+    // Real-time sync for assets, assignments, and requests (with companyId filtering)
     useEffect(() => {
-        if (!employeeId) return;
+        if (!employeeId || !companyId) return;
 
-        console.log('📡 Setting up real-time asset sync for employee:', employeeId);
+        console.log('📡 Setting up real-time asset sync for employee:', employeeId, 'company:', companyId);
 
-        // Real-time listener for assigned assets
-        const assetsQuery = query(
+        // Real-time listener for assigned assets (filtered by companyId)
+        let assetsQuery = query(
             collection(db, 'assets'),
             where('assignedTo', '==', employeeId),
             where('status', '==', 'Assigned')
         );
+        
+        // Add companyId filter if possible (may require composite index)
+        try {
+            assetsQuery = query(assetsQuery, where('companyId', '==', companyId));
+        } catch (error) {
+            console.warn('⚠️ Could not add companyId filter to assets query (may need composite index), filtering in memory');
+        }
 
         const unsubscribeAssets = onSnapshot(
             assetsQuery,
             (snapshot) => {
-                const assetsData = snapshot.docs.map(doc => ({
+                let assetsData = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 } as Asset));
+                
+                // Filter by companyId in memory as fallback
+                assetsData = assetsData.filter(asset => (asset as any).companyId === companyId);
+                
                 setAssets(assetsData);
-                console.log('📡 Real-time update: Assets changed -', assetsData.length, 'assigned to employee');
+                console.log(`📡 Real-time update: Assets changed - ${assetsData.length} assigned to employee (company: ${companyId})`);
                 setLoading(false);
             },
             (error) => {
@@ -141,42 +152,64 @@ export default function MyAssets() {
             }
         );
 
-        // Real-time listener for assignment history
-        const assignmentsQuery = query(
+        // Real-time listener for assignment history (filtered by companyId)
+        let assignmentsQuery = query(
             collection(db, 'asset_assignments'),
             where('employeeId', '==', employeeId)
         );
+        
+        // Add companyId filter if possible
+        try {
+            assignmentsQuery = query(assignmentsQuery, where('companyId', '==', companyId));
+        } catch (error) {
+            console.warn('⚠️ Could not add companyId filter to assignments query, filtering in memory');
+        }
 
         const unsubscribeAssignments = onSnapshot(
             assignmentsQuery,
             (snapshot) => {
-                const assignmentsData = snapshot.docs.map(doc => ({
+                let assignmentsData = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 } as AssetAssignment));
+                
+                // Filter by companyId in memory as fallback
+                assignmentsData = assignmentsData.filter(assignment => (assignment as any).companyId === companyId);
+                
                 setAssignments(assignmentsData);
-                console.log('📡 Real-time update: Assignment history changed');
+                console.log(`📡 Real-time update: Assignment history changed (company: ${companyId})`);
             },
             (error) => {
                 console.error('Error in assignments listener:', error);
             }
         );
 
-        // Real-time listener for asset requests
-        const requestsQuery = query(
+        // Real-time listener for asset requests (filtered by companyId)
+        let requestsQuery = query(
             collection(db, 'assetRequests'),
             where('employeeId', '==', employeeId)
         );
+        
+        // Add companyId filter if possible
+        try {
+            requestsQuery = query(requestsQuery, where('companyId', '==', companyId));
+        } catch (error) {
+            console.warn('⚠️ Could not add companyId filter to requests query, filtering in memory');
+        }
 
         const unsubscribeRequests = onSnapshot(
             requestsQuery,
             (snapshot) => {
-                const requestsData = snapshot.docs.map(doc => ({
+                let requestsData = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 } as AssetRequest));
+                
+                // Filter by companyId in memory as fallback
+                requestsData = requestsData.filter(request => (request as any).companyId === companyId);
+                
                 setRequests(requestsData);
-                console.log('📡 Real-time update: Asset requests changed');
+                console.log(`📡 Real-time update: Asset requests changed (company: ${companyId})`);
             },
             (error) => {
                 console.error('Error in requests listener:', error);
@@ -190,7 +223,7 @@ export default function MyAssets() {
             unsubscribeAssignments();
             unsubscribeRequests();
         };
-    }, [employeeId]);
+    }, [employeeId, companyId]);
 
     // Load employee name
     useEffect(() => {
@@ -266,7 +299,8 @@ export default function MyAssets() {
                 justification: requestForm.justification,
                 priority: requestForm.priority,
                 status: 'Pending',
-                requestedDate: Timestamp.now()
+                requestedDate: Timestamp.now(),
+                companyId: companyId || null // Add companyId for filtering
             });
 
             console.log('✅ Asset request submitted:', requestForm.assetName);

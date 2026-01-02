@@ -29,6 +29,57 @@ npm run dev:careers           # start careers portal
 
 Each app reads its Firebase configuration from environment variables. Copy the `example.env` in each sub-project to `.env.local` and fill in the keys from Firebase console.
 
+## Email Delivery (Vercel Serverless + Nodemailer)
+
+Transactional emails now flow through a Vercel Serverless Function located at `api/send-email.ts`. The front-end apps call this endpoint, and the function relays messages via Nodemailer/SMTP.
+
+### Vercel environment variables
+
+Add the following secrets to **every** Vercel project that needs to send email (HR, Employee, or a dedicated API project):
+
+```
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=465
+SMTP_SECURE=1                  # set to 0 if you use STARTTLS on port 587
+SMTP_USER=apikey-or-user
+SMTP_PASS=super-secret
+SMTP_FROM_NAME=Your HRIS
+SMTP_FROM_EMAIL=notifications@yourdomain.com
+EMAIL_API_KEY=super-long-secret   # optional but recommended
+```
+
+If `EMAIL_API_KEY` is set, the apps must include the same value in the `x-api-key` header when calling the endpoint.
+
+### Front-end configuration
+
+Each Vite app reads the email API location from:
+
+```
+VITE_EMAIL_API_URL=https://your-vercel-app.vercel.app/api/send-email
+VITE_EMAIL_API_KEY=super-long-secret           # match EMAIL_API_KEY if used
+VITE_FROM_NAME=Your HRIS
+VITE_FROM_EMAIL=notifications@yourdomain.com
+```
+
+For local development, you can either point to the deployed Vercel URL or run `vercel dev` in the repo root to emulate the serverless function and use `VITE_EMAIL_API_URL=http://localhost:3000/api/send-email`.
+
+### Firebase Cloud Functions
+
+If you later upgrade to Firebase Blaze and redeploy Cloud Functions, mirror the SMTP credentials with:
+
+```bash
+firebase functions:config:set \
+  mail.host="smtp.yourprovider.com" \
+  mail.port="465" \
+  mail.secure="true" \
+  mail.user="apikey-or-user" \
+  mail.pass="super-secret" \
+  mail.from_email="notifications@yourdomain.com" \
+  mail.from_name="Your HRIS"
+```
+
+Until then, invitations can call the Vercel endpoint directly instead of relying on Firebase Functions.
+
 ## Backfill Script
 
 `scripts/backfillPlatformConfig.js` keeps Firestore `systemConfig` and `hrSettings` documents aligned with the latest deployment URLs and slugs. Run it after every production deploy:

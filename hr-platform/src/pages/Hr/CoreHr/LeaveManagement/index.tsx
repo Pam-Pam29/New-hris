@@ -592,7 +592,7 @@ export default function HRLeaveManagement() {
 
         {/* Approval Modal */}
         {showApprovalModal && selectedRequest && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed' }}>
             <Card className="w-full max-w-md mx-4">
               <CardHeader>
                 <CardTitle>
@@ -653,7 +653,7 @@ export default function HRLeaveManagement() {
 
         {/* Leave Type Modal */}
         {showLeaveTypeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed' }}>
             <Card className="w-full max-w-md mx-4">
               <CardHeader>
                 <CardTitle>{editingLeaveType ? 'Edit Leave Type' : 'Create Leave Type'}</CardTitle>

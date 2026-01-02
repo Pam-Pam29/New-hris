@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Alert, AlertDescription } from '../../components/ui/alert';
@@ -15,6 +15,10 @@ import {
     Play
 } from 'lucide-react';
 import { useCompany } from '../../context/CompanyContext';
+import { useAuth } from '../../context/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { format, addMonths, startOfMonth, addDays } from 'date-fns';
 
 interface OnboardingCompletionProps {
     employeeId: string;
@@ -26,6 +30,85 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
     onComplete
 }) => {
     const { company } = useCompany();
+    const { currentEmployee } = useAuth();
+    const [employeeData, setEmployeeData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadEmployeeData = async () => {
+            try {
+                const employeeRef = doc(db, 'employees', employeeId);
+                const employeeDoc = await getDoc(employeeRef);
+                
+                if (employeeDoc.exists()) {
+                    const data = employeeDoc.data();
+                    setEmployeeData(data);
+                }
+            } catch (error) {
+                console.error('Error loading employee data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (employeeId) {
+            loadEmployeeData();
+        }
+    }, [employeeId]);
+
+    // Get work email from employee data
+    const workEmail = employeeData?.contactInfo?.workEmail || 
+                     employeeData?.workEmail || 
+                     currentEmployee?.email || 
+                     'Not assigned yet';
+
+    // Calculate next payroll date (assuming monthly payroll, starting from hire date)
+    const getNextPayrollDate = () => {
+        if (!employeeData?.workInfo?.hireDate) {
+            return 'Next pay period';
+        }
+
+        try {
+            const hireDate = employeeData.workInfo.hireDate.toDate 
+                ? employeeData.workInfo.hireDate.toDate() 
+                : new Date(employeeData.workInfo.hireDate);
+            
+            const today = new Date();
+            const payFrequency = employeeData.workInfo.salary?.payFrequency || 'Monthly';
+            
+            if (payFrequency === 'Monthly') {
+                // Next month's first day
+                const nextPayroll = startOfMonth(addMonths(today, 1));
+                return format(nextPayroll, 'MMM dd, yyyy');
+            } else if (payFrequency === 'Bi-weekly') {
+                // Every 2 weeks from hire date
+                const weeksSinceHire = Math.floor((today.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24 * 7));
+                const nextPayroll = addDays(hireDate, (Math.floor(weeksSinceHire / 2) + 1) * 14);
+                return format(nextPayroll, 'MMM dd, yyyy');
+            } else if (payFrequency === 'Weekly') {
+                // Next week
+                const nextPayroll = addDays(today, 7);
+                return format(nextPayroll, 'MMM dd, yyyy');
+            }
+            
+            return 'Next pay period';
+        } catch (error) {
+            return 'Next pay period';
+        }
+    };
+
+    // Get company support information
+    const hrEmail = company?.settings?.supportEmail || 
+                   company?.contactEmail || 
+                   `hr@${company?.domain || 'company.com'}`;
+    
+    const itSupport = company?.settings?.itSupportEmail || 
+                     company?.settings?.itSupportPhone || 
+                     null;
+    
+    const employeePortalUrl = company?.settings?.employeePlatformUrl || 
+                              import.meta.env.VITE_EMPLOYEE_PLATFORM_URL || 
+                              window.location.origin;
 
     const completedSteps = [
         { id: 'welcome', title: 'Welcome Video Watched', icon: Play },
@@ -33,6 +116,21 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
         { id: 'contract_upload', title: 'Contract Uploaded', icon: Upload },
         { id: 'system_overview', title: 'System Overview Completed', icon: BookOpen }
     ];
+
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <Card>
+                    <CardContent className="flex items-center justify-center py-8">
+                        <div className="text-center">
+                            <Clock className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+                            <p>Loading completion details...</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -57,7 +155,7 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
                                     <strong>Employee ID:</strong> {employeeId}
                                 </p>
                                 <p className="text-sm text-green-800 mb-2">
-                                    <strong>Work Email:</strong> john.doe@company.com
+                                    <strong>Work Email:</strong> {workEmail}
                                 </p>
                                 <p className="text-sm text-green-800">
                                     <strong>Onboarding Date:</strong> {new Date().toLocaleDateString()}
@@ -71,7 +169,7 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
                                     <strong>Access Level:</strong> Full Employee Portal
                                 </p>
                                 <p className="text-sm text-green-800">
-                                    <strong>Next Payroll:</strong> Next pay period
+                                    <strong>Next Payroll:</strong> {getNextPayrollDate()}
                                 </p>
                             </div>
                         </div>
@@ -156,14 +254,39 @@ const OnboardingCompletion: React.FC<OnboardingCompletionProps> = ({
                             <p>
                                 • HR Department:{' '}
                                 <a
-                                    href={`mailto:${company?.settings?.supportEmail ?? `hr@${company?.domain ?? 'company.com'}`}`}
+                                    href={`mailto:${hrEmail}`}
                                     className="text-blue-600 hover:underline"
                                 >
-                                    {company?.settings?.supportEmail ?? `hr@${company?.domain ?? 'company.com'}`}
+                                    {hrEmail}
                                 </a>
                             </p>
-                            <p>• IT Support: it@company.com | (555) 123-4568</p>
-                            <p>• Employee Portal: portal.company.com</p>
+                            {itSupport && (
+                                <p>
+                                    • IT Support:{' '}
+                                    {company?.settings?.itSupportEmail && (
+                                        <a
+                                            href={`mailto:${company.settings.itSupportEmail}`}
+                                            className="text-blue-600 hover:underline"
+                                        >
+                                            {company.settings.itSupportEmail}
+                                        </a>
+                                    )}
+                                    {company?.settings?.itSupportPhone && (
+                                        <span> | {company.settings.itSupportPhone}</span>
+                                    )}
+                                </p>
+                            )}
+                            <p>
+                                • Employee Portal:{' '}
+                                <a
+                                    href={employeePortalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                >
+                                    {employeePortalUrl.replace(/^https?:\/\//, '')}
+                                </a>
+                            </p>
                         </div>
                     </div>
 

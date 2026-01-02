@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../../../config/firebase';
+import { db } from '../../../config/firebase';
+import { cloudinaryStorageService } from '../../../services/cloudinaryStorageService';
 
 export interface ContractData {
     id: string;
@@ -74,15 +74,7 @@ class ContractService {
                 return await this.generateContractPDF(contract);
             }
 
-            // If it's a Firebase Storage URL, download from Storage
-            if (contract.documentUrl.startsWith('gs://')) {
-                const storageRef = ref(storage, contract.documentUrl);
-                const url = await getDownloadURL(storageRef);
-                const response = await fetch(url);
-                return await response.blob();
-            }
-
-            // If it's a regular URL, fetch it
+            // If it's a Cloudinary URL or regular URL, fetch it directly
             const response = await fetch(contract.documentUrl);
             if (!response.ok) {
                 throw new Error('Failed to download contract document');
@@ -187,11 +179,22 @@ Print this document, sign it, and upload the signed copy during onboarding.
                 };
             }
 
-            // Upload to Firebase Storage
-            const fileName = `signed_contracts/${employeeId}_${Date.now()}.${fileExtension}`;
-            const storageRef = ref(storage, fileName);
-            const uploadResult = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(uploadResult.ref);
+            // Upload to Cloudinary
+            const folderPath = `signed_contracts/${employeeId}`;
+            const uploadResult = await cloudinaryStorageService.uploadDocument(file, folderPath, {
+                employeeId: employeeId,
+                documentType: 'signed_contract',
+                uploadedAt: new Date().toISOString()
+            });
+
+            if (!uploadResult.success || !uploadResult.downloadURL) {
+                return {
+                    success: false,
+                    message: uploadResult.error || 'Failed to upload contract to storage'
+                };
+            }
+
+            const downloadURL = uploadResult.downloadURL;
 
             // Update contract record
             const contractRef = doc(db, 'contracts', employeeId);
@@ -204,7 +207,7 @@ Print this document, sign it, and upload the signed copy during onboarding.
 
             return {
                 success: true,
-                documentId: fileName
+                documentId: uploadResult.publicId || downloadURL
             };
         } catch (error) {
             console.error('Error uploading signed contract:', error);
@@ -234,13 +237,20 @@ Print this document, sign it, and upload the signed copy during onboarding.
     // Create initial contract (HR action)
     async createContract(contractData: Omit<ContractData, 'id' | 'createdAt' | 'updatedAt'>): Promise<boolean> {
         try {
+            // Validate companyId is present
+            if (!(contractData as any).companyId) {
+                throw new Error('companyId is required for contract creation');
+            }
+
             const contractRef = doc(db, 'contracts', contractData.employeeId);
             await setDoc(contractRef, {
                 ...contractData,
+                companyId: (contractData as any).companyId, // Ensure companyId is explicitly set
                 status: 'draft',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
+            console.log(`✅ Contract created with companyId: ${(contractData as any).companyId}`);
             return true;
         } catch (error) {
             console.error('Error creating contract:', error);
@@ -256,9 +266,21 @@ Print this document, sign it, and upload the signed copy during onboarding.
                 return false;
             }
 
-            // Delete from Storage
-            const storageRef = ref(storage, contract.signedDocumentUrl);
-            await deleteObject(storageRef);
+            // Extract public ID from Cloudinary URL if it's a Cloudinary URL
+            // Cloudinary URLs format: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/v{version}/{public_id}.{format}
+            if (contract.signedDocumentUrl.includes('cloudinary.com')) {
+                try {
+                    // Extract public ID from URL
+                    const urlParts = contract.signedDocumentUrl.split('/');
+                    const publicIdWithVersion = urlParts.slice(-2).join('/');
+                    const publicId = publicIdWithVersion.split('.')[0].replace(/^v\d+\//, '');
+                    
+                    // Delete from Cloudinary (requires backend API, so we'll just update Firestore)
+                    console.log('ℹ️ [Contract] Cloudinary delete requires backend API - updating Firestore only');
+                } catch (error) {
+                    console.warn('⚠️ [Contract] Could not extract Cloudinary public ID:', error);
+                }
+            }
 
             // Update contract record
             const contractRef = doc(db, 'contracts', employeeId);

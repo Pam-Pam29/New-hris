@@ -14,10 +14,16 @@ export class PerformanceSyncService {
 
             const meetingData = {
                 ...meeting,
+                companyId: meeting.companyId || (meeting as any).companyId, // Ensure companyId is included
                 status: 'pending' as const,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
+
+            // Validate companyId is present
+            if (!meetingData.companyId) {
+                throw new Error('companyId is required for performance meetings');
+            }
 
             const docRef = await addDoc(collection(this.db, 'performanceMeetings'), meetingData);
 
@@ -206,6 +212,7 @@ export class PerformanceSyncService {
 
             await addDoc(collection(this.db, 'notifications'), {
                 ...notification,
+                companyId: meeting.companyId || (meeting as any).companyId, // Include companyId in notification
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
@@ -223,9 +230,15 @@ export class PerformanceSyncService {
 
             const goalData = {
                 ...goal,
+                companyId: goal.companyId || (goal as any).companyId, // Ensure companyId is included
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
+
+            // Validate companyId is present
+            if (!goalData.companyId) {
+                throw new Error('companyId is required for performance goals');
+            }
 
             const docRef = await addDoc(collection(this.db, 'performanceGoals'), goalData);
             console.log('✅ Goal created with ID:', docRef.id);
@@ -279,9 +292,15 @@ export class PerformanceSyncService {
 
             const reviewData = {
                 ...review,
+                companyId: review.companyId || (review as any).companyId, // Ensure companyId is included
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
+
+            // Validate companyId is present
+            if (!reviewData.companyId) {
+                throw new Error('companyId is required for performance reviews');
+            }
 
             const docRef = await addDoc(collection(this.db, 'performanceReviews'), reviewData);
             console.log('✅ Review created with ID:', docRef.id);
@@ -318,6 +337,7 @@ export class PerformanceSyncService {
 
             await addDoc(collection(this.db, 'notifications'), {
                 ...notification,
+                companyId: meeting.companyId || (meeting as any).companyId, // Include companyId in notification
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
@@ -335,9 +355,15 @@ export class PerformanceSyncService {
 
             const goalData = {
                 ...goal,
+                companyId: goal.companyId || (goal as any).companyId, // Ensure companyId is included
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
+
+            // Validate companyId is present
+            if (!goalData.companyId) {
+                throw new Error('companyId is required for performance goals');
+            }
 
             const docRef = await addDoc(collection(this.db, 'performanceGoals'), goalData);
             console.log('✅ Goal created with ID:', docRef.id);
@@ -374,6 +400,7 @@ export class PerformanceSyncService {
 
             await addDoc(collection(this.db, 'notifications'), {
                 ...notification,
+                companyId: meeting.companyId || (meeting as any).companyId, // Include companyId in notification
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });

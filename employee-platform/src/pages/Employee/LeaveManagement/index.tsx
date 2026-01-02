@@ -139,6 +139,14 @@ export default function LeaveManagement() {
 
             const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
+            // Check leave balance before submitting
+            const balance = leaveBalances.find(b => b.leaveTypeId === selectedLeaveType);
+            if (balance && balance.remainingDays < totalDays) {
+                setError(`Insufficient balance. You only have ${balance.remainingDays} days remaining for ${selectedType.name}`);
+                setSubmitting(false);
+                return;
+            }
+
             // ✅ Use leaveSyncService for real-time sync
             console.log('📝 Submitting leave request via sync service...');
             const requestId = await leaveSyncService.submitLeaveRequest({

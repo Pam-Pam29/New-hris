@@ -76,3 +76,5 @@ test-email-now.js
 test-mailgun.js
 test-resend.js
 test-sendgrid.js
+
+.vercel

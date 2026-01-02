@@ -371,7 +371,9 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
     async updateEmployeeProfile(employeeId: string, profileData: Partial<EmployeeProfile>): Promise<EmployeeProfile> {
         try {
             const docRef = doc(getFirebaseDb(), 'employees', employeeId);
-            const updateData = {
+            
+            // Ensure DOB is saved in both new and legacy fields for compatibility
+            const updateData: any = {
                 ...profileData,
                 updatedAt: serverTimestamp(),
                 profileStatus: {
@@ -381,12 +383,35 @@ export class FirebaseComprehensiveDataFlowService implements IComprehensiveDataF
                 }
             };
 
+            // If personalInfo.dateOfBirth exists, also save to legacy fields
+            if (profileData.personalInfo?.dateOfBirth) {
+                const dob = profileData.personalInfo.dateOfBirth;
+                // Save to legacy dob field (string format YYYY-MM-DD)
+                if (dob instanceof Date) {
+                    updateData.dob = dob.toISOString().split('T')[0];
+                    updateData.dateOfBirth = dob.toISOString().split('T')[0];
+                } else if (typeof dob === 'string') {
+                    updateData.dob = dob;
+                    updateData.dateOfBirth = dob;
+                }
+                console.log('📅 [DataFlow] Saving DOB to legacy fields:', {
+                    dob: updateData.dob,
+                    dateOfBirth: updateData.dateOfBirth,
+                    personalInfoDateOfBirth: profileData.personalInfo.dateOfBirth
+                });
+            }
+
             console.log('🔍 [DataFlow] Saving employee profile to Firestore:', {
                 employeeId,
                 hasAuth: !!(profileData as any).auth,
                 authKeys: (profileData as any).auth ? Object.keys((profileData as any).auth) : [],
                 setupToken: (profileData as any).auth?.setupToken,
                 setupExpiry: (profileData as any).auth?.setupExpiry,
+                hasPersonalInfo: !!(profileData as any).personalInfo,
+                dateOfBirth: (profileData as any).personalInfo?.dateOfBirth,
+                dateOfBirthType: (profileData as any).personalInfo?.dateOfBirth ? typeof (profileData as any).personalInfo.dateOfBirth : 'undefined',
+                legacyDob: updateData.dob,
+                legacyDateOfBirth: updateData.dateOfBirth,
                 fullAuth: (profileData as any).auth
             });
 

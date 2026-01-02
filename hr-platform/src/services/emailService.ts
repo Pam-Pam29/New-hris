@@ -1,5 +1,7 @@
+/// <reference types="vite/client" />
+
 /**
- * Email Service using SendGrid
+ * Email Service using external email transport (Vercel serverless API)
  * Handles all email communications for the HR Platform
  */
 
@@ -184,14 +186,16 @@ interface FirstDayInstructionsData {
 }
 
 class EmailService {
-    private sendGridApiKey: string;
+    private emailApiUrl: string;
+    private emailApiKey?: string;
     private fromEmail: string;
     private fromName: string;
     private employeePlatformUrl: string;
     private hrPlatformUrl: string;
 
     constructor() {
-        this.sendGridApiKey = import.meta.env.VITE_SENDGRID_API_KEY || '';
+        this.emailApiUrl = import.meta.env.VITE_EMAIL_API_URL || '/api/send-email';
+        this.emailApiKey = import.meta.env.VITE_EMAIL_API_KEY;
         this.fromEmail = import.meta.env.VITE_FROM_EMAIL || 'noreply@yourhris.com';
         this.fromName = import.meta.env.VITE_FROM_NAME || 'Your HRIS';
         this.employeePlatformUrl = import.meta.env.VITE_EMPLOYEE_PLATFORM_URL || 'http://localhost:3005';
@@ -199,63 +203,47 @@ class EmailService {
     }
 
     /**
-     * Check if SendGrid is configured
+     * Check if Email API is configured
      */
     isConfigured(): boolean {
-        return !!this.sendGridApiKey && !!this.fromEmail;
+        return !!this.emailApiUrl;
     }
 
     /**
-     * Send email using SendGrid API
+     * Send email using external API
      */
     private async sendEmail({ to, subject, html, text }: SendEmailParams): Promise<boolean> {
         if (!this.isConfigured()) {
-            console.warn('⚠️ [Email] SendGrid not configured. Email not sent:', { to, subject });
+            console.warn('⚠️ [Email] Email API not configured. Email not sent:', { to, subject });
             console.log('📧 [Email] Would have sent:', { to, subject });
             return false;
         }
 
         try {
-            const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+            const response = await fetch(this.emailApiUrl, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.sendGridApiKey}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...(this.emailApiKey ? { 'x-api-key': this.emailApiKey } : {})
                 },
                 body: JSON.stringify({
-                    personalizations: [
-                        {
-                            to: [{ email: to }],
-                            subject: subject
-                        }
-                    ],
-                    from: {
-                        email: this.fromEmail,
-                        name: this.fromName
-                    },
-                    content: [
-                        {
-                            type: 'text/plain',
-                            value: text || this.stripHtml(html)
-                        },
-                        {
-                            type: 'text/html',
-                            value: html
-                        }
-                    ]
+                    to,
+                    subject,
+                    html,
+                    text: text || this.stripHtml(html)
                 })
             });
 
-            if (response.ok) {
-                console.log('✅ [Email] Email sent successfully to:', to);
-                return true;
-            } else {
-                const error = await response.text();
-                console.error('❌ [Email] Failed to send email:', error);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ [Email] API responded with error:', errorText);
                 return false;
             }
+
+            console.log('✅ [Email] Email sent successfully to:', to);
+            return true;
         } catch (error) {
-            console.error('❌ [Email] Error sending email:', error);
+            console.error('❌ [Email] Error calling email API:', error);
             return false;
         }
     }
@@ -1629,12 +1617,12 @@ class EmailService {
     async sendTestEmail(toEmail: string): Promise<boolean> {
         const subject = 'Test Email - HRIS Configuration';
         const html = `
-      <h1>✅ SendGrid Configuration Successful!</h1>
+      <h1>✅ Email API Configuration Successful!</h1>
       <p>This is a test email from your HRIS system.</p>
       <p>If you received this, your email integration is working correctly.</p>
+      <p><strong>API Endpoint:</strong> ${this.emailApiUrl}</p>
       <p><strong>From:</strong> ${this.fromEmail}</p>
       <p><strong>To:</strong> ${toEmail}</p>
-      <p><strong>SendGrid:</strong> Configured ✅</p>
     `;
 
         return this.sendEmail({ to: toEmail, subject, html });

@@ -313,28 +313,28 @@ function QuickActions() {
 	const actions = [
 		{
 			label: "Add New Employee",
-			href: "/Hr/CoreHr/EmployeeManagement",
+			href: "/hr/core-hr/employee-management",
 			icon: UserPlus,
 			color: "bg-success hover:bg-success/90",
 			description: "Onboard new team members"
 		},
 		{
 			label: "Post a Job",
-			href: "/Hr/Hiring/JobBoard",
+			href: "/hr/hiring/job-board",
 			icon: Briefcase,
 			color: "bg-primary hover:bg-primary/90",
 			description: "Create new job openings"
 		},
 		{
 			label: "Approve Leave",
-			href: "/Hr/CoreHr/LeaveManagement",
+			href: "/hr/core-hr/leave-management",
 			icon: CheckCircle,
 			color: "bg-warning hover:bg-warning/90",
 			description: "Review pending requests"
 		},
 		{
 			label: "Run Payroll",
-			onClick: () => comingSoon("Run Payroll"),
+			href: "/hr/payroll",
 			icon: DollarSign,
 			color: "bg-secondary hover:bg-secondary/90",
 			description: "Process monthly payroll"
@@ -633,11 +633,17 @@ function UpcomingEvents() {
 					const { getFirebaseDb } = await import('../../config/firebase');
 					const db = getFirebaseDb();
 
-					// Get all non-cancelled meetings
-					const q = query(
+					// Get all non-cancelled meetings for this company
+					let q = query(
 						collection(db, 'performanceMeetings'),
 						where('status', 'in', ['pending', 'approved', 'confirmed'])
 					);
+					
+					// Filter by companyId if available
+					if (companyId) {
+						q = query(q, where('companyId', '==', companyId));
+					}
+					
 					const snapshot = await getDocs(q);
 
 					const upcomingMeetings = snapshot.docs

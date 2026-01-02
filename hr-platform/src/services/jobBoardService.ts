@@ -88,6 +88,12 @@ export class FirebaseJobBoardService implements IJobBoardService {
 
     async createJobPosting(posting: Omit<JobPosting, 'id'>): Promise<string> {
         const { collection, addDoc } = await import('firebase/firestore');
+        
+        // Ensure db is valid
+        if (!this.db) {
+            throw new Error('Firestore database instance is not initialized');
+        }
+        
         const postingsRef = collection(this.db, 'job_postings');
         const docRef = await addDoc(postingsRef, posting);
         return docRef.id;

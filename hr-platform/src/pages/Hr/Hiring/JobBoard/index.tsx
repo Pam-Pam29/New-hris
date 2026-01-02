@@ -31,22 +31,8 @@ import {
 } from 'lucide-react';
 
 // Import Firebase services
-import { getServiceConfig } from '../../../../config/firebase';
-import { JobPosting, JobApplication } from '../../../../services/jobBoardService';
+import { JobPosting, JobApplication, getJobBoardService } from '../../../../services/jobBoardService';
 import { useCompany } from '../../../../context/CompanyContext';
-
-// Firebase service instances
-const { db } = getServiceConfig();
-let jobBoardServiceInstance: any = null;
-
-// Initialize services
-const getJobBoardService = async () => {
-    if (!jobBoardServiceInstance) {
-        const { FirebaseJobBoardService } = await import('../../../../services/jobBoardService');
-        jobBoardServiceInstance = new FirebaseJobBoardService(db);
-    }
-    return jobBoardServiceInstance;
-};
 
 export default function JobBoard() {
     const { companyId } = useCompany();

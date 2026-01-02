@@ -111,6 +111,11 @@ export default function Payroll() {
 
   // Fetch data on component mount
   useEffect(() => {
+    if (!companyId) {
+      console.warn('⚠️ [Payroll] No companyId available, skipping load');
+      return;
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -180,20 +185,29 @@ export default function Payroll() {
         setEmployees(employeesData);
         console.log('👥 Loaded', employeesData.length, 'employees');
 
-        // Fetch payroll records
-        const recordsData = await payrollService.getPayrollRecords();
-        setPayrollRecords(recordsData);
-        console.log('📊 Loaded', recordsData.length, 'payroll records');
+        // Fetch payroll records (filtered by companyId)
+        const recordsData = await payrollService.getPayrollRecords(companyId || undefined);
+        // Additional client-side filter to ensure only current company records are shown
+        // Also verify that the employee belongs to the current company
+        const employeeIds = new Set(employeesData.map(emp => emp.employeeId || emp.id));
+        const filteredRecords = recordsData.filter(record => {
+            const recordCompanyId = (record as any).companyId;
+            const employeeBelongsToCompany = employeeIds.has(record.employeeId);
+            // Filter by companyId if set, and ensure employee belongs to current company
+            return (!companyId || recordCompanyId === companyId) && employeeBelongsToCompany;
+        });
+        setPayrollRecords(filteredRecords);
+        console.log(`📊 Loaded ${filteredRecords.length} payroll records (filtered from ${recordsData.length} total) for company ${companyId}`);
 
-        // Fetch financial requests
-        const requestsData = await payrollService.getFinancialRequests();
+        // Fetch financial requests (filtered by companyId)
+        const requestsData = await payrollService.getFinancialRequests(companyId || undefined);
         setFinancialRequests(requestsData);
         console.log('💰 Loaded', requestsData.length, 'financial requests');
 
-        // Get active payroll records (not archived)
-        const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
-        const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
-        const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
+        // Get active payroll records (not archived) filtered by companyId
+        const paidRecords = await payrollService.getPayrollRecordsByStatus('paid', companyId || undefined);
+        const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending', companyId || undefined);
+        const processingRecords = await payrollService.getPayrollRecordsByStatus('processing', companyId || undefined);
 
         // Set status counts
         setStatusCounts({
@@ -234,7 +248,7 @@ export default function Payroll() {
     };
 
     fetchData();
-  }, []);
+  }, [companyId]);
 
   // Handle deleting a payroll record
   const handleDeletePayroll = async (id: string) => {
@@ -245,10 +259,10 @@ export default function Payroll() {
       // Update local state
       setPayrollRecords(prev => prev.filter(record => record.id !== id));
 
-      // Refresh status counts
-      const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
-      const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
-      const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
+      // Refresh status counts (filtered by companyId)
+      const paidRecords = await payrollService.getPayrollRecordsByStatus('paid', companyId || undefined);
+      const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending', companyId || undefined);
+      const processingRecords = await payrollService.getPayrollRecordsByStatus('processing', companyId || undefined);
 
       setStatusCounts({
         paid: paidRecords.length,
@@ -256,12 +270,17 @@ export default function Payroll() {
         processing: processingRecords.length
       });
 
-      // Refresh department data
-      const recordsData = await payrollService.getPayrollRecords();
+      // Refresh department data (filtered by companyId)
+      const recordsData = await payrollService.getPayrollRecords(companyId || undefined);
+      // Additional client-side filter
+      const filteredRecords = recordsData.filter(record => {
+        const recordCompanyId = (record as any).companyId;
+        return !companyId || recordCompanyId === companyId;
+      });
       const deptData: { [key: string]: { count: number, total: number, average: number } } = {};
 
       // Group by department
-      recordsData.forEach(record => {
+      filteredRecords.forEach(record => {
         if (!deptData[record.department]) {
           deptData[record.department] = {
             count: 0,
@@ -738,6 +757,7 @@ export default function Payroll() {
 
       // Create payroll record
       const payrollToAdd = {
+        companyId: companyId || undefined, // Add companyId for multi-tenancy
         employeeId: payrollForm.employeeId,
         employeeName: payrollForm.employeeName,
         department: payrollForm.department,
@@ -773,8 +793,8 @@ export default function Payroll() {
       for (const deduction of financialDeductions) {
         const requestId = deduction.id.replace('fin-req-', '');
         try {
-          // Get the request to update
-          const requests = await payrollService.getFinancialRequestsByEmployee(payrollForm.employeeId);
+          // Get the request to update (filtered by companyId)
+          const requests = await payrollService.getFinancialRequestsByEmployee(payrollForm.employeeId, companyId || undefined);
           const request = requests.find(r => r.id === requestId);
 
           if (request) {
@@ -800,13 +820,18 @@ export default function Payroll() {
       }
 
       // Refresh payroll records list
-      const recordsData = await payrollService.getPayrollRecords();
-      setPayrollRecords(recordsData);
+      const recordsData = await payrollService.getPayrollRecords(companyId || undefined);
+      // Additional client-side filter
+      const filteredRecords = recordsData.filter(record => {
+        const recordCompanyId = (record as any).companyId;
+        return !companyId || recordCompanyId === companyId;
+      });
+      setPayrollRecords(filteredRecords);
 
-      // Refresh status counts
-      const paidRecords = await payrollService.getPayrollRecordsByStatus('paid');
-      const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending');
-      const processingRecords = await payrollService.getPayrollRecordsByStatus('processing');
+      // Refresh status counts (filtered by companyId)
+      const paidRecords = await payrollService.getPayrollRecordsByStatus('paid', companyId || undefined);
+      const pendingRecords = await payrollService.getPayrollRecordsByStatus('pending', companyId || undefined);
+      const processingRecords = await payrollService.getPayrollRecordsByStatus('processing', companyId || undefined);
 
       setStatusCounts({
         paid: paidRecords.length,
@@ -1072,7 +1097,11 @@ export default function Payroll() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payrollRecords.length === 0 ? (
+                  {payrollRecords.filter(record => {
+                    // Additional safety filter: ensure record belongs to current company
+                    const recordCompanyId = (record as any).companyId;
+                    return !companyId || recordCompanyId === companyId;
+                  }).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center gap-2">
@@ -1086,7 +1115,16 @@ export default function Payroll() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    payrollRecords.map((record) => (
+                    payrollRecords
+                      .filter(record => {
+                        // Additional safety filter: ensure record belongs to current company
+                        const recordCompanyId = (record as any).companyId;
+                        const employeeIds = new Set(employees.map(emp => emp.employeeId || emp.id));
+                        const employeeBelongsToCompany = employeeIds.has(record.employeeId);
+                        // Filter by companyId if set, and ensure employee belongs to current company
+                        return (!companyId || recordCompanyId === companyId) && employeeBelongsToCompany;
+                      })
+                      .map((record) => (
                       <TableRow key={record.id} className="hover:bg-muted/30">
                         <TableCell>
                           <div className="font-medium">{record.employeeName}</div>

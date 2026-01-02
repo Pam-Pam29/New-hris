@@ -43,8 +43,6 @@ interface OnboardingData {
     website: string;
 
     // Step 2: Business Details
-    address: string;
-    city: string;
     country: string;
     timezone: string;
     phone: string;
@@ -74,7 +72,16 @@ interface OnboardingData {
         department: string;
     }>;
 
-    // Step 7: System Configuration
+    // Step 7: Office Location
+    officeLocation: {
+        name: string;
+        address: string;
+        latitude: string;
+        longitude: string;
+        radius: string;
+    };
+
+    // Step 8: System Configuration
     emailTemplates: {
         welcomeEmail: string;
         onboardingEmail: string;
@@ -101,7 +108,8 @@ const STEPS = [
     { id: 5, title: 'Departments', icon: Users },
     { id: 6, title: 'Leave Policies', icon: Calendar },
     { id: 7, title: 'HR Team Setup', icon: Briefcase },
-    { id: 8, title: 'Complete', icon: CheckCircle }
+    { id: 8, title: 'Office Location', icon: MapPin },
+    { id: 9, title: 'Complete', icon: CheckCircle }
 ];
 
 const INDUSTRIES = [
@@ -291,8 +299,6 @@ export default function CompanyOnboarding() {
         industry: '',
         companySize: '',
         website: '',
-        address: '',
-        city: '',
         country: '',
         timezone: getInitialTimezone(),
         phone: '',
@@ -308,6 +314,13 @@ export default function CompanyOnboarding() {
             { name: 'Personal Leave', days: 5 }
         ],
         hrTeam: [],
+        officeLocation: {
+            name: '',
+            address: '',
+            latitude: '',
+            longitude: '',
+            radius: '100'
+        },
         emailTemplates: {
             welcomeEmail: 'Welcome to {companyName}! We\'re excited to have you on board.',
             onboardingEmail: 'Your onboarding process is ready. Please complete the required steps.',
@@ -332,10 +345,9 @@ export default function CompanyOnboarding() {
             return;
         }
 
+        // Extract country from address if available, otherwise use empty string
         const resolvedAddressParts = company.address?.split(',').map((part) => part.trim()) ?? [];
-        const streetAddress = resolvedAddressParts[0] ?? '';
-        const cityFromAddress = resolvedAddressParts[1] ?? '';
-        const countryFromAddress = resolvedAddressParts[resolvedAddressParts.length - 1] ?? '';
+        const countryFromAddress = resolvedAddressParts.length > 0 ? resolvedAddressParts[resolvedAddressParts.length - 1] ?? '' : '';
 
         setFormData((prev) => ({
             ...prev,
@@ -345,8 +357,6 @@ export default function CompanyOnboarding() {
             phone: company.phone ?? prev.phone,
             email: company.email ?? prev.email,
             supportEmail: company.settings?.supportEmail ?? company.email ?? prev.supportEmail,
-            address: streetAddress || prev.address,
-            city: cityFromAddress || prev.city,
             country: countryFromAddress || prev.country,
             primaryColor: company.primaryColor ?? prev.primaryColor,
             secondaryColor: company.secondaryColor ?? prev.secondaryColor,
@@ -447,7 +457,7 @@ export default function CompanyOnboarding() {
                     email: formData.email,
                     phone: formData.phone,
                     website: formData.website,
-                    address: `${formData.address}, ${formData.city}, ${formData.country}`,
+                    address: formData.country,
                     primaryColor: formData.primaryColor.trim(),
                     secondaryColor: formData.secondaryColor.trim(),
                     logo: formData.logo,
@@ -503,7 +513,7 @@ export default function CompanyOnboarding() {
                 await companyService.updateCompany(companyId, {
                     displayName: formData.displayName,
                     domain: formData.domain,
-                    address: `${formData.address}, ${formData.city}, ${formData.country}`,
+                    address: formData.country,
                     phone: formData.phone,
                     email: formData.email,
                     website: formData.website,
@@ -638,6 +648,49 @@ export default function CompanyOnboarding() {
             }
             console.log(`✅ Created ${departmentsCreated} department documents in Firebase`);
 
+            // Step 6: Create office location for this company
+            let officeLocationCreated = 0;
+            if (formData.officeLocation.name && formData.officeLocation.address && formData.officeLocation.latitude && formData.officeLocation.longitude) {
+                try {
+                    console.log('📍 Creating office location...', {
+                        companyId,
+                        name: formData.officeLocation.name,
+                        hasAddress: !!formData.officeLocation.address,
+                        latitude: formData.officeLocation.latitude,
+                        longitude: formData.officeLocation.longitude
+                    });
+                    
+                    // Dynamic import to avoid initialization issues on page load
+                    const { getOfficeLocationService } = await import('../../services/officeLocationService');
+                    const officeService = await getOfficeLocationService();
+                    console.log('✅ Office location service initialized');
+                    
+                    const locationData = {
+                        companyId: companyId,
+                        name: formData.officeLocation.name,
+                        address: formData.officeLocation.address,
+                        latitude: parseFloat(formData.officeLocation.latitude),
+                        longitude: parseFloat(formData.officeLocation.longitude),
+                        radius: parseInt(formData.officeLocation.radius) || 100,
+                        isDefault: true, // First office is default
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    };
+
+                    await officeService.createOfficeLocation(locationData);
+                    officeLocationCreated = 1;
+                    console.log('✅ Created office location in Firebase');
+                } catch (error: any) {
+                    console.error('❌ Error creating office location:', error);
+                    console.error('❌ Error details:', {
+                        message: error?.message,
+                        stack: error?.stack,
+                        name: error?.name
+                    });
+                    // Don't fail onboarding if office location fails
+                }
+            }
+
             // Refresh company data
             const updatedCompany = await companyService.getCompany(companyId);
             if (updatedCompany) {
@@ -648,7 +701,7 @@ export default function CompanyOnboarding() {
             console.log('📊 Summary of saved data:', {
                 company: formData.displayName,
                 domain: formData.domain,
-                address: `${formData.address}, ${formData.city}, ${formData.country}`,
+                address: formData.country,
                 email: formData.email,
                 phone: formData.phone,
                 website: formData.website,
@@ -659,20 +712,21 @@ export default function CompanyOnboarding() {
                 secondaryColor: formData.secondaryColor,
                 departmentsCreated: departmentsCreated,
                 leaveTypesCreated: leaveTypesCreated,
-                hrTeamCreated: hrTeamCreated
+                hrTeamCreated: hrTeamCreated,
+                officeLocationCreated: officeLocationCreated
             });
 
             // Check if user is already authenticated (currentUser was checked at the start of handleComplete)
             if (currentUser) {
                 // User is already authenticated (signed up before onboarding)
                 // Show success message and redirect to dashboard
-                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nRedirecting to dashboard...`);
+                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n${officeLocationCreated > 0 ? '✅ Office location configured\n' : ''}✅ System configuration saved\n\nRedirecting to dashboard...`);
                 
                 // Redirect to dashboard
                 navigate('/dashboard', { replace: true });
             } else {
                 // User is not authenticated, redirect to signup
-                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n✅ System configuration saved\n\nNext: Create your HR administrator account`);
+                alert(`🎉 Company Profile Created!\n\n✅ Company profile saved\n✅ ${leaveTypesCreated} leave types created\n✅ ${departmentsCreated} departments configured\n✅ ${hrTeamCreated} HR team members added\n${officeLocationCreated > 0 ? '✅ Office location configured\n' : ''}✅ System configuration saved\n\nNext: Create your HR administrator account`);
                 
                 // Navigate to signup page to create HR user
                 navigate('/signup');
@@ -752,6 +806,16 @@ export default function CompanyOnboarding() {
                 );
 
             case 8:
+                return (
+                    <OfficeLocationStep
+                        formData={formData}
+                        setFormData={setFormData}
+                        onNext={handleNext}
+                        onBack={handleBack}
+                    />
+                );
+
+            case 9:
                 return (
                     <CompleteStep
                         formData={formData}
@@ -998,17 +1062,12 @@ function BusinessDetailsStep({
     onNext: () => void;
     onBack: () => void;
 }) {
-    const canProceed = formData.address && formData.city && formData.country && formData.email;
+    const canProceed = formData.country && formData.email;
 
-    // Auto-detect timezone when country or city changes
+    // Auto-detect timezone when country changes
     const handleCountryChange = (country: string) => {
-        const detectedTimezone = detectTimezone(country, formData.city);
+        const detectedTimezone = detectTimezone(country, '');
         setFormData({ ...formData, country, timezone: detectedTimezone });
-    };
-
-    const handleCityChange = (city: string) => {
-        const detectedTimezone = detectTimezone(formData.country, city);
-        setFormData({ ...formData, city, timezone: detectedTimezone });
     };
 
     return (
@@ -1026,35 +1085,14 @@ function BusinessDetailsStep({
             </CardHeader>
             <CardContent className="p-8 space-y-6">
                 <div className="space-y-2">
-                    <Label htmlFor="address">Street Address *</Label>
+                    <Label htmlFor="country">Country *</Label>
                     <Input
-                        id="address"
-                        placeholder="123 Business Street"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        id="country"
+                        placeholder="United States"
+                        value={formData.country}
+                        onChange={(e) => handleCountryChange(e.target.value)}
                     />
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="city">City *</Label>
-                        <Input
-                            id="city"
-                            placeholder="San Francisco"
-                            value={formData.city}
-                            onChange={(e) => handleCityChange(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">Timezone will auto-detect based on your location</p>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="country">Country *</Label>
-                        <Input
-                            id="country"
-                            placeholder="United States"
-                            value={formData.country}
-                            onChange={(e) => handleCountryChange(e.target.value)}
-                        />
-                    </div>
+                    <p className="text-xs text-muted-foreground">Timezone will auto-detect based on your country</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1075,18 +1113,18 @@ function BusinessDetailsStep({
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                const detected = detectTimezone(formData.country, formData.city);
+                                const detected = detectTimezone(formData.country, '');
                                 setFormData({ ...formData, timezone: detected });
                             }}
-                            title="Auto-detect timezone from location"
+                            title="Auto-detect timezone from country"
                         >
                             <Globe className="w-4 h-4" />
                         </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        {formData.country || formData.city 
-                            ? `Detected from ${formData.city ? formData.city : ''}${formData.city && formData.country ? ', ' : ''}${formData.country || ''}`
-                            : 'Enter your city or country to auto-detect timezone'}
+                        {formData.country 
+                            ? `Detected from ${formData.country}`
+                            : 'Enter your country to auto-detect timezone'}
                     </p>
                 </div>
 
@@ -1665,6 +1703,164 @@ function HrTeamStep({
     );
 }
 
+function OfficeLocationStep({
+    formData,
+    setFormData,
+    onNext,
+    onBack
+}: {
+    formData: OnboardingData;
+    setFormData: (data: OnboardingData) => void;
+    onNext: () => void;
+    onBack: () => void;
+}) {
+    const updateOfficeLocation = (field: string, value: string) => {
+        setFormData({
+            ...formData,
+            officeLocation: {
+                ...formData.officeLocation,
+                [field]: value
+            }
+        });
+    };
+
+    const handleCoordinatesPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        const pastedText = e.clipboardData.getText();
+        // Try to parse format like "-1.9536, 30.0606"
+        const match = pastedText.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+        if (match) {
+            e.preventDefault();
+            updateOfficeLocation('latitude', match[1]);
+            updateOfficeLocation('longitude', match[2]);
+        }
+    };
+
+    return (
+        <Card className="border-2 shadow-xl">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
+                        <MapPin className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-2xl">Add Office Location</CardTitle>
+                        <CardDescription>Configure an office location to track employee proximity during clock-in</CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-8 space-y-6">
+                <div>
+                    <Label htmlFor="officeName">Office Name</Label>
+                    <Input
+                        id="officeName"
+                        value={formData.officeLocation.name}
+                        onChange={(e) => updateOfficeLocation('name', e.target.value)}
+                        placeholder="e.g., Main Office, Kigali Branch"
+                        className="mt-1"
+                    />
+                </div>
+
+                <div>
+                    <Label htmlFor="officeAddress">Address</Label>
+                    <Textarea
+                        id="officeAddress"
+                        value={formData.officeLocation.address}
+                        onChange={(e) => updateOfficeLocation('address', e.target.value)}
+                        placeholder="e.g., KG 11 Ave, Kigali, Rwanda"
+                        className="mt-1"
+                        rows={3}
+                    />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <Label htmlFor="latitude">Latitude</Label>
+                        <Input
+                            id="latitude"
+                            type="number"
+                            step="any"
+                            value={formData.officeLocation.latitude}
+                            onChange={(e) => updateOfficeLocation('latitude', e.target.value)}
+                            placeholder="-1.9536"
+                            className="mt-1"
+                            onPaste={handleCoordinatesPaste}
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="longitude">Longitude</Label>
+                        <Input
+                            id="longitude"
+                            type="number"
+                            step="any"
+                            value={formData.officeLocation.longitude}
+                            onChange={(e) => updateOfficeLocation('longitude', e.target.value)}
+                            placeholder="30.0606"
+                            className="mt-1"
+                            onPaste={handleCoordinatesPaste}
+                        />
+                    </div>
+                </div>
+                <p className="text-sm text-gray-600">
+                    Get from Google Maps: Right-click location → Copy coordinates
+                </p>
+
+                <div>
+                    <Label htmlFor="radius">Proximity Radius (meters)</Label>
+                    <Input
+                        id="radius"
+                        type="number"
+                        value={formData.officeLocation.radius}
+                        onChange={(e) => updateOfficeLocation('radius', e.target.value)}
+                        placeholder="100"
+                        className="mt-1"
+                    />
+                    <p className="text-sm text-gray-600 mt-1">
+                        Employees within this radius are considered "At Office"
+                    </p>
+                </div>
+
+                <Alert className="bg-yellow-50 border-yellow-200">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
+                        <strong>Tip: To get accurate coordinates:</strong>
+                        <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
+                            <li>
+                                Open{' '}
+                                <a
+                                    href="https://www.google.com/maps"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 underline"
+                                >
+                                    Google Maps
+                                </a>
+                            </li>
+                            <li>Right-click on your office location</li>
+                            <li>Click the coordinates at the top to copy them</li>
+                            <li>Paste here (format: -1.9536, 30.0606)</li>
+                        </ol>
+                    </AlertDescription>
+                </Alert>
+
+                <div className="flex justify-between pt-6 border-t">
+                    <Button onClick={onBack} variant="outline">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                    <Button 
+                        onClick={onNext} 
+                        className="bg-blue-600 hover:bg-blue-700"
+                        disabled={!formData.officeLocation.name || !formData.officeLocation.address || !formData.officeLocation.latitude || !formData.officeLocation.longitude}
+                    >
+                        Continue
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 function SystemConfigStep({
     formData,
     setFormData,
@@ -1948,7 +2144,7 @@ function CompleteStep({
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Address:</span>
-                                <span className="font-medium text-right">{formData.address}, {formData.city}, {formData.country}</span>
+                                <span className="font-medium text-right">{formData.country}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Email:</span>

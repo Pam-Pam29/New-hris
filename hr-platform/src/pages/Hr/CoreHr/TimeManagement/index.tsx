@@ -77,39 +77,160 @@ export default function TimeManagement() {
   const [employeeService, setEmployeeService] = useState<IEmployeeService | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Build a quick lookup map for employee names
+  // Build a quick lookup map for employee names - support both id and employeeId
   const employeeNameById = useMemo(() => {
     const map = new Map<string, string>();
-    employees.forEach(emp => map.set(emp.id.toString(), emp.name));
+    employees.forEach(emp => {
+      // Map by numeric id (if it exists)
+      if (emp.id) {
+        map.set(emp.id.toString(), emp.name);
+      }
+      // Map by employeeId (string like "SIR001", "SIR002") - this is the primary key
+      if (emp.employeeId) {
+        map.set(emp.employeeId.toString(), emp.name);
+        // Also map lowercase version for case-insensitive matching
+        map.set(emp.employeeId.toString().toLowerCase(), emp.name);
+      }
+      // Also map by firebaseId if available (for backward compatibility)
+      if ((emp as any).firebaseId) {
+        map.set((emp as any).firebaseId, emp.name);
+        // Also map lowercase version
+        map.set((emp as any).firebaseId.toLowerCase(), emp.name);
+      }
+    });
+    console.log('📋 [TimeManagement] Employee name map created:', {
+      totalEmployees: employees.length,
+      mapSize: map.size,
+      sampleEntries: Array.from(map.entries()).slice(0, 10),
+      employeeIds: employees.map(e => ({
+        employeeId: e.employeeId,
+        firebaseId: (e as any).firebaseId,
+        name: e.name
+      })).slice(0, 5)
+    });
     return map;
   }, [employees]);
 
   // Helper to resolve employee display names
   const resolveEmployeeName = useCallback(
     (employeeId?: string, fallback?: string) => {
-      if (employeeId && employeeNameById.has(employeeId)) {
-        return employeeNameById.get(employeeId)!;
+      // If we have a valid fallback name (not "Loading..." or empty), try to match by name first
+      // This handles cases where employeeId is generic (like "EMP001") but employeeName is correct
+      if (fallback && fallback.trim() !== '' && fallback.trim().toLowerCase() !== 'loading...' && fallback.trim().toLowerCase() !== 'unknown') {
+        const normalizedFallback = fallback.trim().toLowerCase();
+        const foundByName = employees.find(emp => 
+          emp.name?.toLowerCase() === normalizedFallback
+        );
+        
+        if (foundByName) {
+          console.log(`✅ [TimeManagement] Resolved employee name by name match: "${fallback}" -> ${foundByName.name} (employeeId: ${foundByName.employeeId})`);
+          return foundByName.name;
+        }
       }
-      if (fallback && fallback.trim() !== '' && fallback.trim().toLowerCase() !== 'loading...') {
+      
+      if (!employeeId) {
+        return fallback && fallback.trim() !== '' && fallback.trim().toLowerCase() !== 'loading...' 
+          ? fallback 
+          : 'Employee';
+      }
+      
+      // Try exact match first
+      if (employeeNameById.has(employeeId)) {
+        const name = employeeNameById.get(employeeId)!;
+        console.log(`✅ [TimeManagement] Resolved employee name for ID: ${employeeId} -> ${name}`);
+        return name;
+      }
+      
+      // Try lowercase match
+      const lowerCaseId = employeeId.toLowerCase();
+      if (employeeNameById.has(lowerCaseId)) {
+        const name = employeeNameById.get(lowerCaseId)!;
+        console.log(`✅ [TimeManagement] Resolved employee name for ID: ${employeeId} (lowercase) -> ${name}`);
+        return name;
+      }
+      
+      // Try to find by searching through employees array directly (fallback)
+      const foundEmployee = employees.find(emp => 
+        emp.employeeId?.toLowerCase() === employeeId.toLowerCase() ||
+        (emp as any).firebaseId?.toLowerCase() === employeeId.toLowerCase() ||
+        emp.id?.toString() === employeeId
+      );
+      
+      if (foundEmployee) {
+        console.log(`✅ [TimeManagement] Resolved employee name for ID: ${employeeId} (direct search) -> ${foundEmployee.name}`);
+        return foundEmployee.name;
+      }
+      
+      // Use fallback if available
+      if (fallback && fallback.trim() !== '' && fallback.trim().toLowerCase() !== 'loading...' && fallback.trim().toLowerCase() !== 'unknown') {
+        console.log(`⚠️ [TimeManagement] Using fallback name for ID: ${employeeId} -> ${fallback}`);
         return fallback;
       }
+      
+      console.warn(`⚠️ [TimeManagement] Could not resolve employee name for ID: ${employeeId}`, {
+        availableEmployeeIds: Array.from(employeeNameById.keys()).slice(0, 10),
+        employeesInArray: employees.map(e => ({
+          employeeId: e.employeeId,
+          firebaseId: (e as any).firebaseId,
+          name: e.name
+        })).slice(0, 3)
+      });
       return 'Employee';
     },
-    [employeeNameById]
+    [employeeNameById, employees]
   );
 
   // Enrich attendance records with latest employee names
   const enrichAttendanceRecords = useCallback(
-    (records: AttendanceRecord[]) =>
-      records.map((record) => {
+    (records: AttendanceRecord[]) => {
+      console.log('🔍 [TimeManagement] Enriching records:', {
+        recordCount: records.length,
+        sampleRecordIds: records.slice(0, 3).map(r => ({
+          employeeId: r.employeeId,
+          employeeName: r.employeeName,
+          employee: r.employee
+        })),
+        availableEmployeeIds: Array.from(employeeNameById.keys()).slice(0, 5),
+        companyId: companyId,
+        employeesInCompany: employees.length
+      });
+      
+      // Filter records to only include those that match employees in the current company
+      // This prevents showing time entries from other companies
+      const filteredRecords = records.filter((record) => {
+        // Try to match by employeeId first
+        const matchedById = employees.some(emp => 
+          emp.employeeId?.toLowerCase() === record.employeeId?.toLowerCase() ||
+          (emp as any).firebaseId?.toLowerCase() === record.employeeId?.toLowerCase() ||
+          emp.id?.toString() === record.employeeId
+        );
+        
+        // If no match by ID, try to match by name (handles generic IDs like "EMP001")
+        if (!matchedById && record.employeeName && record.employeeName.trim() !== '' && record.employeeName.toLowerCase() !== 'loading...' && record.employeeName.toLowerCase() !== 'unknown') {
+          const matchedByName = employees.some(emp => 
+            emp.name?.toLowerCase() === record.employeeName?.toLowerCase()
+          );
+          return matchedByName;
+        }
+        
+        return matchedById;
+      });
+      
+      console.log(`🔍 [TimeManagement] Filtered ${records.length} records to ${filteredRecords.length} records for company ${companyId}`);
+      
+      return filteredRecords.map((record) => {
         const displayName = resolveEmployeeName(record.employeeId, record.employeeName || record.employee);
+        if (displayName === 'Employee' && record.employeeId) {
+          console.warn(`⚠️ [TimeManagement] Could not resolve name for employeeId: ${record.employeeId}, employeeName: ${record.employeeName}`);
+        }
         return {
           ...record,
           employee: displayName,
           employeeName: displayName,
         };
-      }),
-    [resolveEmployeeName]
+      });
+    },
+    [resolveEmployeeName, employeeNameById, employees, companyId]
   );
 
   // Get unique employee IDs from attendance records (for filtering)
@@ -164,6 +285,10 @@ export default function TimeManagement() {
     radius: '100' // 100 meters default
   });
 
+  // Late threshold configuration
+  const [lateThreshold, setLateThreshold] = useState<string>('09:00'); // Default 9:00 AM
+  const [savingLateThreshold, setSavingLateThreshold] = useState(false);
+
   // Initialize Employee Service
   useEffect(() => {
     const initializeService = async () => {
@@ -176,10 +301,10 @@ export default function TimeManagement() {
     };
 
     initializeService();
-  }, [enrichAttendanceRecords]);
+  }, []); // Only run once on mount
 
   // Load employees using Employee Service (filtered by company)
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     if (!employeeService || !companyId) return;
 
     try {
@@ -188,56 +313,86 @@ export default function TimeManagement() {
     } catch (err) {
       console.error('Error fetching employees:', err);
     }
-  };
+  }, [employeeService, companyId]);
 
   // Load attendance records from backend (real time entries)
-  const loadAttendanceRecords = async () => {
+  const loadAttendanceRecords = useCallback(async () => {
     try {
       const timeService = await getTimeService();
       const records = await timeService.getAttendanceRecords();
       const enriched = enrichAttendanceRecords(records);
 
       console.log('📊 Loaded real time entries:', enriched.length);
-      console.log('📋 First record has location?:', {
-        hasLocation: !!enriched[0]?.location,
-        location: enriched[0]?.location,
-        recordId: enriched[0]?.id
-      });
+      if (enriched.length > 0) {
+        console.log('📋 First record has location?:', {
+          hasLocation: !!enriched[0]?.location,
+          location: enriched[0]?.location,
+          recordId: enriched[0]?.id
+        });
+      }
 
       setAttendanceRecords(enriched);
       setFilteredAttendanceRecords(enriched);
-
-      // Check after setting state
-      setTimeout(() => {
-        console.log('📊 After setState - records in state:', attendanceRecords.length);
-        console.log('📋 First record in state has location?:', {
-          hasLocation: !!attendanceRecords[0]?.location,
-          location: attendanceRecords[0]?.location
-        });
-      }, 100);
     } catch (error) {
       console.error('Error loading attendance records:', error);
       setAttendanceRecords([]);
       setFilteredAttendanceRecords([]);
     }
-  };
+  }, [enrichAttendanceRecords]);
 
   // Load office locations
-  const loadOfficeLocations = async () => {
+  const loadOfficeLocations = useCallback(async () => {
+    if (!companyId) return;
+    
     try {
       console.log('🔄 Loading office locations...');
       const officeService = await getOfficeLocationService();
       console.log('✅ Office service initialized');
 
-      const locations = await officeService.getOfficeLocations();
-      const defaultLoc = await officeService.getDefaultOfficeLocation();
+      const locations = await officeService.getOfficeLocations(companyId);
+      const defaultLoc = await officeService.getDefaultOfficeLocation(companyId);
 
-      // Remove duplicates based on ID
-      const uniqueLocations = locations.filter((location, index, self) =>
+      // Remove duplicates based on ID first
+      let uniqueById = locations.filter((location, index, self) =>
         index === self.findIndex((t) => t.id === location.id)
       );
 
-      setOfficeLocations(uniqueLocations);
+      // Also remove duplicates based on data (name, address, coordinates) - keep the first one
+      let uniqueLocations = uniqueById.filter((location, index, self) => {
+        const isDuplicate = self.findIndex((t) => 
+          t.name === location.name &&
+          t.address === location.address &&
+          Math.abs(t.latitude - location.latitude) < 0.0001 &&
+          Math.abs(t.longitude - location.longitude) < 0.0001
+        );
+        return isDuplicate === index; // Keep only the first occurrence
+      });
+
+      // Filter out generic/incomplete locations - only show locations explicitly created by HR
+      // Generic locations are those without proper name, address, or with generic names
+      const genericLocationNames = ['office', 'location', 'headquarters', 'main office', 'default', 'office location'];
+      const validLocations = uniqueLocations.filter((location) => {
+        const hasValidName = location.name && 
+                            location.name.trim().length > 0 && 
+                            !genericLocationNames.includes(location.name.toLowerCase().trim());
+        const hasValidAddress = location.address && location.address.trim().length > 0;
+        const hasValidCoordinates = location.latitude && location.longitude && 
+                                   !isNaN(location.latitude) && !isNaN(location.longitude);
+        
+        return hasValidName && hasValidAddress && hasValidCoordinates;
+      });
+
+      // Log if generic locations were filtered
+      if (uniqueLocations.length !== validLocations.length) {
+        console.log(`⚠️ Filtered out ${uniqueLocations.length - validLocations.length} generic/incomplete office location(s)`);
+      }
+
+      // Log if duplicates were found
+      if (uniqueById.length !== uniqueLocations.length) {
+        console.log(`⚠️ Removed ${uniqueById.length - uniqueLocations.length} duplicate office location(s)`);
+      }
+
+      setOfficeLocations(validLocations);
       setDefaultOffice(defaultLoc);
       console.log('📍 Loaded office locations:', uniqueLocations.length);
 
@@ -249,7 +404,7 @@ export default function TimeManagement() {
       console.error('❌ Error details:', error.message);
       // Don't show error to user - office locations are optional
     }
-  };
+  }, [companyId]);
 
   const handleEditOffice = (office: OfficeLocation) => {
     setEditingOffice(office);
@@ -293,6 +448,7 @@ export default function TimeManagement() {
       if (editingOffice) {
         // Update existing office
         await officeService.updateOfficeLocation(editingOffice.id, {
+          companyId: companyId || editingOffice.companyId,
           name: officeForm.name,
           address: officeForm.address,
           latitude: parseFloat(officeForm.latitude),
@@ -307,6 +463,7 @@ export default function TimeManagement() {
       } else {
         // Create new office
         const locationData: Omit<OfficeLocation, 'id'> = {
+          companyId: companyId || '',
           name: officeForm.name,
           address: officeForm.address,
           latitude: parseFloat(officeForm.latitude),
@@ -340,25 +497,96 @@ export default function TimeManagement() {
 
   // Load data when employee service is ready
   useEffect(() => {
-    if (employeeService) {
+    if (employeeService && companyId) {
       fetchEmployees();
     }
-  }, [employeeService]);
+  }, [employeeService, companyId, fetchEmployees]);
 
-  // Load office locations on mount
+  // Load late threshold from hrSettings
+  const loadLateThreshold = useCallback(async () => {
+    if (!companyId) return;
+    
+    try {
+      const { db } = await import('../../../../config/firebase');
+      const { doc, getDoc } = await import('firebase/firestore');
+      
+      const settingsRef = doc(db, 'hrSettings', companyId);
+      const settingsSnapshot = await getDoc(settingsRef);
+      
+      if (settingsSnapshot.exists()) {
+        const settings = settingsSnapshot.data();
+        if (settings.lateThreshold) {
+          setLateThreshold(settings.lateThreshold);
+          console.log('✅ Loaded late threshold:', settings.lateThreshold);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load late threshold:', error);
+    }
+  }, [companyId]);
+
+  // Save late threshold to hrSettings
+  const saveLateThreshold = useCallback(async () => {
+    if (!companyId) return;
+    
+    setSavingLateThreshold(true);
+    try {
+      const { db } = await import('../../../../config/firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      
+      const settingsRef = doc(db, 'hrSettings', companyId);
+      await setDoc(settingsRef, {
+        lateThreshold: lateThreshold,
+        updatedAt: new Date()
+      }, { merge: true });
+      
+      toast({
+        title: 'Late threshold updated',
+        description: `Employees clocking in after ${lateThreshold} will be marked as late`,
+        duration: 3000
+      });
+      
+      console.log('✅ Saved late threshold:', lateThreshold);
+    } catch (error) {
+      console.error('Failed to save late threshold:', error);
+      toast({
+        title: 'Failed to save',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+        duration: 3000
+      });
+    } finally {
+      setSavingLateThreshold(false);
+    }
+  }, [companyId, lateThreshold, toast]);
+
+  // Load office locations when companyId is available
   useEffect(() => {
-    loadOfficeLocations();
-  }, []);
+    if (companyId) {
+      loadOfficeLocations();
+      loadLateThreshold();
+    }
+  }, [companyId, loadLateThreshold]);
 
-  // Load attendance records on component mount
+  // Load attendance records on component mount (only once, real-time updates handle the rest)
   useEffect(() => {
     loadAttendanceRecords();
-  }, [enrichAttendanceRecords]);
+  }, []); // Only run once on mount - real-time subscriptions will handle updates
 
+  // Enrich existing records when employee names become available
   useEffect(() => {
-    setAttendanceRecords(prev => enrichAttendanceRecords(prev));
-    setFilteredAttendanceRecords(prev => enrichAttendanceRecords(prev));
-  }, [enrichAttendanceRecords]);
+    if (attendanceRecords.length > 0 && employees.length > 0) {
+      const enriched = enrichAttendanceRecords(attendanceRecords);
+      // Only update if names actually changed to avoid infinite loops
+      const needsUpdate = enriched.some((record, index) => 
+        record.employeeName !== attendanceRecords[index]?.employeeName
+      );
+      if (needsUpdate) {
+        setAttendanceRecords(enriched);
+        setFilteredAttendanceRecords(enriched);
+      }
+    }
+  }, [employees.length, enrichAttendanceRecords]); // Only re-enrich when employees list length changes
 
   // Set up Firebase real-time subscriptions
   useEffect(() => {
@@ -389,13 +617,14 @@ export default function TimeManagement() {
                 clockOutTime = clockOutDate.toTimeString().slice(0, 5);
               }
 
-              // Determine status based on clock-in time (9:00 AM expected)
+              // Determine status based on clock-in time (using configurable threshold)
               let status: 'Present' | 'Late' | 'Absent' = 'Present';
               const [hours, minutes] = clockInTime.split(':').map(Number);
               const clockInMinutes = hours * 60 + minutes;
-              const expectedMinutes = 9 * 60; // 9:00 AM
+              const [expectedHours, expectedMinutes] = lateThreshold.split(':').map(Number);
+              const expectedTotalMinutes = expectedHours * 60 + expectedMinutes;
 
-              if (clockInMinutes > expectedMinutes + 30) {
+              if (clockInMinutes > expectedTotalMinutes) {
                 status = 'Late';
               }
 
@@ -432,6 +661,7 @@ export default function TimeManagement() {
             });
 
             console.log('📡 Real-time: Converted entries with location data');
+            // Use enrichAttendanceRecords from closure - it will use latest employee data
             const enriched = enrichAttendanceRecords(records);
             setAttendanceRecords(enriched);
             setFilteredAttendanceRecords(enriched);
@@ -470,13 +700,75 @@ export default function TimeManagement() {
       unsubscribeNotifs?.();
       console.log('🔌 HR: Firebase subscriptions cleaned up');
     };
-  }, []);
+  }, [enrichAttendanceRecords]); // Re-setup subscriptions when enrichAttendanceRecords changes (when employees load)
 
   // Summary stats
-  const summary = statuses.map(status => ({
-    status,
-    count: attendanceRecords.filter(row => row.status === status).length,
-  }));
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  // Filter attendance records for today only
+  const todayRecords = attendanceRecords.filter(record => {
+    if (!record.date) return false;
+    // Handle both string dates and Firestore Timestamp objects
+    let recordDate: string;
+    if (typeof record.date === 'string') {
+      recordDate = record.date.split('T')[0]; // Extract date part if it includes time
+    } else if (record.date && typeof record.date === 'object' && 'toDate' in record.date) {
+      // Firestore Timestamp
+      recordDate = (record.date as any).toDate().toISOString().split('T')[0];
+    } else {
+      return false;
+    }
+    return recordDate === todayStr;
+  });
+  
+  // Get employee IDs who have clocked in today (any status - Present, Late, or Absent)
+  const employeesPresentToday = new Set(
+    todayRecords.map(record => {
+      // Try to match by employeeId
+      const emp = employees.find(e => 
+        e.employeeId?.toLowerCase() === record.employeeId?.toLowerCase() ||
+        (e as any).firebaseId?.toLowerCase() === record.employeeId?.toLowerCase() ||
+        e.id?.toString() === record.employeeId
+      );
+      return emp?.employeeId || emp?.id?.toString() || record.employeeId;
+    }).filter(Boolean)
+  );
+  
+  // Count employees who haven't clocked in today (absent)
+  const totalEmployees = employees.length;
+  const employeesWithRecords = employeesPresentToday.size;
+  const absentCount = Math.max(0, totalEmployees - employeesWithRecords);
+  
+  // Log for debugging
+  if (totalEmployees > 0) {
+    console.log(`📊 [TimeManagement] Summary calculation:`, {
+      today: todayStr,
+      totalEmployees,
+      employeesWithRecords,
+      absentCount,
+      todayRecordsCount: todayRecords.length,
+      presentCount: todayRecords.filter(r => r.status === 'Present').length,
+      lateCount: todayRecords.filter(r => r.status === 'Late').length,
+    });
+  }
+  
+  // Calculate summary with proper absent count
+  const summary = statuses.map(status => {
+    if (status === 'Absent') {
+      // Use calculated absent count (employees without any record today)
+      return {
+        status,
+        count: absentCount,
+      };
+    }
+    // For Present and Late, count from today's records
+    return {
+      status,
+      count: todayRecords.filter(row => row.status === status).length,
+    };
+  });
 
   const handleAdjust = (attendance: AttendanceRecord) => {
     if (!attendance.id) {
@@ -590,7 +882,8 @@ export default function TimeManagement() {
     if (!clockIn) return 'Absent';
 
     const clockInTime = new Date(`2000-01-01 ${clockIn}`);
-    const expectedTime = new Date(`2000-01-01 09:00`); // Expected start time
+    const [expectedHours, expectedMinutes] = lateThreshold.split(':').map(Number);
+    const expectedTime = new Date(`2000-01-01 ${expectedHours.toString().padStart(2, '0')}:${expectedMinutes.toString().padStart(2, '0')}`);
 
     const timeDifference = clockInTime.getTime() - expectedTime.getTime();
     const minutesLate = Math.floor(timeDifference / (1000 * 60));
@@ -1345,11 +1638,12 @@ export default function TimeManagement() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-xs text-muted-foreground">Expected: 09:00</div>
+                          <div className="text-xs text-muted-foreground">Expected: {lateThreshold}</div>
                           <div className="text-xs text-muted-foreground">
                             {adjustForm.clockIn && (() => {
                               const clockInTime = new Date(`2000-01-01 ${adjustForm.clockIn}`);
-                              const expectedTime = new Date(`2000-01-01 09:00`);
+                              const [expectedHours, expectedMinutes] = lateThreshold.split(':').map(Number);
+                              const expectedTime = new Date(`2000-01-01 ${expectedHours.toString().padStart(2, '0')}:${expectedMinutes.toString().padStart(2, '0')}`);
                               const timeDifference = clockInTime.getTime() - expectedTime.getTime();
                               const minutesLate = Math.floor(timeDifference / (1000 * 60));
 
@@ -1873,7 +2167,7 @@ export default function TimeManagement() {
                               variant="outline"
                               onClick={async () => {
                                 const service = await getOfficeLocationService();
-                                await service.setDefaultOffice(office.id);
+                                await service.setDefaultOffice(office.id, companyId || undefined);
                                 await loadOfficeLocations();
                                 toast({ title: "Default office updated" });
                               }}
@@ -1916,6 +2210,66 @@ export default function TimeManagement() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Late Threshold Configuration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Late Arrival Threshold
+                </CardTitle>
+                <CardDescription>
+                  Set the time after which employees will be marked as "Late" when clocking in
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                      <Label htmlFor="lateThreshold">Expected Start Time</Label>
+                      <Input
+                        id="lateThreshold"
+                        type="time"
+                        value={lateThreshold}
+                        onChange={(e) => setLateThreshold(e.target.value)}
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Employees clocking in after this time will be marked as "Late"
+                      </p>
+                    </div>
+                    <Button
+                      onClick={saveLateThreshold}
+                      disabled={savingLateThreshold}
+                      className="mb-0"
+                    >
+                      {savingLateThreshold ? (
+                        <>
+                          <Loader className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 className="font-semibold text-sm text-blue-900 mb-2">
+                      How It Works
+                    </h4>
+                    <ul className="text-xs text-blue-700 space-y-1">
+                      <li>• <strong>Before {lateThreshold}:</strong> Marked as "Present" (green)</li>
+                      <li>• <strong>After {lateThreshold}:</strong> Marked as "Late" (yellow)</li>
+                      <li>• <strong>No clock-in:</strong> Marked as "Absent" (red)</li>
+                    </ul>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

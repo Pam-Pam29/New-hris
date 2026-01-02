@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Badge } from '../../../../components/ui/badge';
@@ -43,6 +43,7 @@ export default function HRPolicyManagement() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const unsubscribeRef = useRef<{ policies?: () => void; acknowledgments?: () => void }>({});
 
   // Initialize service
   useEffect(() => {
@@ -86,7 +87,12 @@ export default function HRPolicyManagement() {
 
   // Real-time sync for policies and acknowledgments
   useEffect(() => {
-    if (!policyService) return;
+    if (!policyService || !companyId) return;
+
+    // Cleanup previous listeners
+    if (unsubscribeRef.current.policies) unsubscribeRef.current.policies();
+    if (unsubscribeRef.current.acknowledgments) unsubscribeRef.current.acknowledgments();
+    unsubscribeRef.current = {};
 
     let db;
     try {
@@ -98,45 +104,61 @@ export default function HRPolicyManagement() {
 
     console.log('🔄 Setting up real-time listeners for policies and acknowledgments...');
 
-    // Listen to policies collection
-    const policiesUnsubscribe = onSnapshot(
-      collection(db, 'policies'),
-      (snapshot) => {
-        console.log('📡 Real-time update: policies changed');
-        loadData();
-      },
-      (error) => {
-        console.error('Error listening to policies:', error);
-      }
-    );
+    // Build queries with companyId filter
+    (async () => {
+      const { query: firestoreQuery, where: whereClause } = await import('firebase/firestore');
+      
+      // Listen to policies collection (filtered by companyId)
+      const policiesQuery = firestoreQuery(
+        collection(db, 'policies'),
+        whereClause('companyId', '==', companyId)
+      );
+      
+      unsubscribeRef.current.policies = onSnapshot(
+        policiesQuery,
+        (snapshot) => {
+          console.log('📡 Real-time update: policies changed');
+          loadData();
+        },
+        (error) => {
+          console.error('Error listening to policies:', error);
+        }
+      );
 
-    // Listen to policyAcknowledgments collection
-    const acknowledgementsUnsubscribe = onSnapshot(
-      collection(db, 'policyAcknowledgments'),
-      (snapshot) => {
-        console.log('📡 Real-time update: acknowledgments changed');
-        loadData();
-      },
-      (error) => {
-        console.error('Error listening to acknowledgments:', error);
-      }
-    );
+      // Listen to policyAcknowledgments collection (filtered by companyId)
+      const acknowledgmentsQuery = firestoreQuery(
+        collection(db, 'policyAcknowledgments'),
+        whereClause('companyId', '==', companyId)
+      );
+      
+      unsubscribeRef.current.acknowledgments = onSnapshot(
+        acknowledgmentsQuery,
+        (snapshot) => {
+          console.log('📡 Real-time update: acknowledgments changed');
+          loadData();
+        },
+        (error) => {
+          console.error('Error listening to acknowledgments:', error);
+        }
+      );
+    })();
 
-    // Cleanup listeners on unmount
+    // Cleanup function
     return () => {
       console.log('🛑 Cleaning up real-time listeners');
-      policiesUnsubscribe();
-      acknowledgementsUnsubscribe();
+      if (unsubscribeRef.current.policies) unsubscribeRef.current.policies();
+      if (unsubscribeRef.current.acknowledgments) unsubscribeRef.current.acknowledgments();
+      unsubscribeRef.current = {};
     };
-  }, [policyService]);
+  }, [policyService, companyId]);
 
   const loadData = async () => {
     if (!policyService) return;
 
     setLoading(true);
     try {
-      const policiesData = await policyService.getPolicies();
-      const acknowledgmentsData = await policyService.getPolicyAcknowledgments();
+      const policiesData = await policyService.getPolicies(companyId || undefined);
+      const acknowledgmentsData = await policyService.getPolicyAcknowledgments(companyId || undefined);
 
       setPolicies(policiesData);
       setAcknowledgments(acknowledgmentsData);
@@ -219,7 +241,8 @@ export default function HRPolicyManagement() {
       const success = await policyService.createPolicy({
         ...policyForm,
         effectiveDate: new Date(policyForm.effectiveDate),
-        createdBy: 'HR Manager' // This would come from auth context
+        createdBy: 'HR Manager', // This would come from auth context
+        companyId: companyId || undefined
       });
 
       if (success) {
@@ -672,7 +695,7 @@ export default function HRPolicyManagement() {
 
         {/* Create Policy Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed' }}>
             <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <CardHeader>
                 <CardTitle>Create New Policy</CardTitle>
@@ -895,7 +918,7 @@ export default function HRPolicyManagement() {
 
         {/* Edit Policy Modal */}
         {showEditModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed' }}>
             <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <CardHeader>
                 <CardTitle>Edit Policy</CardTitle>

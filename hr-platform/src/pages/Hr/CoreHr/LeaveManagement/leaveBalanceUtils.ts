@@ -1,16 +1,9 @@
-// Mock leave entitlements per employee per leave type
+// Leave entitlements per employee per leave type
 export interface LeaveEntitlement {
   employeeId: number;
   type: string; // leave type name
   entitled: number; // total entitled days
 }
-
-export const mockLeaveEntitlements: LeaveEntitlement[] = [
-  { employeeId: 101, type: 'Annual', entitled: 20 },
-  { employeeId: 101, type: 'Sick', entitled: 10 },
-  { employeeId: 102, type: 'Annual', entitled: 15 },
-  { employeeId: 102, type: 'Sick', entitled: 8 },
-];
 
 // Calculate leave taken for an employee and leave type
 export function calculateLeaveTaken(requests: any[], employeeId: number, type: string) {

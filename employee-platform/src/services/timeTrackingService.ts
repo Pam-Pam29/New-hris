@@ -165,15 +165,22 @@ export class FirebaseTimeTrackingService implements ITimeTrackingService {
     }
 
     async createTimeEntry(entry: Omit<TimeEntry, 'id'>): Promise<TimeEntry> {
+        // Validate companyId is present
+        if (!(entry as any).companyId) {
+            throw new Error('companyId is required for time entry creation');
+        }
+
         const entriesRef = collection(this.db, 'timeEntries');
         const docRef = await addDoc(entriesRef, {
             ...entry,
+            companyId: (entry as any).companyId, // Ensure companyId is explicitly set
             clockIn: entry.clockIn instanceof Date ? Timestamp.fromDate(entry.clockIn) : Timestamp.now(),
             clockOut: entry.clockOut instanceof Date ? Timestamp.fromDate(entry.clockOut as Date) : null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
 
+        console.log(`✅ Time entry created with companyId: ${(entry as any).companyId}`);
         return { id: docRef.id, ...entry };
     }
 
@@ -201,10 +208,15 @@ export class FirebaseTimeTrackingService implements ITimeTrackingService {
         await deleteDoc(doc(this.db, 'timeEntries', id));
     }
 
-    async clockIn(employeeId: string, employeeName: string, location?: GeoLocation, photo?: string): Promise<TimeEntry> {
+    async clockIn(employeeId: string, employeeName: string, location?: GeoLocation, photo?: string, companyId?: string): Promise<TimeEntry> {
+        if (!companyId) {
+            throw new Error('companyId is required for clock in');
+        }
+
         const entry: Omit<TimeEntry, 'id'> = {
             employeeId,
             employeeName,
+            companyId: companyId, // Ensure companyId is included
             clockIn: new Date(),
             clockInLocation: location,
             location,
@@ -290,13 +302,20 @@ export class FirebaseTimeTrackingService implements ITimeTrackingService {
     }
 
     async createAdjustmentRequest(request: Omit<TimeAdjustmentRequest, 'id'>): Promise<TimeAdjustmentRequest> {
+        // Validate companyId is present
+        if (!(request as any).companyId) {
+            throw new Error('companyId is required for time adjustment request creation');
+        }
+
         const requestsRef = collection(this.db, 'timeAdjustmentRequests');
         const docRef = await addDoc(requestsRef, {
             ...request,
+            companyId: (request as any).companyId, // Ensure companyId is explicitly set
             status: 'pending',
             createdAt: serverTimestamp(),
         });
 
+        console.log(`✅ Time adjustment request created with companyId: ${(request as any).companyId}`);
         return { id: docRef.id, ...request, status: 'pending', createdAt: new Date() };
     }
 

@@ -74,8 +74,8 @@ export interface IEmployeeDashboardService {
     createAssetRequest(request: Omit<AssetRequest, 'id' | 'requestedAt'>): Promise<AssetRequest>;
 
     // Policy Management
-    getPolicies(): Promise<Policy[]>;
-    getPolicyAcknowledgments(employeeId: string): Promise<PolicyAcknowledgment[]>;
+    getPolicies(companyId?: string): Promise<Policy[]>;
+    getPolicyAcknowledgments(employeeId: string, companyId?: string): Promise<PolicyAcknowledgment[]>;
     acknowledgePolicy(employeeId: string, policyId: string, signature: string): Promise<PolicyAcknowledgment>;
 
     // Notifications
@@ -275,13 +275,20 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
 
     async createLeaveRequest(request: Omit<LeaveRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeaveRequest> {
         try {
+            // Validate companyId is present
+            if (!(request as any).companyId) {
+                throw new Error('companyId is required for leave request creation');
+            }
+
             const docRef = await addDoc(collection(this.db, 'leaveRequests'), {
                 ...request,
+                companyId: (request as any).companyId, // Ensure companyId is explicitly set
                 startDate: Timestamp.fromDate(request.startDate),
                 endDate: Timestamp.fromDate(request.endDate),
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             });
+            console.log(`✅ Leave request created with companyId: ${(request as any).companyId}`);
 
             const newDoc = await getDoc(docRef);
             const data = newDoc.data()!;
@@ -332,8 +339,14 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
 
     async createTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<TimeEntry> {
         try {
+            // Validate companyId is present
+            if (!(entry as any).companyId) {
+                throw new Error('companyId is required for time entry creation');
+            }
+
             const docRef = await addDoc(collection(this.db, 'timeEntries'), {
                 ...entry,
+                companyId: (entry as any).companyId, // Ensure companyId is explicitly set
                 clockIn: Timestamp.fromDate(entry.clockIn),
                 clockOut: entry.clockOut ? Timestamp.fromDate(entry.clockOut) : null,
                 location: {
@@ -343,6 +356,7 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             });
+            console.log(`✅ Time entry created with companyId: ${(entry as any).companyId}`);
 
             const newDoc = await getDoc(docRef);
             const data = newDoc.data()!;
@@ -560,8 +574,14 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
 
     async createPerformanceGoal(goal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'updatedAt'>): Promise<PerformanceGoal> {
         try {
+            // Validate companyId is present
+            if (!goal.companyId) {
+                throw new Error('companyId is required for performance goal creation');
+            }
+
             const docRef = await addDoc(collection(this.db, 'performanceGoals'), {
                 ...goal,
+                companyId: goal.companyId, // Ensure companyId is explicitly set
                 startDate: Timestamp.fromDate(goal.startDate),
                 endDate: Timestamp.fromDate(goal.endDate),
                 milestones: goal.milestones?.map(milestone => ({
@@ -572,6 +592,7 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             });
+            console.log(`✅ Performance goal created with companyId: ${goal.companyId}`);
 
             const newDoc = await getDoc(docRef);
             const data = newDoc.data()!;
@@ -660,16 +681,37 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
     }
 
     // Policy Management
-    async getPolicies(): Promise<Policy[]> {
+    async getPolicies(companyId?: string): Promise<Policy[]> {
         try {
-            const q = query(
-                collection(this.db, 'policies'),
-                where('status', '==', 'active'),
-                orderBy('createdAt', 'desc')
-            );
+            let q = query(collection(this.db, 'policies'));
+
+            // Filter by companyId first if provided
+            if (companyId) {
+                q = query(q, where('companyId', '==', companyId));
+                console.log(`🏢 Filtering policies by companyId: ${companyId}`);
+            }
+
+            // Filter by active status (use isActive field, fallback to status)
+            try {
+                q = query(q, where('isActive', '==', true));
+            } catch (error) {
+                // If isActive doesn't exist, try status field
+                try {
+                    q = query(q, where('status', '==', 'active'));
+                } catch (statusError) {
+                    console.warn('Could not filter by status, will filter in memory');
+                }
+            }
+
+            // Try to add orderBy
+            try {
+                q = query(q, orderBy('effectiveDate', 'desc'));
+            } catch (orderError) {
+                console.warn('Could not order policies by effectiveDate, sorting in memory');
+            }
 
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => {
+            let policies = querySnapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     id: doc.id,
@@ -680,21 +722,52 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
                     updatedAt: data.updatedAt?.toDate() || new Date()
                 } as Policy;
             });
+
+            // Filter by active status in memory if query didn't work
+            policies = policies.filter(p => {
+                const isActive = (p as any).isActive !== false && (p as any).status !== 'inactive';
+                return isActive;
+            });
+
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                policies = policies.filter(p => p.companyId === companyId);
+            }
+
+            // Sort in memory if orderBy didn't work
+            policies.sort((a, b) => {
+                const aDate = a.effectiveDate?.getTime() || 0;
+                const bDate = b.effectiveDate?.getTime() || 0;
+                return bDate - aDate; // Descending order
+            });
+
+            console.log(`📋 Loaded ${policies.length} policies${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return policies;
         } catch (error) {
             console.error('Error getting policies:', error);
             throw error;
         }
     }
 
-    async getPolicyAcknowledgments(employeeId: string): Promise<PolicyAcknowledgment[]> {
+    async getPolicyAcknowledgments(employeeId: string, companyId?: string): Promise<PolicyAcknowledgment[]> {
         try {
-            const q = query(
+            let q = query(
                 collection(this.db, 'policyAcknowledgments'),
                 where('employeeId', '==', employeeId)
             );
 
+            // Filter by companyId if provided (note: may require composite index)
+            if (companyId) {
+                try {
+                    q = query(q, where('companyId', '==', companyId));
+                    console.log(`🏢 Filtering policy acknowledgments by companyId: ${companyId}`);
+                } catch (indexError) {
+                    console.warn('Could not add companyId filter to query, will filter in memory');
+                }
+            }
+
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => {
+            let acknowledgments = querySnapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     id: doc.id,
@@ -702,6 +775,14 @@ export class FirebaseEmployeeDashboardService implements IEmployeeDashboardServi
                     acknowledgedAt: data.acknowledgedAt?.toDate() || new Date()
                 } as PolicyAcknowledgment;
             });
+
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                acknowledgments = acknowledgments.filter(a => a.companyId === companyId);
+            }
+
+            console.log(`📋 Loaded ${acknowledgments.length} policy acknowledgments${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return acknowledgments;
         } catch (error) {
             console.error('Error getting policy acknowledgments:', error);
             throw error;

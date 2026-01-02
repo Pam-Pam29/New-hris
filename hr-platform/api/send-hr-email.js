@@ -1,7 +1,21 @@
-import { Resend } from 'resend';
+import { sendMail } from './_resend.mjs';
 
-// Initialize Resend with API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY);
+async function readRawBody(req) {
+  return await new Promise((resolve, reject) => {
+    const chunks = [];
+
+    req.on('data', chunk => {
+      chunks.push(Buffer.from(chunk));
+    });
+
+    req.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      resolve(buffer.toString('utf8'));
+    });
+
+    req.on('error', reject);
+  });
+}
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -20,7 +34,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { emailType, recipient, data } = req.body;
+    const rawBody = await readRawBody(req);
+    console.log('📦 [Vercel Function] Raw body:', rawBody);
+
+    if (!rawBody) {
+      return res.status(400).json({
+        error: 'Missing request body'
+      });
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Invalid JSON'
+      });
+    }
+
+    const apiKey = process.env.EMAIL_API_KEY;
+    const providedKey = req.headers['x-api-key'];
+
+    if (apiKey && apiKey !== providedKey) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { emailType, recipient, data } = payload;
 
     // Validate required fields
     if (!emailType || !recipient) {
@@ -29,15 +68,26 @@ export default async function handler(req, res) {
       });
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(recipient.email)) {
+    // Validate recipient object
+    if (!recipient || !recipient.email) {
       return res.status(400).json({
-        error: 'Invalid email format'
+        error: 'Missing recipient email address'
       });
     }
 
-    console.log('📧 [Vercel Function] Sending HR email:', { emailType, to: recipient.email });
+    // Validate email format (more comprehensive)
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    const emailToTest = recipient.email.trim();
+    
+    if (!emailRegex.test(emailToTest) || emailToTest.includes('..') || emailToTest.startsWith('.') || emailToTest.endsWith('.')) {
+      return res.status(400).json({
+        error: 'Invalid email format',
+        provided: recipient.email,
+        suggestion: 'Please provide a valid email address (e.g., user@example.com)'
+      });
+    }
+
+    console.log('📧 [Vercel Function] Sending HR email:', { emailType, to: emailToTest });
 
     // Generate email content based on type
     let emailContent;
@@ -163,35 +213,58 @@ export default async function handler(req, res) {
         });
     }
 
-    // Send email using Resend
-    const { data: emailData, error } = await resend.emails.send({
-      from: `HRIS System <${process.env.FROM_EMAIL || 'noreply@resend.dev'}>`,
-      to: [recipient.email],
-      subject: emailContent.subject,
-      html: emailContent.html,
-    });
+    try {
+      const info = await sendMail({
+        to: emailToTest,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text
+      });
 
-    if (error) {
-      console.error('❌ [Vercel Function] Resend error:', error);
-      return res.status(500).json({
-        error: 'Failed to send email',
-        details: error.message
+      console.log('✅ [Vercel Function] HR email sent successfully:', {
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected
+      });
+
+      return res.status(200).json({
+        success: true,
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected || [],
+        message: 'HR email sent successfully'
+      });
+    } catch (emailError) {
+      // Handle email-specific errors with better messages
+      console.error('❌ [Vercel Function] HR email error:', emailError.message);
+      
+      // Determine appropriate status code
+      let statusCode = 500;
+      if (emailError.message.includes('Invalid email') || emailError.message.includes('Missing required')) {
+        statusCode = 400;
+      } else if (emailError.message.includes('authentication') || emailError.message.includes('SMTP')) {
+        statusCode = 502; // Bad Gateway - SMTP configuration issue
+      }
+      
+      return res.status(statusCode).json({
+        error: 'Failed to send HR email',
+        emailType: emailType,
+        details: emailError.message,
+        suggestion: emailError.message.includes('authentication') 
+          ? 'Please check your SMTP credentials (SMTP_USER and SMTP_PASS)'
+          : emailError.message.includes('connection')
+          ? 'Please check your SMTP server settings (SMTP_HOST and SMTP_PORT)'
+          : 'Please verify the email address and SMTP configuration'
       });
     }
-
-    console.log('✅ [Vercel Function] HR email sent successfully:', emailData);
-
-    return res.status(200).json({
-      success: true,
-      messageId: emailData.id,
-      message: 'HR email sent successfully'
-    });
 
   } catch (error) {
     console.error('❌ [Vercel Function] Unexpected error:', error);
     return res.status(500).json({
       error: 'Internal server error',
-      details: error.message
+      details: error.message,
+      type: error.name || 'UnknownError',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

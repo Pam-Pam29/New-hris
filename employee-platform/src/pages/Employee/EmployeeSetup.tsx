@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import { UserPlus, AlertCircle, Loader, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, updateDoc, getFirestore } from 'firebase/firestore';
 
 /**
@@ -184,6 +184,8 @@ export const EmployeeSetup: React.FC = () => {
             console.log('🔐 [Employee Setup] Creating Firebase Auth account for:', employeeEmail);
 
             let userCredential;
+            let existingAccount = false;
+            
             try {
                 // Try to create new Firebase Auth account
                 userCredential = await createUserWithEmailAndPassword(
@@ -194,8 +196,36 @@ export const EmployeeSetup: React.FC = () => {
                 console.log('✅ [Employee Setup] New Firebase Auth account created');
             } catch (error: any) {
                 if (error.code === 'auth/email-already-in-use') {
-                    console.log('⚠️ [Employee Setup] Account exists, cannot update password automatically');
-                    throw new Error('This email is already registered. Please contact HR to reset your password or use the login page if you know your password.');
+                    console.log('⚠️ [Employee Setup] Account exists, attempting to link to employee record');
+                    existingAccount = true;
+                    
+                    // Try to sign in with the provided password to verify it's the correct account
+                    try {
+                        userCredential = await signInWithEmailAndPassword(
+                            auth,
+                            employeeEmail,
+                            formData.password
+                        );
+                        console.log('✅ [Employee Setup] Successfully signed in with existing account');
+                    } catch (signInError: any) {
+                        // Password is wrong - offer password reset
+                        if (signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/wrong-password') {
+                            console.log('⚠️ [Employee Setup] Wrong password for existing account');
+                            
+                            // Try to send password reset email
+                            try {
+                                await sendPasswordResetEmail(auth, employeeEmail);
+                                throw new Error('This email is already registered with a different password. A password reset link has been sent to your email. Please check your inbox and use the reset link, or contact HR for assistance.');
+                            } catch (resetError: any) {
+                                if (resetError.message.includes('password reset link')) {
+                                    throw resetError; // Re-throw our custom message
+                                }
+                                throw new Error('This email is already registered. Please use the login page if you know your password, or contact HR to reset it.');
+                            }
+                        } else {
+                            throw signInError;
+                        }
+                    }
                 } else {
                     throw error;
                 }
@@ -211,11 +241,18 @@ export const EmployeeSetup: React.FC = () => {
                 'auth.loginCount': 0
             };
 
-            // Store Firebase UID if we created a new account
+            // Store Firebase UID (for both new and existing accounts)
+            // IMPORTANT: Same email can be used for multiple companies
+            // We link the Firebase Auth account to THIS company's employee record
             if (userCredential) {
                 updateData['auth.firebaseUid'] = userCredential.user.uid;
                 updateData['auth.emailVerified'] = userCredential.user.emailVerified;
                 updateData['auth.email'] = employeeEmail;
+                
+                if (existingAccount) {
+                    console.log('✅ [Employee Setup] Linked existing Firebase Auth account to employee record');
+                    console.log('ℹ️ [Employee Setup] Same email can be used for multiple companies - this is normal');
+                }
             }
 
             await updateDoc(employeeRef, updateData);

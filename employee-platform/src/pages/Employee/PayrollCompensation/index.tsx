@@ -46,215 +46,6 @@ import {
 import { PayrollRecord, PayPeriod, Allowance, Deduction, BenefitsEnrollment, Beneficiary } from '../types';
 import { getPayrollService, FinancialRequest } from '../../../services/payrollService';
 
-// Mock data - REPLACED WITH FIREBASE (keeping for reference only)
-const mockPayrollRecords: any[] = [
-    {
-        id: 'pr-001',
-        employeeId: 'emp-001',
-        employeeName: 'John Doe',
-        department: 'Engineering',
-        position: 'Software Developer',
-        payPeriod: {
-            startDate: new Date('2024-12-01'),
-            endDate: new Date('2024-12-15'),
-            payDate: new Date('2024-12-20'),
-            type: 'biweekly'
-        },
-        baseSalary: 3125.00,
-        overtime: 250.00,
-        bonuses: 500.00,
-        allowances: [
-            {
-                id: 'allow-001',
-                name: 'Transportation Allowance',
-                amount: 200.00,
-                type: 'fixed',
-                taxable: true
-            },
-            {
-                id: 'allow-002',
-                name: 'Meal Allowance',
-                amount: 150.00,
-                type: 'fixed',
-                taxable: false
-            }
-        ],
-        deductions: [
-            {
-                id: 'deduct-001',
-                name: 'Federal Tax',
-                amount: 450.00,
-                type: 'tax'
-            },
-            {
-                id: 'deduct-002',
-                name: 'State Tax',
-                amount: 180.00,
-                type: 'tax'
-            },
-            {
-                id: 'deduct-003',
-                name: 'Health Insurance',
-                amount: 120.00,
-                type: 'insurance'
-            },
-            {
-                id: 'deduct-004',
-                name: '401k Contribution',
-                amount: 250.00,
-                type: 'other'
-            }
-        ],
-        grossPay: 3875.00,
-        totalDeductions: 1000.00,
-        netPay: 2875.00,
-        paymentStatus: 'paid',
-        paymentDate: new Date('2024-12-20'),
-        paymentMethod: 'bank_transfer',
-        currency: 'NGN',
-        createdAt: new Date('2024-12-20'),
-        updatedAt: new Date('2024-12-20')
-    },
-    {
-        id: 'pr-002',
-        employeeId: 'emp-001',
-        employeeName: 'John Doe',
-        department: 'Engineering',
-        position: 'Software Developer',
-        payPeriod: {
-            startDate: new Date('2024-11-16'),
-            endDate: new Date('2024-11-30'),
-            payDate: new Date('2024-12-05'),
-            type: 'biweekly'
-        },
-        baseSalary: 3125.00,
-        overtime: 0.00,
-        bonuses: 0.00,
-        allowances: [
-            {
-                id: 'allow-001',
-                name: 'Transportation Allowance',
-                amount: 200.00,
-                type: 'fixed',
-                taxable: true
-            },
-            {
-                id: 'allow-002',
-                name: 'Meal Allowance',
-                amount: 150.00,
-                type: 'fixed',
-                taxable: false
-            }
-        ],
-        deductions: [
-            {
-                id: 'deduct-001',
-                name: 'Federal Tax',
-                amount: 450.00,
-                type: 'tax'
-            },
-            {
-                id: 'deduct-002',
-                name: 'State Tax',
-                amount: 180.00,
-                type: 'tax'
-            },
-            {
-                id: 'deduct-003',
-                name: 'Health Insurance',
-                amount: 120.00,
-                type: 'insurance'
-            },
-            {
-                id: 'deduct-004',
-                name: '401k Contribution',
-                amount: 250.00,
-                type: 'other'
-            }
-        ],
-        grossPay: 3475.00,
-        totalDeductions: 1000.00,
-        netPay: 2475.00,
-        paymentStatus: 'paid',
-        paymentDate: new Date('2024-12-05'),
-        paymentMethod: 'bank_transfer',
-        currency: 'NGN',
-        createdAt: new Date('2024-12-05'),
-        updatedAt: new Date('2024-12-05')
-    }
-];
-
-const mockFinancialRequests: FinancialRequest[] = [
-    {
-        id: 'fr-001',
-        employeeId: 'emp-001',
-        employeeName: 'John Doe',
-        requestType: 'advance',
-        amount: 1000.00,
-        reason: 'Emergency medical expenses',
-        status: 'approved',
-        approvedBy: 'manager-001',
-        approvedAt: new Date('2024-12-08'),
-        paidAt: new Date('2024-12-10'),
-        createdAt: new Date('2024-12-05'),
-        updatedAt: new Date('2024-12-10')
-    },
-    {
-        id: 'fr-002',
-        employeeId: 'emp-001',
-        employeeName: 'John Doe',
-        requestType: 'reimbursement',
-        amount: 250.00,
-        reason: 'Business travel expenses',
-        status: 'pending',
-        createdAt: new Date('2024-12-12'),
-        updatedAt: new Date('2024-12-12')
-    }
-];
-
-const mockBenefitsEnrollments: BenefitsEnrollment[] = [
-    {
-        id: 'be-001',
-        employeeId: 'emp-001',
-        benefitType: 'Health Insurance',
-        provider: 'Blue Cross Blue Shield',
-        enrollmentStatus: 'active',
-        contribution: 120.00,
-        employerContribution: 480.00,
-        effectiveDate: new Date('2024-01-01'),
-        coverage: 'Family',
-        beneficiaries: [
-            {
-                id: 'ben-001',
-                name: 'John Doe',
-                relationship: 'Self',
-                percentage: 100
-            }
-        ]
-    },
-    {
-        id: 'be-002',
-        employeeId: 'emp-001',
-        benefitType: 'Dental Insurance',
-        provider: 'Delta Dental',
-        enrollmentStatus: 'active',
-        contribution: 25.00,
-        employerContribution: 75.00,
-        effectiveDate: new Date('2024-01-01'),
-        coverage: 'Individual'
-    },
-    {
-        id: 'be-003',
-        employeeId: 'emp-001',
-        benefitType: '401k Retirement',
-        provider: 'Fidelity',
-        enrollmentStatus: 'active',
-        contribution: 250.00,
-        employerContribution: 125.00,
-        effectiveDate: new Date('2024-01-01'),
-        coverage: 'Individual'
-    }
-];
 
 export default function PayrollCompensation() {
     const { companyId } = useCompany();
@@ -271,32 +62,49 @@ export default function PayrollCompensation() {
     const [selectedPayslipForPDF, setSelectedPayslipForPDF] = useState<PayrollRecord | null>(null);
     const [selectedRequest, setSelectedRequest] = useState<FinancialRequest | null>(null);
     const [showRequestDetails, setShowRequestDetails] = useState(false);
+    const [employeeProfile, setEmployeeProfile] = useState<any>(null); // Store employee profile for salary info
 
     // Get current employee ID from auth context
     const currentEmployeeId = currentEmployee?.employeeId || '';
 
     // Load payroll data from Firebase
     useEffect(() => {
+        if (!currentEmployeeId || !companyId) {
+            console.warn('⚠️ [PayrollCompensation] Missing employeeId or companyId, skipping load');
+            return;
+        }
+
         const fetchPayrollData = async () => {
             try {
                 setLoading(true);
                 setError(null);
 
                 const payrollService = await getPayrollService();
+                const { getComprehensiveDataFlowService } = await import('../../../services/comprehensiveDataFlowService');
+                const dataFlowService = await getComprehensiveDataFlowService();
 
-                // Fetch my payroll records
-                console.log('📊 Loading payroll for employee:', currentEmployeeId);
-                const records = await payrollService.getMyPayrollRecords(currentEmployeeId);
+                // Fetch employee profile to get base salary
+                try {
+                    const profile = await dataFlowService.getEmployeeProfile(currentEmployeeId);
+                    setEmployeeProfile(profile);
+                    console.log('👤 Loaded employee profile for salary info');
+                } catch (profileError) {
+                    console.warn('Could not load employee profile:', profileError);
+                }
+
+                // Fetch my payroll records (filtered by companyId)
+                console.log('📊 Loading payroll for employee:', currentEmployeeId, 'company:', companyId);
+                const records = await payrollService.getMyPayrollRecords(currentEmployeeId, companyId);
                 setPayrollRecords(records as any); // Type assertion for unified types
                 console.log('✅ Loaded', records.length, 'payroll records');
 
-                // Fetch my financial requests
-                const requests = await payrollService.getMyFinancialRequests(currentEmployeeId);
+                // Fetch my financial requests (filtered by companyId)
+                const requests = await payrollService.getMyFinancialRequests(currentEmployeeId, companyId);
                 setFinancialRequests(requests as any); // Type assertion for unified types
                 console.log('💰 Loaded', requests.length, 'financial requests');
 
-                // Fetch my benefits
-                const benefits = await payrollService.getMyBenefits(currentEmployeeId);
+                // Fetch my benefits (filtered by companyId)
+                const benefits = await payrollService.getMyBenefits(currentEmployeeId, companyId);
                 setBenefitsEnrollments(benefits as any); // Type assertion for unified types
                 console.log('🎁 Loaded', benefits.length, 'benefits');
 
@@ -309,7 +117,7 @@ export default function PayrollCompensation() {
         };
 
         fetchPayrollData();
-    }, [currentEmployeeId]);
+    }, [currentEmployeeId, companyId]);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -459,11 +267,16 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
         try {
             const payrollService = await getPayrollService();
 
-            // Get employee name (would come from auth context in production)
-            const employeeName = 'Current Employee'; // TODO: Get from auth context
+            // Get employee name from current employee or profile
+            const employeeName = currentEmployee?.firstName && currentEmployee?.lastName
+                ? `${currentEmployee.firstName} ${currentEmployee.lastName}`
+                : employeeProfile?.personalInfo?.firstName && employeeProfile?.personalInfo?.lastName
+                    ? `${employeeProfile.personalInfo.firstName} ${employeeProfile.personalInfo.lastName}`
+                    : 'Current Employee';
 
             const amount = parseFloat(formData.amount);
             const newRequest: any = {
+                companyId: companyId || undefined, // Add companyId for multi-tenancy
                 employeeId: currentEmployeeId,
                 employeeName,
                 requestType: formData.requestType as any,
@@ -489,8 +302,8 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
             console.log('💰 Submitting financial request:', newRequest);
             await payrollService.createFinancialRequest(newRequest);
 
-            // Refresh requests
-            const requests = await payrollService.getMyFinancialRequests(currentEmployeeId);
+            // Refresh requests (filtered by companyId)
+            const requests = await payrollService.getMyFinancialRequests(currentEmployeeId, companyId || undefined);
             setFinancialRequests(requests);
 
             setShowRequestForm(false);
@@ -567,8 +380,11 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Base Salary</p>
                                         <h3 className="text-2xl font-bold text-green-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.baseSalary, 'NGN') : '₦0.00'}
+                                            {formatCurrency(baseSalary, 'NGN')}
                                         </h3>
+                                        {!currentPayroll && baseSalary > 0 && (
+                                            <p className="text-xs text-muted-foreground">From profile</p>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -583,8 +399,11 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Gross Pay</p>
                                         <h3 className="text-2xl font-bold text-blue-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.grossPay, 'NGN') : '₦0.00'}
+                                            {formatCurrency(grossPay, 'NGN')}
                                         </h3>
+                                        {!currentPayroll && grossPay > 0 && (
+                                            <p className="text-xs text-muted-foreground">Estimated</p>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -599,9 +418,11 @@ ${record.deductions.map(d => `<div class="info-row"><span class="label">${d.name
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Net Pay</p>
                                         <h3 className="text-2xl font-bold text-purple-600">
-                                            {currentPayroll ? formatCurrency(currentPayroll.netPay, 'NGN') : '₦0.00'}
+                                            {formatCurrency(netPay, 'NGN')}
                                         </h3>
-                                        <p className="text-xs text-muted-foreground">Last payment</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {currentPayroll ? 'Last payment' : 'Estimated'}
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>

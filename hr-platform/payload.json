@@ -1,0 +1,6 @@
+{
+    "to": "recipient@example.com",
+    "subject": "SMTP smoke test",
+    "html": "<h1>Hello</h1><p>Testing SMTP.</p>",
+    "text": "Testing SMTP."
+}

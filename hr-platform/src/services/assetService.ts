@@ -17,9 +17,11 @@ import { Asset, AssetAssignment, AssetMaintenance, AssetStatistics } from '../ty
 
 export class AssetService {
   private db;
+  private companyId?: string;
 
-  constructor() {
+  constructor(companyId?: string) {
     this.db = getFirebaseDb();
+    this.companyId = companyId;
   }
 
   // ==================== ASSETS ====================
@@ -54,24 +56,64 @@ export class AssetService {
     }
   }
 
-  async getAssetsByStatus(status: Asset['status']): Promise<Asset[]> {
+  async getAssetsByStatus(status: Asset['status'], companyId?: string): Promise<Asset[]> {
     try {
+      const targetCompanyId = companyId || this.companyId;
       const assetsRef = collection(this.db, 'assets');
-      const q = query(assetsRef, where('status', '==', status));
+      
+      let q;
+      if (targetCompanyId) {
+        try {
+          q = query(assetsRef, where('companyId', '==', targetCompanyId), where('status', '==', status));
+        } catch (error) {
+          console.warn('⚠️ Could not add companyId filter to getAssetsByStatus query, filtering in memory');
+          q = query(assetsRef, where('status', '==', status));
+        }
+      } else {
+        q = query(assetsRef, where('status', '==', status));
+      }
+      
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      let assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      
+      // Filter by companyId in memory if query didn't include it
+      if (targetCompanyId && !q.toString().includes('companyId')) {
+        assets = assets.filter(asset => asset.companyId === targetCompanyId);
+      }
+      
+      return assets;
     } catch (error) {
       console.error('Failed to get assets by status:', error);
       return [];
     }
   }
 
-  async getAssetsByEmployee(employeeId: string): Promise<Asset[]> {
+  async getAssetsByEmployee(employeeId: string, companyId?: string): Promise<Asset[]> {
     try {
+      const targetCompanyId = companyId || this.companyId;
       const assetsRef = collection(this.db, 'assets');
-      const q = query(assetsRef, where('assignedTo', '==', employeeId), where('status', '==', 'assigned'));
+      
+      let q;
+      if (targetCompanyId) {
+        try {
+          q = query(assetsRef, where('companyId', '==', targetCompanyId), where('assignedTo', '==', employeeId), where('status', '==', 'assigned'));
+        } catch (error) {
+          console.warn('⚠️ Could not add companyId filter to getAssetsByEmployee query, filtering in memory');
+          q = query(assetsRef, where('assignedTo', '==', employeeId), where('status', '==', 'assigned'));
+        }
+      } else {
+        q = query(assetsRef, where('assignedTo', '==', employeeId), where('status', '==', 'assigned'));
+      }
+      
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      let assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      
+      // Filter by companyId in memory if query didn't include it
+      if (targetCompanyId && !q.toString().includes('companyId')) {
+        assets = assets.filter(asset => asset.companyId === targetCompanyId);
+      }
+      
+      return assets;
     } catch (error) {
       console.error('Failed to get assets by employee:', error);
       return [];
@@ -80,13 +122,19 @@ export class AssetService {
 
   async createAsset(asset: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+      // Ensure companyId is included
+      if (!asset.companyId) {
+        throw new Error('companyId is required for asset creation');
+      }
+
       const assetsRef = collection(this.db, 'assets');
       const docRef = await addDoc(assetsRef, {
         ...asset,
+        companyId: asset.companyId, // Explicitly ensure companyId is set
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      console.log('✅ Asset created:', docRef.id);
+      console.log('✅ Asset created with companyId:', docRef.id, asset.companyId);
       return docRef.id;
     } catch (error) {
       console.error('Failed to create asset:', error);

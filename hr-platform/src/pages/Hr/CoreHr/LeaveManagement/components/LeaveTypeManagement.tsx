@@ -73,7 +73,7 @@ const LeaveDetailsModal = ({
   if (!open || !request) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ position: 'fixed' }}>
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-background rounded-lg shadow-lg max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}

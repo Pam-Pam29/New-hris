@@ -19,6 +19,7 @@ import LeaveManagement from './pages/Hr/CoreHr/LeaveManagement';
 import PerformanceManagement from './pages/Hr/CoreHr/PerformanceManagement';
 import PolicyManagement from './pages/Hr/CoreHr/PolicyManagement';
 import TimeManagement from './pages/Hr/CoreHr/TimeManagement';
+import DepartmentManagement from './pages/Hr/CoreHr/DepartmentManagement';
 import Onboarding from './pages/Hr/Hiring/Onboarding';
 import SettingsPage from './pages/Hr/Settings/Settings';
 import AvailabilitySettings from './pages/Hr/CoreHr/Settings/AvailabilitySettings';
@@ -266,6 +267,15 @@ export default function App() {
                                     <div className="p-8">
                                         <TimeManagement />
                                     </div>
+                                </HrLayout>
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Department Management */}
+                        <Route path="/hr/core-hr/department-management" element={
+                            <ProtectedRoute>
+                                <HrLayout>
+                                    <DepartmentManagement />
                                 </HrLayout>
                             </ProtectedRoute>
                         } />

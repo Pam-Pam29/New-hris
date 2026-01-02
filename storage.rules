@@ -73,6 +73,17 @@ service firebase.storage {
       allow write: if isHR() && isValidSize() && isValidFileType();
       allow delete: if isHR();
     }
+    
+    // ==========================================
+    // SIGNED CONTRACTS
+    // signed_contracts/{employeeId}_{timestamp}.{ext}
+    // Authenticated employees can upload their own signed contracts
+    // ==========================================
+    match /signed_contracts/{allPaths=**} {
+      allow read: if isAuthenticated(); // All authenticated users can read
+      allow write: if isAuthenticated() && isValidSize() && isValidFileType(); // Authenticated users can upload
+      allow delete: if isHR(); // Only HR can delete
+    }
   }
 }
 

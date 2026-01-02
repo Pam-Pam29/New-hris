@@ -260,3 +260,11 @@ const PasswordResetConfirmation: React.FC = () => {
 
 export default PasswordResetConfirmation;
 
+
+
+
+
+
+
+
+

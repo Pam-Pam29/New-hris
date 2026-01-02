@@ -7,6 +7,7 @@ import {
     updateDoc,
     deleteDoc,
     query,
+    where,
     limit,
     Firestore
 } from 'firebase/firestore';
@@ -14,6 +15,7 @@ import { getServiceConfig, initializeFirebase } from '../config/firebase';
 
 export interface OfficeLocation {
     id: string;
+    companyId: string;
     name: string;
     address: string;
     latitude: number;
@@ -25,13 +27,13 @@ export interface OfficeLocation {
 }
 
 export interface IOfficeLocationService {
-    getOfficeLocations(): Promise<OfficeLocation[]>;
-    getDefaultOfficeLocation(): Promise<OfficeLocation | null>;
+    getOfficeLocations(companyId?: string): Promise<OfficeLocation[]>;
+    getDefaultOfficeLocation(companyId?: string): Promise<OfficeLocation | null>;
     getOfficeLocationById(id: string): Promise<OfficeLocation | null>;
     createOfficeLocation(location: Omit<OfficeLocation, 'id'>): Promise<OfficeLocation>;
     updateOfficeLocation(id: string, location: Partial<OfficeLocation>): Promise<OfficeLocation>;
     deleteOfficeLocation(id: string): Promise<void>;
-    setDefaultOffice(id: string): Promise<void>;
+    setDefaultOffice(id: string, companyId?: string): Promise<void>;
 }
 
 export class FirebaseOfficeLocationService implements IOfficeLocationService {
@@ -41,22 +43,37 @@ export class FirebaseOfficeLocationService implements IOfficeLocationService {
         this.db = db;
     }
 
-    async getOfficeLocations(): Promise<OfficeLocation[]> {
+    async getOfficeLocations(companyId?: string): Promise<OfficeLocation[]> {
         const locationsRef = collection(this.db, 'officeLocations');
-        const snapshot = await getDocs(locationsRef);
+        let q;
+        
+        if (companyId) {
+            q = query(locationsRef, where('companyId', '==', companyId));
+        } else {
+            q = query(locationsRef);
+        }
+        
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as OfficeLocation));
     }
 
-    async getDefaultOfficeLocation(): Promise<OfficeLocation | null> {
+    async getDefaultOfficeLocation(companyId?: string): Promise<OfficeLocation | null> {
         const locationsRef = collection(this.db, 'officeLocations');
-        const q = query(locationsRef, limit(1));
+        let q;
+        
+        if (companyId) {
+            q = query(locationsRef, where('companyId', '==', companyId));
+        } else {
+            q = query(locationsRef);
+        }
+        
         const snapshot = await getDocs(q);
 
         // Find the default office
-        const defaultOffice = snapshot.docs.find(doc => doc.data().isDefault);
+        const defaultOffice = snapshot.docs.find(doc => doc.data().isDefault === true);
         if (defaultOffice) {
             return {
                 id: defaultOffice.id,
@@ -111,9 +128,9 @@ export class FirebaseOfficeLocationService implements IOfficeLocationService {
         await deleteDoc(docRef);
     }
 
-    async setDefaultOffice(id: string): Promise<void> {
-        // First, unset all defaults
-        const locations = await this.getOfficeLocations();
+    async setDefaultOffice(id: string, companyId?: string): Promise<void> {
+        // First, unset all defaults for this company
+        const locations = await this.getOfficeLocations(companyId);
         for (const loc of locations) {
             if (loc.isDefault) {
                 await updateDoc(doc(this.db, 'officeLocations', loc.id), {

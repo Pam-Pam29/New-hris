@@ -45,9 +45,14 @@ import { getScheduleService, WorkSchedule as FirebaseSchedule, getShortDayName }
 import { getComprehensiveDataFlowService } from '../../../services/comprehensiveDataFlowService';
 import { getOfficeLocationService, calculateDistance, formatDistance } from '../../../services/officeLocationService';
 
+import { useAuth } from '../../../context/AuthContext';
+import { useCompany } from '../../../context/CompanyContext';
+
 export default function TimeManagement() {
+    const { currentEmployee } = useAuth();
+    const { companyId } = useCompany();
     // Employee info - Load from profile
-    const employeeId = 'EMP001'; // Updated to match Firebase profile ID
+    const employeeId = currentEmployee?.employeeId || currentEmployee?.id || '';
     const [employeeName, setEmployeeName] = useState('Loading...');
     const [employeeProfile, setEmployeeProfile] = useState<any>(null);
 
@@ -382,7 +387,8 @@ export default function TimeManagement() {
             // Calculate distance from office
             try {
                 const officeService = await getOfficeLocationService();
-                const defaultOffice = await officeService.getDefaultOfficeLocation();
+                const employeeCompanyId = currentEmployee?.companyId;
+                const defaultOffice = await officeService.getDefaultOfficeLocation(employeeCompanyId);
 
                 if (defaultOffice) {
                     const distanceKm = calculateDistance(
@@ -425,10 +431,16 @@ export default function TimeManagement() {
 
             // Clock in with Firebase
             console.log('⏰ Clocking in...');
+            const finalCompanyId = companyId || currentEmployee?.companyId;
+            if (!finalCompanyId) {
+                throw new Error('Company ID is required for clock in');
+            }
             const entry = await timeService.clockIn(
                 employeeId,
                 employeeName,
-                currentLocation
+                currentLocation,
+                undefined, // photo
+                finalCompanyId // companyId
             );
 
             // Send notification to HR
@@ -536,10 +548,15 @@ export default function TimeManagement() {
 
             // Create adjustment request
             console.log('📝 Submitting adjustment request...');
+            const finalCompanyId = companyId || currentEmployee?.companyId;
+            if (!finalCompanyId) {
+                throw new Error('Company ID is required for adjustment request');
+            }
             const request = await timeService.createAdjustmentRequest({
                 timeEntryId: selectedEntry.id,
                 employeeId,
                 employeeName,
+                companyId: finalCompanyId, // Ensure companyId is included
                 originalClockIn: selectedEntry.clockIn,
                 originalClockOut: selectedEntry.clockOut || new Date(),
                 requestedClockIn,

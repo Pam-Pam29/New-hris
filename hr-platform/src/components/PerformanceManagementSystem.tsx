@@ -126,179 +126,48 @@ export function PerformanceManagementSystem({ isHR = false, employeeId = 'emp-00
 
     const loadPerformanceData = async () => {
         try {
-            // Load employee data for HR view
+            // Load employee data for HR view from Firebase
             if (isHR) {
-                const sampleEmployees = [
-                    { id: 'emp-001', name: 'John Doe', department: 'Engineering', position: 'Senior Developer' },
-                    { id: 'emp-002', name: 'Jane Smith', department: 'Marketing', position: 'Marketing Manager' },
-                    { id: 'emp-003', name: 'Mike Johnson', department: 'Sales', position: 'Sales Representative' },
-                    { id: 'emp-004', name: 'Sarah Wilson', department: 'HR', position: 'HR Specialist' },
-                    { id: 'emp-005', name: 'David Brown', department: 'Engineering', position: 'Frontend Developer' }
-                ];
-                setEmployees(sampleEmployees);
+                const { getComprehensiveDataFlowService } = await import('../services/comprehensiveDataFlowService');
+                const dataFlowService = await getComprehensiveDataFlowService();
+                const allEmployees = await dataFlowService.getAllEmployees();
+                const employeeList = allEmployees.map(emp => ({
+                    id: emp.employeeId || emp.id,
+                    name: `${emp.personalInfo?.firstName || ''} ${emp.personalInfo?.lastName || ''}`.trim() || 'Unknown',
+                    department: emp.workInfo?.department || 'N/A',
+                    position: emp.workInfo?.position || 'N/A'
+                }));
+                setEmployees(employeeList);
             }
 
-            // Sample data - in real implementation, this would come from Firebase
-            const sampleGoals: PerformanceGoal[] = [
-                {
-                    id: 'goal-001',
-                    employeeId: 'emp-001',
-                    title: 'Complete React Training',
-                    description: 'Complete advanced React.js training course',
-                    category: 'Learning & Development',
-                    targetValue: 100,
-                    currentValue: 75,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-03-31'),
-                    status: 'in_progress',
-                    priority: 'high',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                },
-                {
-                    id: 'goal-002',
-                    employeeId: 'emp-001',
-                    title: 'Increase Code Quality Score',
-                    description: 'Improve code quality metrics by 20%',
-                    category: 'Performance',
-                    targetValue: 90,
-                    currentValue: 85,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-06-30'),
-                    status: 'in_progress',
-                    priority: 'high',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                },
-                {
-                    id: 'goal-003',
-                    employeeId: 'emp-002',
-                    title: 'Launch Marketing Campaign',
-                    description: 'Launch Q2 marketing campaign for new product',
-                    category: 'Project Delivery',
-                    targetValue: 100,
-                    currentValue: 60,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-03-31'),
-                    status: 'in_progress',
-                    priority: 'high',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                },
-                {
-                    id: 'goal-004',
-                    employeeId: 'emp-003',
-                    title: 'Increase Sales Target',
-                    description: 'Achieve 150% of quarterly sales target',
-                    category: 'Sales',
-                    targetValue: 150,
-                    currentValue: 120,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-03-31'),
-                    status: 'in_progress',
-                    priority: 'high',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                },
-                {
-                    id: 'goal-005',
-                    employeeId: 'emp-004',
-                    title: 'Employee Engagement Survey',
-                    description: 'Conduct quarterly employee engagement survey',
-                    category: 'HR Operations',
-                    targetValue: 100,
-                    currentValue: 100,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-02-28'),
-                    status: 'completed',
-                    priority: 'medium',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                },
-                {
-                    id: 'goal-006',
-                    employeeId: 'emp-005',
-                    title: 'UI/UX Design Course',
-                    description: 'Complete advanced UI/UX design course',
-                    category: 'Learning & Development',
-                    targetValue: 100,
-                    currentValue: 40,
-                    unit: 'percentage',
-                    startDate: new Date('2024-01-01'),
-                    endDate: new Date('2024-06-30'),
-                    status: 'in_progress',
-                    priority: 'medium',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-01-01')
-                }
-            ];
-
-            const sampleReviews: PerformanceReview[] = [
-                {
-                    id: 'review-001',
-                    employeeId: 'emp-001',
-                    employeeName: 'John Doe',
-                    reviewerId: 'mgr-001',
-                    reviewerName: 'Jane Manager',
-                    reviewType: 'quarterly',
-                    reviewPeriod: 'Q1 2024',
-                    overallRating: 4.2,
-                    strengths: ['Strong technical skills', 'Good team collaboration', 'Reliable and punctual'],
-                    areasForImprovement: ['Communication skills', 'Leadership development'],
-                    goals: ['Complete React training', 'Improve code quality', 'Take on more leadership roles'],
-                    comments: 'John has shown excellent progress this quarter...',
-                    status: 'completed',
-                    createdAt: new Date('2024-01-01'),
-                    submittedAt: new Date('2024-01-15'),
-                    approvedAt: new Date('2024-01-20')
-                }
-            ];
-
-            const sampleMeetings: MeetingSchedule[] = [
-                {
-                    id: 'meeting-001',
-                    employeeId: 'emp-001',
-                    employeeName: 'John Doe',
-                    managerId: 'mgr-001',
-                    managerName: 'Jane Manager',
-                    meetingType: 'performance_review',
-                    title: 'Q2 Performance Review',
-                    description: 'Quarterly performance review meeting',
-                    scheduledDate: new Date('2024-04-15'),
-                    duration: 90,
-                    location: 'Conference Room A',
-                    status: 'scheduled',
-                    agenda: 'Review Q2 goals, discuss achievements, set Q3 objectives',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-04-01')
-                },
-                {
-                    id: 'meeting-002',
-                    employeeId: 'emp-001',
-                    employeeName: 'John Doe',
-                    managerId: 'mgr-001',
-                    managerName: 'Jane Manager',
-                    meetingType: 'one_on_one',
-                    title: 'Weekly 1-on-1',
-                    description: 'Regular check-in meeting',
-                    scheduledDate: new Date('2024-04-22'),
-                    duration: 30,
-                    location: 'Manager Office',
-                    status: 'confirmed',
-                    agenda: 'Discuss current projects, any blockers, career development',
-                    createdBy: 'Manager',
-                    createdAt: new Date('2024-04-01')
-                }
-            ];
-
-            setGoals(sampleGoals);
-            setReviews(sampleReviews);
-            setMeetings(sampleMeetings);
+            // Load performance data from Firebase
+            const { getComprehensiveDataFlowService } = await import('../services/comprehensiveDataFlowService');
+            const dataFlowService = await getComprehensiveDataFlowService();
+            
+            const goals = await dataFlowService.getPerformanceGoals(employeeId);
+            const reviews = await dataFlowService.getPerformanceReviews(employeeId);
+            
+            // For meetings, we need to use a different approach since getPerformanceMeetings might not exist
+            // We'll use the performanceSyncService or query directly
+            const { collection, getDocs, query, where } = await import('firebase/firestore');
+            const { getFirebaseDb } = await import('../config/firebase');
+            const db = getFirebaseDb();
+            
+            let meetingsQuery = query(collection(db, 'performanceMeetings'));
+            if (employeeId) {
+                meetingsQuery = query(meetingsQuery, where('employeeId', '==', employeeId));
+            }
+            const meetingsSnapshot = await getDocs(meetingsQuery);
+            const meetings = meetingsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                scheduledDate: doc.data().scheduledDate?.toDate() || new Date(),
+                createdAt: doc.data().createdAt?.toDate() || new Date()
+            })) as MeetingSchedule[];
+            
+            setGoals(goals);
+            setReviews(reviews);
+            setMeetings(meetings);
             setLoading(false);
         } catch (error) {
             console.error('Error loading performance data:', error);

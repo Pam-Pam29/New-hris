@@ -52,6 +52,8 @@ import { Asset } from './types';
 import { getAssetService } from './services/assetService';
 import { useToast } from "../../../../hooks/use-toast";
 import { useCompany } from '../../../../context/CompanyContext';
+import { vercelEmailService } from '../../../../services/vercelEmailService';
+import { getEmployeeService } from '../../../../services/employeeService';
 
 interface StatCardProps {
   title: string;
@@ -135,6 +137,54 @@ export default function AssetManagement() {
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState('assets');
+  const [officeLocations, setOfficeLocations] = useState<{ value: string; label: string }[]>([]);
+
+  // Load office locations for the company
+  useEffect(() => {
+    const loadOfficeLocations = async () => {
+      if (!companyId) return;
+
+      try {
+        const { getOfficeLocationService } = await import('../../../../services/officeLocationService');
+        const officeService = await getOfficeLocationService();
+        
+        const locations = await officeService.getOfficeLocations(companyId);
+        
+        // Filter out generic/incomplete locations - only show locations explicitly created by HR
+        const genericLocationNames = ['office', 'location', 'headquarters', 'main office', 'default', 'office location'];
+        const validLocations = locations.filter((location) => {
+          const hasValidName = location.name && 
+                              location.name.trim().length > 0 && 
+                              !genericLocationNames.includes(location.name.toLowerCase().trim());
+          const hasValidAddress = location.address && location.address.trim().length > 0;
+          const hasValidCoordinates = location.latitude && location.longitude && 
+                                     !isNaN(location.latitude) && !isNaN(location.longitude);
+          
+          return hasValidName && hasValidAddress && hasValidCoordinates;
+        });
+
+        // Convert to select options format
+        const locationOptions = validLocations.map(loc => ({
+          value: loc.name,
+          label: loc.name
+        }));
+
+        // Add "Remote" as an option if not already present
+        if (!locationOptions.find(opt => opt.value === 'Remote')) {
+          locationOptions.push({ value: 'Remote', label: 'Remote' });
+        }
+
+        setOfficeLocations(locationOptions);
+        console.log('📍 [AssetManagement] Loaded office locations:', locationOptions.length);
+      } catch (error) {
+        console.error('❌ [AssetManagement] Error loading office locations:', error);
+        // Fallback to Remote only
+        setOfficeLocations([{ value: 'Remote', label: 'Remote' }]);
+      }
+    };
+
+    loadOfficeLocations();
+  }, [companyId]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -227,6 +277,14 @@ export default function AssetManagement() {
         console.log('📦 Loaded:', assetData.length, 'assets,', requestsData.length, 'requests,', starterKitsData.length, 'kits,', employeeData.length, 'employees');
         console.log('👥 Employees:', employeeData);
         console.log('📦 Assets:', assetData);
+        console.log('📋 Asset Requests:', requestsData);
+        
+        if (requestsData.length === 0) {
+          console.warn('⚠️ No asset requests found. Check if:');
+          console.warn('   1. Requests exist in Firestore collection "assetRequests"');
+          console.warn('   2. Requests have companyId field matching:', companyId);
+          console.warn('   3. Firestore rules allow read access to assetRequests');
+        }
       } catch (error) {
         console.error('Error loading data:', error);
         setError('Failed to load data. Please try again later.');
@@ -234,7 +292,135 @@ export default function AssetManagement() {
       }
     };
     loadData();
-  }, []);
+  }, [companyId]);
+
+  // Real-time synchronization for assets, requests, and assignments
+  useEffect(() => {
+    if (!companyId) return;
+
+    console.log('📡 Setting up real-time asset sync for company:', companyId);
+
+    const { collection, query, where, onSnapshot } = require('firebase/firestore');
+    const { getFirebaseDb } = require('../../../../config/firebase');
+    const db = getFirebaseDb();
+
+    // Real-time listener for assets (filtered by companyId)
+    let assetsQuery = query(collection(db, 'assets'));
+    try {
+      assetsQuery = query(assetsQuery, where('companyId', '==', companyId));
+    } catch (error) {
+      console.warn('⚠️ Could not add companyId filter to assets query, filtering in memory');
+    }
+
+    const unsubscribeAssets = onSnapshot(
+      assetsQuery,
+      (snapshot) => {
+        let assetsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Asset));
+        
+        // Filter by companyId in memory as fallback
+        assetsData = assetsData.filter(asset => asset.companyId === companyId);
+        
+        setAssets(assetsData);
+        console.log(`📡 Real-time update: Assets changed - ${assetsData.length} assets (company: ${companyId})`);
+      },
+      (error) => {
+        console.error('Error in assets listener:', error);
+      }
+    );
+
+    // Real-time listener for asset requests (filtered by companyId)
+    let requestsQuery = query(collection(db, 'assetRequests'));
+    try {
+      requestsQuery = query(requestsQuery, where('companyId', '==', companyId));
+    } catch (error) {
+      console.warn('⚠️ Could not add companyId filter to requests query, filtering in memory');
+    }
+
+    const unsubscribeRequests = onSnapshot(
+      requestsQuery,
+      (snapshot) => {
+        let requestsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Filter by companyId in memory as fallback
+        requestsData = requestsData.filter((request: any) => request.companyId === companyId);
+        
+        setRequests(requestsData);
+        console.log(`📡 Real-time update: Asset requests changed - ${requestsData.length} requests (company: ${companyId})`);
+      },
+      (error) => {
+        console.error('Error in requests listener:', error);
+      }
+    );
+
+    // Real-time listener for asset assignments (filtered by companyId)
+    let assignmentsQuery = query(collection(db, 'asset_assignments'));
+    try {
+      assignmentsQuery = query(assignmentsQuery, where('companyId', '==', companyId));
+    } catch (error) {
+      console.warn('⚠️ Could not add companyId filter to assignments query, filtering in memory');
+    }
+
+    const unsubscribeAssignments = onSnapshot(
+      assignmentsQuery,
+      (snapshot) => {
+        // Asset assignments are used internally, but we can log updates
+        const assignmentsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        const filteredAssignments = assignmentsData.filter((assignment: any) => assignment.companyId === companyId);
+        console.log(`📡 Real-time update: Asset assignments changed - ${filteredAssignments.length} assignments (company: ${companyId})`);
+        
+        // Note: Assets will be refreshed via the assets listener above
+      },
+      (error) => {
+        console.error('Error in assignments listener:', error);
+      }
+    );
+
+    // Real-time listener for starter kits (filtered by companyId)
+    let kitsQuery = query(collection(db, 'starterKits'));
+    try {
+      kitsQuery = query(kitsQuery, where('companyId', '==', companyId));
+    } catch (error) {
+      console.warn('⚠️ Could not add companyId filter to starterKits query, filtering in memory');
+    }
+
+    const unsubscribeKits = onSnapshot(
+      kitsQuery,
+      (snapshot) => {
+        let kitsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Filter by companyId in memory as fallback
+        kitsData = kitsData.filter((kit: any) => kit.companyId === companyId);
+        
+        setStarterKits(kitsData);
+        console.log(`📡 Real-time update: Starter kits changed - ${kitsData.length} kits (company: ${companyId})`);
+      },
+      (error) => {
+        console.error('Error in starter kits listener:', error);
+      }
+    );
+
+    // Cleanup listeners on unmount
+    return () => {
+      console.log('🔌 Cleaning up asset management listeners');
+      unsubscribeAssets();
+      unsubscribeRequests();
+      unsubscribeAssignments();
+      unsubscribeKits();
+    };
+  }, [companyId]);
 
   // Mock employee data for assignment dropdown
   const mockEmployees = employees.map(employee => ({ value: employee.name, label: employee.name }));
@@ -254,6 +440,9 @@ export default function AssetManagement() {
         return;
       }
 
+      // Get current user name for history tracking
+      const currentUser = 'HR Admin'; // TODO: Get from auth context
+      
       // If employeeId is empty, unassign the asset
       if (!employeeId || employeeId.trim() === '') {
         const updatedAsset = {
@@ -263,8 +452,11 @@ export default function AssetManagement() {
           assignedDate: '' // Explicitly clear assignedDate
         };
         console.log('🔄 Unassigning asset:', assetId, 'Clearing assignedTo field');
-        await service.updateAsset(assetId, updatedAsset);
-        setAssets(prev => prev.map(a => a.id === assetId ? updatedAsset : a));
+        await service.updateAsset(assetId, updatedAsset, currentUser, `Asset unassigned from ${asset.assignedTo || 'employee'}`);
+        const refreshedAsset = await service.getAssetById(assetId);
+        if (refreshedAsset) {
+          setAssets(prev => prev.map(a => a.id === assetId ? refreshedAsset : a));
+        }
         toast({
           title: 'Success',
           description: 'Asset unassigned successfully',
@@ -277,14 +469,56 @@ export default function AssetManagement() {
           status: 'Assigned' as const,
           assignedDate: new Date().toISOString()
         };
-        await service.updateAsset(assetId, updatedAsset);
-        setAssets(prev => prev.map(a => a.id === assetId ? updatedAsset : a));
+        const isTransfer = asset.assignedTo && asset.assignedTo !== employeeId;
+        await service.updateAsset(
+          assetId, 
+          updatedAsset, 
+          currentUser, 
+          isTransfer 
+            ? `Asset transferred from ${asset.assignedTo} to ${employeeId}`
+            : `Asset assigned to ${employeeId}`
+        );
+        const refreshedAsset = await service.getAssetById(assetId);
+        if (refreshedAsset) {
+          setAssets(prev => prev.map(a => a.id === assetId ? refreshedAsset : a));
+        }
 
         console.log('✅ Asset assigned:', assetId, 'to employee:', employeeId);
 
+        // Send email notification to employee
+        try {
+          const employeeService = await getEmployeeService();
+          const employee = await employeeService.getEmployeeById(employeeId);
+          
+          if (employee) {
+            const employeeEmail = employee.contactInfo?.workEmail || 
+                                 employee.contactInfo?.personalEmail || 
+                                 employee.email || 
+                                 (employee as any).personalEmail;
+            
+            if (employeeEmail) {
+              await vercelEmailService.sendAssetAssigned({
+                employeeName: employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+                email: employeeEmail,
+                assetName: asset.name,
+                assetType: asset.type || asset.category || 'Asset',
+                serialNumber: asset.serialNumber || 'N/A',
+                assignedDate: new Date().toLocaleDateString(),
+                companyName: company?.displayName || 'Your Company'
+              });
+              console.log('📧 Asset assignment notification sent to:', employeeEmail);
+            } else {
+              console.warn('⚠️ No email found for employee:', employeeId);
+            }
+          }
+        } catch (emailError) {
+          console.error('❌ Failed to send asset assignment notification:', emailError);
+          // Don't fail the assignment if email fails
+        }
+
         toast({
           title: 'Success',
-          description: 'Asset assigned successfully',
+          description: 'Asset assigned successfully. Employee has been notified.',
         });
       }
     } catch (error) {
@@ -680,10 +914,13 @@ export default function AssetManagement() {
 
       console.log('Asset data to be saved:', assetData); // Debug log
 
+      // Get current user name for history tracking
+      const currentUser = 'HR Admin'; // TODO: Get from auth context
+      
       // Check if we're editing or creating
       if (selectedAssetForDetails) {
         // Update existing asset
-        const updatedAsset = await service.updateAsset(selectedAssetForDetails.id, assetData);
+        const updatedAsset = await service.updateAsset(selectedAssetForDetails.id, assetData, currentUser, 'Asset details updated');
         console.log('Asset updated:', updatedAsset);
 
         // Update local state
@@ -695,7 +932,8 @@ export default function AssetManagement() {
         });
       } else {
         // Create new asset
-        const newAsset = await service.createAsset(assetData);
+        const currentUser = 'HR Admin'; // TODO: Get from auth context
+        const newAsset = await service.createAsset(assetData, currentUser);
         console.log('New asset created:', newAsset);
 
         setAssets(prev => [...prev, newAsset]);
@@ -1723,6 +1961,7 @@ export default function AssetManagement() {
             handleSubmit={handleSubmit}
             sending={sending}
             employees={mockEmployees}
+            locationOptions={officeLocations}
           />
         </DialogContent>
       </Dialog>

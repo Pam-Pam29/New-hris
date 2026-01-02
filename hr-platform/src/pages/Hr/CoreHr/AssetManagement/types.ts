@@ -1,5 +1,17 @@
 // Asset Management Types
 
+export interface AssetHistoryEntry {
+  id: string;
+  action: 'assigned' | 'unassigned' | 'transferred' | 'created' | 'maintenance' | 'status_change' | 'updated';
+  date: string;
+  fromEmployee?: string;
+  toEmployee?: string;
+  performedBy: string;
+  notes?: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
 export interface Asset {
   id: string;
   name: string;
@@ -23,6 +35,7 @@ export interface Asset {
   priority: 'Critical' | 'High' | 'Medium' | 'Low';
   isEssential?: boolean; // For new employee starter kit
   companyId?: string;
+  history?: AssetHistoryEntry[];
 }
 
 export interface AssetAssignment {

@@ -29,9 +29,6 @@ import {
 import { usePerformanceMeetings, usePerformanceGoals, usePerformanceReviews } from '../../../hooks/useRealTimeSync';
 import { PerformanceMeeting, PerformanceGoal, PerformanceReview, normalizeMeetingStatus, getMeetingStatusInfo, formatMeetingDate } from '../../../types/performanceManagement';
 import { performanceSyncService } from '../../../services/performanceSyncService';
-import { googleMeetService } from '../../../services/googleMeetService';
-import { meetingNotificationService } from '../../../services/meetingNotificationService';
-import { hrAvailabilityService } from '../../../services/hrAvailabilityService';
 import { GoalStatusBadge, AtRiskBadge } from '../../../components/GoalStatusBadge';
 import { goalOverdueService } from '../../../services/goalOverdueService';
 
@@ -43,9 +40,6 @@ export default function PerformanceManagement() {
         return currentEmployee?.employeeId || localStorage.getItem('currentEmployeeId') || 'EMP123456ABC';
     });
     const [employeeName, setEmployeeName] = useState<string>(currentEmployee?.firstName + ' ' + currentEmployee?.lastName || '');
-    const [availableTimeSlots, setAvailableTimeSlots] = useState<{ startTime: string; endTime: string; }[]>([]);
-    const [loadingSlots, setLoadingSlots] = useState(false);
-    const [hrBookingPageUrl, setHrBookingPageUrl] = useState<string>('');
 
     // Helper function to display unit correctly
     const formatUnit = (unit: string) => {
@@ -54,7 +48,6 @@ export default function PerformanceManagement() {
         if (unit === 'hours') return 'hrs';
         return unit;
     };
-    const [showScheduleForm, setShowScheduleForm] = useState(false);
     const [showGoalForm, setShowGoalForm] = useState(false);
     const [showGoalView, setShowGoalView] = useState(false);
     const [viewingGoal, setViewingGoal] = useState<PerformanceGoal | null>(null);
@@ -81,18 +74,6 @@ export default function PerformanceManagement() {
         completedDate: string;
     } | null>(null);
 
-    // Form state for meetings
-    const [meetingForm, setMeetingForm] = useState({
-        title: '',
-        description: '',
-        meetingType: 'one-on-one' as const,
-        scheduledDate: '',
-        scheduledTime: '',
-        duration: 30, // Default to 30 minutes
-        location: '',
-        meetingLink: ''
-    });
-
     // Form state for goals
     const [goalForm, setGoalForm] = useState({
         title: '',
@@ -107,9 +88,9 @@ export default function PerformanceManagement() {
     });
 
     // Real-time sync
-    const { data: allMeetings, loading: meetingsLoading } = usePerformanceMeetings();
-    const { data: allGoals, loading: goalsLoading } = usePerformanceGoals(employeeId);
-    const { data: allReviews, loading: reviewsLoading } = usePerformanceReviews(employeeId);
+    const { data: allMeetings, loading: meetingsLoading } = usePerformanceMeetings(employeeId, companyId);
+    const { data: allGoals, loading: goalsLoading } = usePerformanceGoals(employeeId, companyId);
+    const { data: allReviews, loading: reviewsLoading } = usePerformanceReviews(employeeId, companyId);
     const loading = meetingsLoading || goalsLoading || reviewsLoading;
 
     // Filter data for this employee
@@ -149,49 +130,7 @@ export default function PerformanceManagement() {
             }
         };
 
-        const loadHrBookingPage = async () => {
-            if (!companyId) {
-                setHrBookingPageUrl('');
-                return;
-            }
-            try {
-                // Try to get HR booking page URL from hrSettings collection
-                const { db } = await import('../../../config/firebase');
-                const { doc, getDoc, collection, getDocs, query, limit } = await import('firebase/firestore');
-
-                let bookingUrl = '';
-
-                // Prefer company-specific settings document
-                const settingsRef = doc(db, 'hrSettings', companyId);
-                const settingsSnapshot = await getDoc(settingsRef);
-
-                if (settingsSnapshot.exists()) {
-                    const settings = settingsSnapshot.data();
-                    bookingUrl = settings.bookingPageUrl || '';
-                } else {
-                    // Fallback to legacy global settings
-                    const legacyQuery = query(collection(db, 'hrSettings'), limit(1));
-                    const legacySnapshot = await getDocs(legacyQuery);
-                    if (!legacySnapshot.empty) {
-                        const legacySettings = legacySnapshot.docs[0].data();
-                        bookingUrl = legacySettings.bookingPageUrl || '';
-                    }
-                }
-
-                if (bookingUrl) {
-                    setHrBookingPageUrl(bookingUrl);
-                    console.log('📅 HR Booking Page URL loaded:', bookingUrl);
-                } else {
-                    setHrBookingPageUrl('');
-                }
-            } catch (error) {
-                console.log('No HR booking page configured (this is optional)');
-                setHrBookingPageUrl('');
-            }
-        };
-
         loadEmployeeName();
-        loadHrBookingPage();
     }, [employeeId, companyId]);
 
     // Check for extension decisions that need acknowledgment
@@ -208,94 +147,6 @@ export default function PerformanceManagement() {
         }
     }, [goals, showExtensionDecision]);
 
-    // Load available time slots when date changes
-    useEffect(() => {
-        const loadAvailableSlots = async () => {
-            if (!meetingForm.scheduledDate) {
-                setAvailableTimeSlots([]);
-                return;
-            }
-
-            setLoadingSlots(true);
-            try {
-                const selectedDate = new Date(meetingForm.scheduledDate);
-                const slots = await hrAvailabilityService.getAvailableTimeSlotsForDate(selectedDate);
-                setAvailableTimeSlots(slots);
-                console.log('📅 Available time slots loaded:', slots);
-            } catch (error) {
-                console.error('Failed to load available slots:', error);
-                setAvailableTimeSlots([]);
-            } finally {
-                setLoadingSlots(false);
-            }
-        };
-
-        loadAvailableSlots();
-    }, [meetingForm.scheduledDate]);
-
-    // Start meeting notification checker
-    useEffect(() => {
-        // Request notification permission on mount
-        meetingNotificationService.requestNotificationPermission();
-
-        // Start checking for upcoming meetings
-        meetingNotificationService.startMeetingChecker(employeeId, (meeting) => {
-            console.log('⏰ Meeting starting soon:', meeting);
-            // The notification is already sent by the service
-        });
-
-        // Cleanup on unmount
-        return () => {
-            meetingNotificationService.stopMeetingChecker();
-        };
-    }, [employeeId]);
-
-    const handleScheduleMeeting = async () => {
-        if (!meetingForm.title || !meetingForm.scheduledDate || !meetingForm.scheduledTime) {
-            alert('Please fill in all required fields');
-            return;
-        }
-
-        if (!meetingForm.meetingLink) {
-            alert('Please provide a meeting link (Google Meet, Zoom, Teams, etc.)');
-            return;
-        }
-
-        setSubmitting(true);
-        try {
-            const scheduledDateTime = new Date(`${meetingForm.scheduledDate}T${meetingForm.scheduledTime}`);
-
-            await performanceSyncService.scheduleMeeting({
-                employeeId,
-                employeeName: employeeName || 'Unknown Employee',
-                title: meetingForm.title,
-                description: meetingForm.description,
-                meetingType: meetingForm.meetingType,
-                scheduledDate: scheduledDateTime,
-                duration: meetingForm.duration,
-                location: meetingForm.location,
-                meetingLink: meetingForm.meetingLink,
-                createdBy: 'employee'
-            });
-
-            setShowScheduleForm(false);
-            setMeetingForm({
-                title: '',
-                description: '',
-                meetingType: 'one-on-one',
-                scheduledDate: '',
-                scheduledTime: '',
-                duration: 30, // Default to 30 minutes
-                location: '',
-                meetingLink: ''
-            });
-        } catch (error) {
-            console.error('Failed to schedule meeting:', error);
-            alert('Failed to schedule meeting');
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     const handleCreateGoal = async () => {
         if (!goalForm.title || !goalForm.startDate || !goalForm.endDate) {
@@ -305,7 +156,14 @@ export default function PerformanceManagement() {
 
         setSubmitting(true);
         try {
+            if (!companyId) {
+                alert('Company ID is required. Please refresh the page.');
+                setSubmitting(false);
+                return;
+            }
+
             const goalData = {
+                companyId: companyId!, // Ensure companyId is included
                 employeeId,
                 employeeName: employeeName || 'Unknown Employee',
                 title: goalForm.title,
@@ -481,13 +339,6 @@ export default function PerformanceManagement() {
         }
     };
 
-    const handleCancelMeeting = async (meetingId: string) => {
-        try {
-            await performanceSyncService.cancelMeeting(meetingId);
-        } catch (error) {
-            console.error('Failed to cancel meeting:', error);
-        }
-    };
 
     const getStatusBadge = (status: string) => {
         const statusInfo = getMeetingStatusInfo(status);
@@ -522,8 +373,6 @@ export default function PerformanceManagement() {
         );
     }
 
-    const pendingMeetings = meetings.filter(m => normalizeMeetingStatus(m.status) === 'pending');
-    const approvedMeetings = meetings.filter(m => normalizeMeetingStatus(m.status) === 'approved');
     const activeGoals = goals.filter(g => g.status === 'in_progress');
     const completedGoals = goals.filter(g => g.status === 'completed');
     const overdueGoals = goals.filter(g => g.status === 'overdue');
@@ -609,40 +458,11 @@ export default function PerformanceManagement() {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className={approvedMeetings.length > 0 ? 'border-l-4 border-l-purple-500' : ''}>
-                        <CardContent className="pt-6">
-                            <div className="flex flex-col">
-                                <div className="flex items-center mb-2">
-                                    <Calendar className="h-5 w-5 text-purple-600 mr-2" />
-                                    <p className="text-2xl font-bold text-purple-600">{approvedMeetings.length}</p>
-                                </div>
-                                <p className="text-sm font-medium text-gray-700">
-                                    Approved Meeting{approvedMeetings.length !== 1 ? 's' : ''}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">Upcoming</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className={pendingMeetings.length > 0 ? 'border-l-4 border-l-yellow-500' : ''}>
-                        <CardContent className="pt-6">
-                            <div className="flex flex-col">
-                                <div className="flex items-center mb-2">
-                                    <Clock className="h-5 w-5 text-yellow-600 mr-2" />
-                                    <p className="text-2xl font-bold text-yellow-600">{pendingMeetings.length}</p>
-                                </div>
-                                <p className="text-sm font-medium text-gray-700">
-                                    Pending Meeting{pendingMeetings.length !== 1 ? 's' : ''}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
-                            </div>
-                        </CardContent>
-                    </Card>
                 </div>
 
                 <Tabs defaultValue="goals" className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="goals">Goals ({goals.length})</TabsTrigger>
-                        <TabsTrigger value="meetings">Meetings ({meetings.length})</TabsTrigger>
                         <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
                     </TabsList>
 
@@ -839,272 +659,6 @@ export default function PerformanceManagement() {
                         )}
                     </TabsContent>
 
-                    {/* Meetings Tab */}
-                    <TabsContent value="meetings" className="space-y-4">
-                        <div className="flex justify-end gap-3">
-                            {hrBookingPageUrl ? (
-                                <>
-                                    <Button
-                                        onClick={() => window.open(hrBookingPageUrl, '_blank', 'noopener')}
-                                        className="bg-green-600 hover:bg-green-700"
-                                    >
-                                        <Calendar className="h-4 w-4 mr-2" />
-                                        Book with HR
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setShowScheduleForm(true)}
-                                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Manual Request
-                                    </Button>
-                                </>
-                            ) : (
-                                <Button
-                                    onClick={() => setShowScheduleForm(true)}
-                                    className="bg-blue-600 hover:bg-blue-700"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Schedule Meeting
-                                </Button>
-                            )}
-                        </div>
-
-                        <Tabs defaultValue="upcoming" className="space-y-4">
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="upcoming">Upcoming ({approvedMeetings.length})</TabsTrigger>
-                                <TabsTrigger value="pending">Pending ({pendingMeetings.length})</TabsTrigger>
-                                <TabsTrigger value="all">All ({meetings.length})</TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="upcoming" className="space-y-4">
-                                {approvedMeetings.length === 0 ? (
-                                    <Card>
-                                        <CardContent className="pt-12 pb-12">
-                                            <div className="text-center">
-                                                <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                                                <h3 className="text-lg font-semibold mb-2">No Upcoming Meetings</h3>
-                                                <p className="text-muted-foreground">Schedule a meeting with your manager</p>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {approvedMeetings.map(meeting => (
-                                            <Card key={meeting.id}>
-                                                <CardHeader>
-                                                    <div className="flex items-center justify-between">
-                                                        <CardTitle className="text-lg">{meeting.title}</CardTitle>
-                                                        {getStatusBadge(meeting.status)}
-                                                    </div>
-                                                    <CardDescription>{meeting.description}</CardDescription>
-                                                </CardHeader>
-                                                <CardContent className="space-y-2">
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Calendar className="h-4 w-4 mr-2" />
-                                                        {formatMeetingDate(meeting.scheduledDate)}
-                                                    </div>
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Clock className="h-4 w-4 mr-2" />
-                                                        {meeting.duration} minutes
-                                                    </div>
-                                                    {meeting.location && (
-                                                        <div className="flex items-center text-sm text-muted-foreground">
-                                                            <MapPin className="h-4 w-4 mr-2" />
-                                                            {meeting.location}
-                                                        </div>
-                                                    )}
-                                                    {meeting.meetingLink && (() => {
-                                                        const meetingDate = meeting.scheduledDate instanceof Date
-                                                            ? meeting.scheduledDate
-                                                            : (meeting.scheduledDate as any).toDate
-                                                                ? (meeting.scheduledDate as any).toDate()
-                                                                : new Date(meeting.scheduledDate);
-                                                        const now = new Date();
-                                                        const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
-                                                        const meetingEndTime = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
-
-                                                        const canJoin = now >= fifteenMinutesBefore && now <= meetingEndTime;
-                                                        const meetingEnded = now > meetingEndTime;
-
-                                                        if (meetingEnded) {
-                                                            return (
-                                                                <div className="mt-2 p-3 bg-red-50 rounded-lg text-center border border-red-200">
-                                                                    <p className="text-xs text-red-600 font-medium">
-                                                                        ⏰ Meeting ended
-                                                                    </p>
-                                                                </div>
-                                                            );
-                                                        } else if (canJoin) {
-                                                            return (
-                                                                <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block">
-                                                                    <Button size="sm" variant="outline" className="w-full mt-2">
-                                                                        <Video className="h-4 w-4 mr-2" />
-                                                                        Join Meeting
-                                                                    </Button>
-                                                                </a>
-                                                            );
-                                                        } else {
-                                                            const timeUntil = Math.ceil((fifteenMinutesBefore.getTime() - now.getTime()) / 60000);
-                                                            return (
-                                                                <div className="mt-2 p-3 bg-gray-100 rounded-lg text-center">
-                                                                    <p className="text-xs text-gray-600">
-                                                                        🔒 Meeting link available {timeUntil} minutes before meeting
-                                                                    </p>
-                                                                </div>
-                                                            );
-                                                        }
-                                                    })()}
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </TabsContent>
-
-                            <TabsContent value="pending" className="space-y-4">
-                                {pendingMeetings.length === 0 ? (
-                                    <Card>
-                                        <CardContent className="pt-12 pb-12">
-                                            <div className="text-center">
-                                                <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-                                                <h3 className="text-lg font-semibold mb-2">No Pending Meetings</h3>
-                                                <p className="text-muted-foreground">All requests have been reviewed</p>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {pendingMeetings.map(meeting => (
-                                            <Card key={meeting.id}>
-                                                <CardHeader>
-                                                    <div className="flex items-center justify-between">
-                                                        <CardTitle className="text-lg">{meeting.title}</CardTitle>
-                                                        {getStatusBadge(meeting.status)}
-                                                    </div>
-                                                    <CardDescription>{meeting.description}</CardDescription>
-                                                </CardHeader>
-                                                <CardContent className="space-y-2">
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Calendar className="h-4 w-4 mr-2" />
-                                                        {formatMeetingDate(meeting.scheduledDate)}
-                                                    </div>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleCancelMeeting(meeting.id)}
-                                                        className="w-full"
-                                                    >
-                                                        <XCircle className="h-4 w-4 mr-2" />
-                                                        Cancel Request
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </TabsContent>
-
-                            <TabsContent value="all" className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {meetings.map(meeting => {
-                                        const status = normalizeMeetingStatus(meeting.status);
-                                        const isRejected = status === 'rejected';
-
-                                        return (
-                                            <Card key={meeting.id} className={isRejected ? 'border-red-300 bg-red-50' : ''}>
-                                                <CardHeader>
-                                                    <div className="flex items-center justify-between">
-                                                        <CardTitle className="text-lg">{meeting.title}</CardTitle>
-                                                        {getStatusBadge(meeting.status)}
-                                                    </div>
-                                                    {meeting.description && (
-                                                        <CardDescription>{meeting.description}</CardDescription>
-                                                    )}
-                                                </CardHeader>
-                                                <CardContent className="space-y-2">
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Calendar className="h-4 w-4 mr-2" />
-                                                        {formatMeetingDate(meeting.scheduledDate)}
-                                                    </div>
-                                                    <div className="flex items-center text-sm text-muted-foreground">
-                                                        <Clock className="h-4 w-4 mr-2" />
-                                                        {meeting.duration} minutes
-                                                    </div>
-
-                                                    {/* Show rejection reason if rejected */}
-                                                    {isRejected && meeting.rejectionReason && (
-                                                        <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
-                                                            <p className="text-sm font-semibold text-red-900 mb-1">❌ Meeting Rejected</p>
-                                                            <p className="text-sm text-red-800">Reason: {meeting.rejectionReason}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Show meeting link ONLY for approved meetings */}
-                                                    {status === 'approved' && meeting.meetingLink && (() => {
-                                                        const meetingDate = meeting.scheduledDate instanceof Date
-                                                            ? meeting.scheduledDate
-                                                            : (meeting.scheduledDate as any).toDate
-                                                                ? (meeting.scheduledDate as any).toDate()
-                                                                : new Date(meeting.scheduledDate);
-                                                        const now = new Date();
-                                                        const fifteenMinutesBefore = new Date(meetingDate.getTime() - 15 * 60000);
-                                                        const meetingEndTime = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
-
-                                                        const canJoin = now >= fifteenMinutesBefore && now <= meetingEndTime;
-                                                        const meetingEnded = now > meetingEndTime;
-
-                                                        if (meetingEnded) {
-                                                            return (
-                                                                <div className="mt-2 p-3 bg-red-50 rounded-lg text-center border border-red-200">
-                                                                    <p className="text-xs text-red-600 font-medium">
-                                                                        ⏰ Meeting ended
-                                                                    </p>
-                                                                </div>
-                                                            );
-                                                        } else if (canJoin) {
-                                                            return (
-                                                                <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="block">
-                                                                    <Button size="sm" variant="outline" className="w-full mt-2">
-                                                                        <Video className="h-4 w-4 mr-2" />
-                                                                        Join Meeting
-                                                                    </Button>
-                                                                </a>
-                                                            );
-                                                        } else {
-                                                            const timeUntil = Math.ceil((fifteenMinutesBefore.getTime() - now.getTime()) / 60000);
-                                                            return (
-                                                                <div className="mt-2 p-3 bg-gray-100 rounded-lg text-center">
-                                                                    <p className="text-xs text-gray-600">
-                                                                        🔒 Meeting link available {timeUntil} minutes before meeting
-                                                                    </p>
-                                                                </div>
-                                                            );
-                                                        }
-                                                    })()}
-
-                                                    {/* Show cancel button for pending meetings */}
-                                                    {status === 'pending' && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleCancelMeeting(meeting.id)}
-                                                            className="w-full mt-2"
-                                                        >
-                                                            <XCircle className="h-4 w-4 mr-2" />
-                                                            Cancel Request
-                                                        </Button>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        );
-                                    })}
-                                </div>
-                            </TabsContent>
-                        </Tabs>
-                    </TabsContent>
-
                     {/* Reviews Tab */}
                     <TabsContent value="reviews" className="space-y-4">
                         {reviews.length === 0 ? (
@@ -1202,203 +756,6 @@ export default function PerformanceManagement() {
                         )}
                     </TabsContent>
                 </Tabs>
-
-                {/* Schedule Meeting Form */}
-                {showScheduleForm && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
-                            <CardHeader>
-                                <CardTitle>Schedule Performance Meeting</CardTitle>
-                                <CardDescription>Request a meeting with your manager</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div>
-                                    <Label htmlFor="title">Meeting Title *</Label>
-                                    <Input
-                                        id="title"
-                                        value={meetingForm.title}
-                                        onChange={(e) => setMeetingForm(prev => ({ ...prev, title: e.target.value }))}
-                                        placeholder="e.g., Quarterly Performance Review"
-                                    />
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="description">Description</Label>
-                                    <Textarea
-                                        id="description"
-                                        value={meetingForm.description}
-                                        onChange={(e) => setMeetingForm(prev => ({ ...prev, description: e.target.value }))}
-                                        placeholder="What would you like to discuss?"
-                                        rows={3}
-                                    />
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="meetingType">Meeting Type</Label>
-                                    <Select
-                                        value={meetingForm.meetingType}
-                                        onValueChange={(value: any) => setMeetingForm(prev => ({ ...prev, meetingType: value }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="one-on-one">One-on-One</SelectItem>
-                                            <SelectItem value="performance-review">Performance Review</SelectItem>
-                                            <SelectItem value="goal-setting">Goal Setting</SelectItem>
-                                            <SelectItem value="feedback">Feedback Session</SelectItem>
-                                            <SelectItem value="development">Development Discussion</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label htmlFor="scheduledDate">Date *</Label>
-                                        <Input
-                                            id="scheduledDate"
-                                            type="date"
-                                            value={meetingForm.scheduledDate}
-                                            onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="scheduledTime">Time *</Label>
-                                        <Input
-                                            id="scheduledTime"
-                                            type="time"
-                                            value={meetingForm.scheduledTime}
-                                            onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduledTime: e.target.value }))}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Show available time slots */}
-                                {meetingForm.scheduledDate && (
-                                    <div className="col-span-2">
-                                        <Label>✅ HR Available Time Slots for {new Date(meetingForm.scheduledDate).toLocaleDateString()}</Label>
-                                        {loadingSlots ? (
-                                            <p className="text-sm text-gray-500 mt-2">Loading available slots...</p>
-                                        ) : availableTimeSlots.length > 0 ? (
-                                            <div className="grid grid-cols-4 gap-2 mt-2">
-                                                {availableTimeSlots.map((slot, idx) => {
-                                                    const isSelected = meetingForm.scheduledTime === slot.startTime;
-                                                    return (
-                                                        <button
-                                                            key={idx}
-                                                            type="button"
-                                                            onClick={() => setMeetingForm(prev => ({ ...prev, scheduledTime: slot.startTime }))}
-                                                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${isSelected
-                                                                ? 'bg-blue-600 text-white border-blue-600'
-                                                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                                                                }`}
-                                                        >
-                                                            {slot.startTime} - {slot.endTime}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-orange-600 mt-2">
-                                                ⚠️ No available slots for this date. HR may be unavailable or fully booked. Please choose another date.
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-
-                                <div>
-                                    <Label htmlFor="duration">Duration</Label>
-                                    <Select
-                                        value={meetingForm.duration.toString()}
-                                        onValueChange={(value) => setMeetingForm(prev => ({ ...prev, duration: parseInt(value) }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="30">30 minutes</SelectItem>
-                                            <SelectItem value="60">1 hour</SelectItem>
-                                            <SelectItem value="90">1.5 hours</SelectItem>
-                                            <SelectItem value="120">2 hours</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="location">Location (optional)</Label>
-                                    <Input
-                                        id="location"
-                                        value={meetingForm.location}
-                                        onChange={(e) => setMeetingForm(prev => ({ ...prev, location: e.target.value }))}
-                                        placeholder="e.g., Conference Room A"
-                                    />
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="meetingLink">Meeting Link *</Label>
-
-                                    {/* HR Booking Page Button (if available) */}
-                                    {hrBookingPageUrl && (
-                                        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                            <p className="text-sm text-green-800 font-medium mb-2">
-                                                ✨ HR has a booking page! Book there to get your Google Meet link:
-                                            </p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => window.open(hrBookingPageUrl, '_blank')}
-                                                className="w-full bg-green-600 text-white hover:bg-green-700 border-green-600"
-                                            >
-                                                <Calendar className="h-4 w-4 mr-2" />
-                                                Open HR Booking Page
-                                                <span className="ml-2 text-xs opacity-90">(New Tab)</span>
-                                            </Button>
-                                            <p className="text-xs text-green-700 mt-2">
-                                                👉 After booking, copy the Google Meet link and paste it below
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    <p className="text-xs text-blue-600 mb-2">
-                                        💡 {hrBookingPageUrl ? 'Or create a meeting link manually:' : 'Create a meeting link first (Google Meet, Zoom, Teams) and paste it here. Create just before the meeting time to ensure it\'s fresh.'}
-                                    </p>
-                                    <Input
-                                        id="meetingLink"
-                                        value={meetingForm.meetingLink}
-                                        onChange={(e) => setMeetingForm(prev => ({ ...prev, meetingLink: e.target.value }))}
-                                        placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                                        required
-                                    />
-                                    {!hrBookingPageUrl && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            💡 <a href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
-                                                Click to create Google Meet
-                                            </a> (copy the link from URL bar before joining, or use Zoom/Teams link)
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="flex space-x-3 pt-4">
-                                    <Button
-                                        onClick={handleScheduleMeeting}
-                                        disabled={submitting}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                                    >
-                                        {submitting ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                        {submitting ? 'Scheduling...' : 'Schedule Meeting'}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setShowScheduleForm(false)}
-                                        className="flex-1"
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
 
                 {/* Goal Form */}
                 {showGoalForm && (

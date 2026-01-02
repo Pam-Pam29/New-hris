@@ -91,101 +91,20 @@ export function PolicyManagementSystem({ isHR = false, employeeId = 'emp-001' }:
 
     const loadPolicyData = async () => {
         try {
-            // Sample data - in real implementation, this would come from Firebase
-            const samplePolicies: Policy[] = [
-                {
-                    id: 'pol-001',
-                    title: 'Code of Conduct',
-                    description: 'Company code of conduct and ethical guidelines',
-                    content: 'This policy outlines the expected behavior and ethical standards for all employees...',
-                    category: 'General',
-                    version: '2.1',
-                    effectiveDate: new Date('2024-01-01'),
-                    requiresAcknowledgment: true,
-                    isActive: true,
-                    createdBy: 'HR Manager',
-                    createdAt: new Date('2023-12-15'),
-                    lastModified: new Date('2024-01-01'),
-                    profileStatus: {
-                        completeness: 100,
-                        status: 'approved',
-                        lastUpdated: new Date().toISOString()
-                    },
-                    tags: ['ethics', 'conduct', 'behavior'],
-                    attachments: ['code-of-conduct.pdf']
-                },
-                {
-                    id: 'pol-002',
-                    title: 'Remote Work Policy',
-                    description: 'Guidelines for remote work arrangements',
-                    content: 'This policy establishes guidelines for remote work arrangements...',
-                    category: 'Workplace',
-                    version: '1.3',
-                    effectiveDate: new Date('2024-01-15'),
-                    requiresAcknowledgment: true,
-                    isActive: true,
-                    createdBy: 'HR Manager',
-                    createdAt: new Date('2023-12-20'),
-                    lastModified: new Date('2024-01-15'),
-                    profileStatus: {
-                        completeness: 100,
-                        status: 'approved',
-                        lastUpdated: new Date().toISOString()
-                    },
-                    tags: ['remote', 'workplace', 'flexibility'],
-                    attachments: ['remote-work-guide.pdf']
-                },
-                {
-                    id: 'pol-003',
-                    title: 'Data Security Policy',
-                    description: 'Information security and data protection guidelines',
-                    content: 'This policy outlines the company\'s approach to data security...',
-                    category: 'Security',
-                    version: '1.0',
-                    effectiveDate: new Date('2024-02-01'),
-                    requiresAcknowledgment: true,
-                    isActive: true,
-                    createdBy: 'IT Manager',
-                    createdAt: new Date('2024-01-25'),
-                    lastModified: new Date('2024-02-01'),
-                    profileStatus: {
-                        completeness: 100,
-                        status: 'approved',
-                        lastUpdated: new Date().toISOString()
-                    },
-                    tags: ['security', 'data', 'privacy'],
-                    attachments: ['data-security.pdf']
-                }
-            ];
-
-            const sampleAcknowledgments: PolicyAcknowledgment[] = [
-                {
-                    id: 'ack-001',
-                    policyId: 'pol-001',
-                    employeeId: 'emp-001',
-                    employeeName: 'John Doe',
-                    acknowledgedAt: new Date('2024-01-02'),
-                    ipAddress: '192.168.1.100',
-                    userAgent: 'Mozilla/5.0...',
-                    version: '2.1'
-                },
-                {
-                    id: 'ack-002',
-                    policyId: 'pol-002',
-                    employeeId: 'emp-001',
-                    employeeName: 'John Doe',
-                    acknowledgedAt: new Date('2024-01-16'),
-                    ipAddress: '192.168.1.100',
-                    userAgent: 'Mozilla/5.0...',
-                    version: '1.3'
-                }
-            ];
-
-            setPolicies(samplePolicies);
-            setAcknowledgments(sampleAcknowledgments);
+            // Load policies from Firebase service
+            const { getPolicyService } = await import('../pages/Hr/CoreHr/PolicyManagement/services/policyService');
+            const policyService = await getPolicyService();
+            
+            const policies = await policyService.getPolicies();
+            const acknowledgments = await policyService.getPolicyAcknowledgments();
+            
+            setPolicies(policies);
+            setAcknowledgments(acknowledgments);
             setLoading(false);
         } catch (error) {
             console.error('Error loading policy data:', error);
+            setPolicies([]);
+            setAcknowledgments([]);
             setLoading(false);
         }
     };

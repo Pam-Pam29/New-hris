@@ -33,6 +33,7 @@ interface AssetFormProps {
   handleSubmit: (e: FormEvent) => void;
   sending: boolean;
   employees: { value: string; label: string }[];
+  locationOptions?: { value: string; label: string }[];
 }
 
 const assetTypeOptions = [
@@ -77,10 +78,8 @@ const conditionOptions = [
   { value: 'Poor', label: 'Poor' }
 ];
 
-const locationOptions = [
-  { value: 'Lagos Office', label: 'Lagos Office' },
-  { value: 'Abuja Office', label: 'Abuja Office' },
-  { value: 'Port Harcourt Office', label: 'Port Harcourt Office' },
+// Default location options (fallback if company locations not loaded)
+const defaultLocationOptions = [
   { value: 'Remote', label: 'Remote' }
 ];
 
@@ -89,7 +88,8 @@ export const AssetForm: React.FC<AssetFormProps> = ({
   setForm,
   handleSubmit,
   sending,
-  employees
+  employees,
+  locationOptions = defaultLocationOptions
 }) => {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();

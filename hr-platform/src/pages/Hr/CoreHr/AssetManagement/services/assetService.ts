@@ -1,7 +1,7 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, getDoc } from 'firebase/firestore';
 import { getServiceConfig, initializeFirebase } from '@/config/firebase';
 import type { Firestore } from 'firebase/firestore';
-import { Asset, AssetAssignment, MaintenanceRecord, AssetRequest, StarterKit } from '../types';
+import { Asset, AssetAssignment, MaintenanceRecord, AssetRequest, StarterKit, AssetHistoryEntry } from '../types';
 import { isFirebaseConfigured } from '@/config/firebase';
 import { vercelEmailService } from '../../../../../services/vercelEmailService';
 
@@ -120,23 +120,97 @@ export class FirebaseAssetService implements IAssetService {
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Asset : null;
   }
 
-  async createAsset(asset: Omit<Asset, 'id'>): Promise<Asset> {
+  async createAsset(asset: Omit<Asset, 'id'>, performedBy: string = 'System'): Promise<Asset> {
     const assetsRef = collection(this.db, 'assets');
     console.log('FirebaseAssetService.createAsset called with:', asset); // Add logging
+    
+    // Validate companyId is present
+    const finalCompanyId = this.companyId || asset.companyId;
+    if (!finalCompanyId) {
+      throw new Error('companyId is required for asset creation');
+    }
+    
+    const historyEntry: AssetHistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'created',
+      date: new Date().toISOString(),
+      performedBy,
+      notes: `Asset ${asset.name} added to inventory`
+    };
+    
     const docRef = await addDoc(assetsRef, {
       ...asset,
-      companyId: this.companyId || asset.companyId, // Ensure companyId is set
+      companyId: finalCompanyId, // Ensure companyId is set
+      history: [historyEntry],
       createdAt: Timestamp.now(),
     });
-    return { id: docRef.id, ...asset, companyId: this.companyId || asset.companyId };
+    console.log(`✅ Asset created with companyId: ${finalCompanyId}`);
+    return { id: docRef.id, ...asset, companyId: finalCompanyId, history: [historyEntry] };
   }
 
-  async updateAsset(id: string, asset: Partial<Asset>): Promise<Asset> {
+  async updateAsset(id: string, asset: Partial<Asset>, performedBy: string = 'System', historyNote?: string): Promise<Asset> {
     const docRef = doc(this.db, 'assets', id);
-    await updateDoc(docRef, {
+    const currentAsset = await this.getAssetById(id);
+    
+    if (!currentAsset) throw new Error('Asset not found');
+    
+    // Determine what changed for history tracking
+    let historyEntry: Omit<AssetHistoryEntry, 'id'> | null = null;
+    
+    if (asset.status && asset.status !== currentAsset.status) {
+      historyEntry = {
+        action: 'status_change',
+        date: new Date().toISOString(),
+        performedBy,
+        notes: historyNote || `Status changed from ${currentAsset.status} to ${asset.status}`,
+        oldValue: currentAsset.status,
+        newValue: asset.status
+      };
+    } else if (asset.assignedTo !== undefined) {
+      if (asset.assignedTo && asset.assignedTo !== currentAsset.assignedTo) {
+        historyEntry = {
+          action: currentAsset.assignedTo ? 'transferred' : 'assigned',
+          date: new Date().toISOString(),
+          performedBy,
+          fromEmployee: currentAsset.assignedTo,
+          toEmployee: asset.assignedTo,
+          notes: historyNote || `Asset ${currentAsset.assignedTo ? 'transferred' : 'assigned'} to ${asset.assignedTo}`
+        };
+      } else if (!asset.assignedTo && currentAsset.assignedTo) {
+        historyEntry = {
+          action: 'unassigned',
+          date: new Date().toISOString(),
+          performedBy,
+          fromEmployee: currentAsset.assignedTo,
+          notes: historyNote || `Asset unassigned from ${currentAsset.assignedTo}`
+        };
+      }
+    } else if (Object.keys(asset).length > 0) {
+      // Generic update
+      historyEntry = {
+        action: 'updated',
+        date: new Date().toISOString(),
+        performedBy,
+        notes: historyNote || 'Asset details updated'
+      };
+    }
+    
+    // Add history entry if there's a change
+    const currentHistory = currentAsset.history || [];
+    const updateData: any = {
       ...asset,
       updatedAt: Timestamp.now(),
-    });
+    };
+    
+    if (historyEntry) {
+      const newEntry: AssetHistoryEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        ...historyEntry
+      };
+      updateData.history = [...currentHistory, newEntry];
+    }
+    
+    await updateDoc(docRef, updateData);
     const updated = await this.getAssetById(id);
     if (!updated) throw new Error('Asset not found after update');
     return updated;
@@ -162,9 +236,28 @@ export class FirebaseAssetService implements IAssetService {
   // Asset Assignment
   async getAssetAssignments(): Promise<AssetAssignment[]> {
     const assignmentsRef = collection(this.db, 'asset_assignments');
-    const q = query(assignmentsRef, orderBy('assignedDate', 'desc'));
+    
+    let q;
+    if (this.companyId) {
+      try {
+        q = query(assignmentsRef, where('companyId', '==', this.companyId), orderBy('assignedDate', 'desc'));
+      } catch (error) {
+        console.warn('⚠️ Could not add companyId filter to getAssetAssignments query, filtering in memory');
+        q = query(assignmentsRef, orderBy('assignedDate', 'desc'));
+      }
+    } else {
+      q = query(assignmentsRef, orderBy('assignedDate', 'desc'));
+    }
+    
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetAssignment));
+    let assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetAssignment));
+    
+    // Filter by companyId in memory if query didn't include it
+    if (this.companyId && !q.toString().includes('companyId')) {
+      assignments = assignments.filter(assignment => assignment.companyId === this.companyId);
+    }
+    
+    return assignments;
   }
 
   async getAssetAssignmentById(id: string): Promise<AssetAssignment | null> {
@@ -174,12 +267,20 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async createAssetAssignment(assignment: Omit<AssetAssignment, 'id'>): Promise<AssetAssignment> {
+    // Validate companyId is present
+    const finalCompanyId = this.companyId || assignment.companyId;
+    if (!finalCompanyId) {
+      throw new Error('companyId is required for asset assignment creation');
+    }
+    
     const assignmentsRef = collection(this.db, 'asset_assignments');
     const docRef = await addDoc(assignmentsRef, {
       ...assignment,
+      companyId: finalCompanyId, // Ensure companyId is set
       createdAt: Timestamp.now(),
     });
-    return { id: docRef.id, ...assignment };
+    console.log(`✅ Asset assignment created with companyId: ${finalCompanyId}`);
+    return { id: docRef.id, ...assignment, companyId: finalCompanyId };
   }
 
   async updateAssetAssignment(id: string, assignment: Partial<AssetAssignment>): Promise<AssetAssignment> {
@@ -222,9 +323,28 @@ export class FirebaseAssetService implements IAssetService {
   // Maintenance Records
   async getMaintenanceRecords(): Promise<MaintenanceRecord[]> {
     const maintenanceRef = collection(this.db, 'maintenance_records');
-    const q = query(maintenanceRef, orderBy('date', 'desc'));
+    
+    let q;
+    if (this.companyId) {
+      try {
+        q = query(maintenanceRef, where('companyId', '==', this.companyId), orderBy('date', 'desc'));
+      } catch (error) {
+        console.warn('⚠️ Could not add companyId filter to getMaintenanceRecords query, filtering in memory');
+        q = query(maintenanceRef, orderBy('date', 'desc'));
+      }
+    } else {
+      q = query(maintenanceRef, orderBy('date', 'desc'));
+    }
+    
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRecord));
+    let records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRecord));
+    
+    // Filter by companyId in memory if query didn't include it
+    if (this.companyId && !q.toString().includes('companyId')) {
+      records = records.filter(record => record.companyId === this.companyId);
+    }
+    
+    return records;
   }
 
   async getMaintenanceRecordById(id: string): Promise<MaintenanceRecord | null> {
@@ -234,12 +354,20 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async createMaintenanceRecord(record: Omit<MaintenanceRecord, 'id'>): Promise<MaintenanceRecord> {
+    // Validate companyId is present
+    const finalCompanyId = this.companyId || record.companyId;
+    if (!finalCompanyId) {
+      throw new Error('companyId is required for maintenance record creation');
+    }
+    
     const maintenanceRef = collection(this.db, 'maintenance_records');
     const docRef = await addDoc(maintenanceRef, {
       ...record,
+      companyId: finalCompanyId, // Ensure companyId is set
       createdAt: Timestamp.now(),
     });
-    return { id: docRef.id, ...record };
+    console.log(`✅ Maintenance record created with companyId: ${finalCompanyId}`);
+    return { id: docRef.id, ...record, companyId: finalCompanyId };
   }
 
   async updateMaintenanceRecord(id: string, record: Partial<MaintenanceRecord>): Promise<MaintenanceRecord> {
@@ -268,6 +396,25 @@ export class FirebaseAssetService implements IAssetService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceRecord));
   }
 
+  // Helper function to add history entry to asset
+  private async addHistoryEntry(assetId: string, entry: Omit<AssetHistoryEntry, 'id'>): Promise<void> {
+    const assetRef = doc(this.db, 'assets', assetId);
+    const assetSnap = await getDoc(assetRef);
+    
+    if (!assetSnap.exists()) return;
+    
+    const assetData = assetSnap.data();
+    const currentHistory = assetData.history || [];
+    const newEntry: AssetHistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      ...entry
+    };
+    
+    await updateDoc(assetRef, {
+      history: [...currentHistory, newEntry]
+    });
+  }
+
   // Asset Requests
   async getAssetRequests(): Promise<AssetRequest[]> {
     const requestsRef = collection(this.db, 'assetRequests');
@@ -278,10 +425,50 @@ export class FirebaseAssetService implements IAssetService {
       // Filter by companyId if provided
       if (this.companyId) {
         q = query(requestsRef, where('companyId', '==', this.companyId));
+        console.log(`📋 [AssetRequests] Querying with companyId filter: ${this.companyId}`);
+      } else {
+        console.log(`📋 [AssetRequests] Querying without companyId filter`);
       }
       
       const snapshot = await getDocs(q);
       let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssetRequest));
+      
+      console.log(`📋 [AssetRequests] Fetched ${requests.length} requests from Firestore`);
+      
+      // If no results with companyId filter, try fetching all to diagnose and include requests without companyId
+      if (requests.length === 0 && this.companyId) {
+        console.log(`⚠️ [AssetRequests] No requests found with companyId filter. Checking if any requests exist...`);
+        try {
+          const allSnapshot = await getDocs(query(requestsRef));
+          const allRequests = allSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+          console.log(`📋 [AssetRequests] Found ${allRequests.length} total requests in collection`);
+          
+          if (allRequests.length > 0) {
+            console.log(`📋 [AssetRequests] Sample request companyIds:`, 
+              allRequests.slice(0, 5).map((r: any) => ({ id: r.id, companyId: r.companyId || 'MISSING' }))
+            );
+            
+            // Include requests without companyId for backward compatibility
+            const requestsWithoutCompanyId = allRequests.filter((r: any) => !r.companyId);
+            if (requestsWithoutCompanyId.length > 0) {
+              console.log(`⚠️ [AssetRequests] Found ${requestsWithoutCompanyId.length} requests without companyId - including them for backward compatibility`);
+              requests = requestsWithoutCompanyId.map((r: any) => ({
+                ...r,
+                companyId: this.companyId // Add companyId to the request object for consistency
+              })) as AssetRequest[];
+            } else {
+              console.log(`⚠️ [AssetRequests] Requests exist but none match companyId: ${this.companyId}`);
+              console.log(`💡 [AssetRequests] Possible issues:`);
+              console.log(`   1. Requests have different companyId`);
+              console.log(`   2. Need to update existing requests with correct companyId`);
+            }
+          } else {
+            console.log(`📋 [AssetRequests] No requests exist in collection at all`);
+          }
+        } catch (diagnosticError: any) {
+          console.warn(`⚠️ [AssetRequests] Could not fetch all requests for diagnosis:`, diagnosticError.message);
+        }
+      }
       
       // Sort in memory to avoid index requirement
       requests.sort((a, b) => {
@@ -308,7 +495,14 @@ export class FirebaseAssetService implements IAssetService {
           // Filter by companyId in memory if needed
           if (this.companyId) {
             const beforeFilter = requests.length;
-            requests = requests.filter(req => req.companyId === this.companyId);
+            requests = requests.filter(req => {
+              const reqCompanyId = (req as any).companyId;
+              const matches = reqCompanyId === this.companyId;
+              if (!matches && beforeFilter > 0) {
+                console.log(`   ⚠️ Request ${req.id} has companyId: ${reqCompanyId}, expected: ${this.companyId}`);
+              }
+              return matches;
+            });
             console.log(`   ✅ Filtered to ${requests.length} requests for companyId: ${this.companyId} (from ${beforeFilter} total)`);
           }
           
@@ -343,14 +537,20 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async createAssetRequest(request: Omit<AssetRequest, 'id'>): Promise<AssetRequest> {
+    // Validate companyId is present
+    const finalCompanyId = this.companyId || request.companyId;
+    if (!finalCompanyId) {
+      throw new Error('companyId is required for asset request creation');
+    }
+    
     const requestsRef = collection(this.db, 'assetRequests');
     const docRef = await addDoc(requestsRef, {
       ...request,
-      companyId: this.companyId || request.companyId, // Ensure companyId is set
+      companyId: finalCompanyId, // Ensure companyId is set
       requestedDate: Timestamp.now(),
     });
-    console.log('✅ Asset request created:', docRef.id);
-    return { id: docRef.id, ...request, companyId: this.companyId || request.companyId };
+    console.log(`✅ Asset request created with companyId: ${finalCompanyId}`, docRef.id);
+    return { id: docRef.id, ...request, companyId: finalCompanyId };
   }
 
   async updateAssetRequest(id: string, request: Partial<AssetRequest>): Promise<AssetRequest> {
@@ -453,15 +653,21 @@ export class FirebaseAssetService implements IAssetService {
   }
 
   async createStarterKit(kit: Omit<StarterKit, 'id'>): Promise<StarterKit> {
+    // Validate companyId is present
+    const finalCompanyId = this.companyId || kit.companyId;
+    if (!finalCompanyId) {
+      throw new Error('companyId is required for starter kit creation');
+    }
+    
     const kitsRef = collection(this.db, 'starterKits');
     const docRef = await addDoc(kitsRef, {
       ...kit,
-      companyId: this.companyId || kit.companyId, // Ensure companyId is set
+      companyId: finalCompanyId, // Ensure companyId is set
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
-    console.log('✅ Starter kit created:', docRef.id);
-    return { id: docRef.id, ...kit, companyId: this.companyId || kit.companyId };
+    console.log(`✅ Starter kit created with companyId: ${finalCompanyId}`, docRef.id);
+    return { id: docRef.id, ...kit, companyId: finalCompanyId };
   }
 
   async updateStarterKit(id: string, kit: Partial<StarterKit>): Promise<StarterKit> {

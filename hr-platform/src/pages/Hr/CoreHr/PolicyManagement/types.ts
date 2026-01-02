@@ -23,6 +23,7 @@ export interface Policy {
   attachments?: string[];
   department?: string[];
   applicableTo?: string[];
+  companyId?: string;
 }
 
 export interface PolicyAcknowledgment {

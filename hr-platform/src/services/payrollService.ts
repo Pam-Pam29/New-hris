@@ -4,6 +4,7 @@ import { Firestore } from 'firebase/firestore';
 // Import unified types
 export interface PayrollRecord {
     id: string;
+    companyId?: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     department: string;
@@ -67,6 +68,7 @@ export interface Deduction {
 
 export interface FinancialRequest {
     id: string;
+    companyId?: string; // Multi-tenancy: Company ID
     employeeId: string;
     employeeName: string;
     requestType: 'advance' | 'loan' | 'reimbursement' | 'allowance';
@@ -119,18 +121,18 @@ export function calculateNetPay(record: Partial<PayrollRecord>): number {
 }
 
 export interface IPayrollService {
-    getPayrollRecords(): Promise<PayrollRecord[]>;
+    getPayrollRecords(companyId?: string): Promise<PayrollRecord[]>;
     getPayrollRecord(id: string): Promise<PayrollRecord | null>;
-    getPayrollRecordsByEmployee(employeeId: string): Promise<PayrollRecord[]>;
+    getPayrollRecordsByEmployee(employeeId: string, companyId?: string): Promise<PayrollRecord[]>;
     createPayrollRecord(record: Omit<PayrollRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<string>;
     updatePayrollRecord(id: string, record: Partial<PayrollRecord>): Promise<void>;
     deletePayrollRecord(id: string): Promise<void>;
-    getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]>;
-    getPayrollRecordsByStatus(status: PayrollRecord['paymentStatus']): Promise<PayrollRecord[]>;
+    getPayrollRecordsByDepartment(department: string, companyId?: string): Promise<PayrollRecord[]>;
+    getPayrollRecordsByStatus(status: PayrollRecord['paymentStatus'], companyId?: string): Promise<PayrollRecord[]>;
 
     // Financial Requests
-    getFinancialRequests(): Promise<FinancialRequest[]>;
-    getFinancialRequestsByEmployee(employeeId: string): Promise<FinancialRequest[]>;
+    getFinancialRequests(companyId?: string): Promise<FinancialRequest[]>;
+    getFinancialRequestsByEmployee(employeeId: string, companyId?: string): Promise<FinancialRequest[]>;
     createFinancialRequest(request: Omit<FinancialRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<string>;
     updateFinancialRequest(id: string, request: Partial<FinancialRequest>): Promise<void>;
 }
@@ -138,12 +140,27 @@ export interface IPayrollService {
 export class FirebasePayrollService implements IPayrollService {
     constructor(private db: Firestore) { }
 
-    async getPayrollRecords(): Promise<PayrollRecord[]> {
+    async getPayrollRecords(companyId?: string): Promise<PayrollRecord[]> {
         try {
-            const { collection, getDocs } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const snapshot = await getDocs(payrollRef);
-            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            
+            let q: any = payrollRef;
+            if (companyId) {
+                q = query(payrollRef, where('companyId', '==', companyId));
+                console.log(`🏢 Filtering payroll records by companyId: ${companyId}`);
+            }
+            
+            const snapshot = await getDocs(q);
+            let records = snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            
+            // Filter by companyId in memory as fallback
+            if (companyId) {
+                records = records.filter(r => r.companyId === companyId);
+            }
+            
+            console.log(`📊 Loaded ${records.length} payroll records${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return records;
         } catch (error) {
             console.error('Error fetching payroll records:', error);
             throw error;
@@ -167,17 +184,48 @@ export class FirebasePayrollService implements IPayrollService {
         }
     }
 
-    async getPayrollRecordsByEmployee(employeeId: string): Promise<PayrollRecord[]> {
+    async getPayrollRecordsByEmployee(employeeId: string, companyId?: string): Promise<PayrollRecord[]> {
         try {
             const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const q = query(
-                payrollRef,
-                where('employeeId', '==', employeeId),
-                orderBy('payPeriod.payDate', 'desc')
-            );
+            
+            let q: any;
+            if (companyId) {
+                try {
+                    q = query(
+                        payrollRef,
+                        where('companyId', '==', companyId),
+                        where('employeeId', '==', employeeId),
+                        orderBy('payPeriod.payDate', 'desc')
+                    );
+                    console.log(`🏢 Filtering employee payroll records by companyId: ${companyId}`);
+                } catch (indexError) {
+                    // If composite index doesn't exist, filter in memory
+                    console.warn('Could not create composite query, filtering in memory');
+                    q = query(
+                        payrollRef,
+                        where('employeeId', '==', employeeId),
+                        orderBy('payPeriod.payDate', 'desc')
+                    );
+                }
+            } else {
+                q = query(
+                    payrollRef,
+                    where('employeeId', '==', employeeId),
+                    orderBy('payPeriod.payDate', 'desc')
+                );
+            }
+            
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            let records = snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                records = records.filter(r => r.companyId === companyId);
+            }
+            
+            console.log(`📊 Loaded ${records.length} payroll records for employee ${employeeId}${companyId ? ` (company ${companyId})` : ''}`);
+            return records;
         } catch (error) {
             console.error('Error fetching employee payroll records:', error);
             throw error;
@@ -256,26 +304,78 @@ export class FirebasePayrollService implements IPayrollService {
         }
     }
 
-    async getPayrollRecordsByDepartment(department: string): Promise<PayrollRecord[]> {
+    async getPayrollRecordsByDepartment(department: string, companyId?: string): Promise<PayrollRecord[]> {
         try {
             const { collection, query, where, getDocs } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const q = query(payrollRef, where('department', '==', department));
+            
+            let q: any;
+            if (companyId) {
+                try {
+                    q = query(
+                        payrollRef,
+                        where('companyId', '==', companyId),
+                        where('department', '==', department)
+                    );
+                    console.log(`🏢 Filtering payroll records by department ${department} and companyId: ${companyId}`);
+                } catch (indexError) {
+                    // If composite index doesn't exist, filter in memory
+                    console.warn('Could not create composite query, filtering in memory');
+                    q = query(payrollRef, where('department', '==', department));
+                }
+            } else {
+                q = query(payrollRef, where('department', '==', department));
+            }
+            
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            let records = snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                records = records.filter(r => r.companyId === companyId);
+            }
+            
+            console.log(`📊 Loaded ${records.length} payroll records for department ${department}${companyId ? ` (company ${companyId})` : ''}`);
+            return records;
         } catch (error) {
             console.error('Error getting payroll records by department:', error);
             throw error;
         }
     }
 
-    async getPayrollRecordsByStatus(status: PayrollRecord['paymentStatus']): Promise<PayrollRecord[]> {
+    async getPayrollRecordsByStatus(status: PayrollRecord['paymentStatus'], companyId?: string): Promise<PayrollRecord[]> {
         try {
             const { collection, query, where, getDocs } = await import('firebase/firestore');
             const payrollRef = collection(this.db, 'payroll_records');
-            const q = query(payrollRef, where('paymentStatus', '==', status));
+            
+            let q: any;
+            if (companyId) {
+                try {
+                    q = query(
+                        payrollRef,
+                        where('companyId', '==', companyId),
+                        where('paymentStatus', '==', status)
+                    );
+                    console.log(`🏢 Filtering payroll records by status ${status} and companyId: ${companyId}`);
+                } catch (indexError) {
+                    // If composite index doesn't exist, filter in memory
+                    console.warn('Could not create composite query, filtering in memory');
+                    q = query(payrollRef, where('paymentStatus', '==', status));
+                }
+            } else {
+                q = query(payrollRef, where('paymentStatus', '==', status));
+            }
+            
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            let records = snapshot.docs.map(doc => this.docToPayrollRecord(doc));
+            
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                records = records.filter(r => r.companyId === companyId);
+            }
+            
+            console.log(`📊 Loaded ${records.length} payroll records with status ${status}${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return records;
         } catch (error) {
             console.error('Error getting payroll records by status:', error);
             throw error;
@@ -283,34 +383,73 @@ export class FirebasePayrollService implements IPayrollService {
     }
 
     // Financial Requests
-    async getFinancialRequests(): Promise<FinancialRequest[]> {
+    async getFinancialRequests(companyId?: string): Promise<FinancialRequest[]> {
         try {
-            const { collection, getDocs } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const requestsRef = collection(this.db, 'financial_requests');
-            const snapshot = await getDocs(requestsRef);
-            return snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            
+            let q: any = requestsRef;
+            if (companyId) {
+                q = query(requestsRef, where('companyId', '==', companyId));
+                console.log(`🏢 Filtering financial requests by companyId: ${companyId}`);
+            }
+            
+            const snapshot = await getDocs(q);
+            let requests = snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            
+            // Filter by companyId in memory as fallback
+            if (companyId) {
+                requests = requests.filter(r => r.companyId === companyId);
+            }
+            
+            console.log(`💰 Loaded ${requests.length} financial requests${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
+            return requests;
         } catch (error) {
             console.error('Error fetching financial requests:', error);
             throw error;
         }
     }
 
-    async getFinancialRequestsByEmployee(employeeId: string): Promise<FinancialRequest[]> {
+    async getFinancialRequestsByEmployee(employeeId: string, companyId?: string): Promise<FinancialRequest[]> {
         try {
             const { collection, query, where, getDocs } = await import('firebase/firestore');
             const requestsRef = collection(this.db, 'financial_requests');
-            const q = query(
-                requestsRef,
-                where('employeeId', '==', employeeId)
-            );
+            
+            let q: any;
+            if (companyId) {
+                try {
+                    q = query(
+                        requestsRef,
+                        where('companyId', '==', companyId),
+                        where('employeeId', '==', employeeId)
+                    );
+                    console.log(`🏢 Filtering financial requests by employee ${employeeId} and companyId: ${companyId}`);
+                } catch (indexError) {
+                    // If composite index doesn't exist, filter in memory
+                    console.warn('Could not create composite query, filtering in memory');
+                    q = query(requestsRef, where('employeeId', '==', employeeId));
+                }
+            } else {
+                q = query(requestsRef, where('employeeId', '==', employeeId));
+            }
+            
             const snapshot = await getDocs(q);
             // Sort in memory instead of using Firestore orderBy to avoid index requirement
-            const requests = snapshot.docs.map(doc => this.docToFinancialRequest(doc));
-            return requests.sort((a, b) => {
+            let requests = snapshot.docs.map(doc => this.docToFinancialRequest(doc));
+            
+            // Filter by companyId in memory if not already filtered (fallback)
+            if (companyId) {
+                requests = requests.filter(r => r.companyId === companyId);
+            }
+            
+            requests.sort((a, b) => {
                 const dateA = new Date(a.createdAt).getTime();
                 const dateB = new Date(b.createdAt).getTime();
                 return dateB - dateA; // Descending order (newest first)
             });
+            
+            console.log(`💰 Loaded ${requests.length} financial requests for employee ${employeeId}${companyId ? ` (company ${companyId})` : ''}`);
+            return requests;
         } catch (error) {
             console.error('Error fetching employee financial requests:', error);
             throw error;

@@ -68,10 +68,22 @@ export class FirebaseEmployeeService implements IEmployeeService {
           }
         }
 
+        const employeeId = data.employeeId || doc.id;
+        
+        // Debug log for employee ID resolution
+        if (index < 3) {
+          console.log(`🔍 [EmployeeService] Employee ${index + 1}:`, {
+            firebaseId: doc.id,
+            employeeId: employeeId,
+            dataEmployeeId: data.employeeId,
+            name: name || 'Unknown'
+          });
+        }
+        
         return {
           id: this.hashStringToNumber(doc.id) + index,
           firebaseId: doc.id, // Keep the original Firebase ID for operations
-          employeeId: data.employeeId || doc.id,
+          employeeId: employeeId,
           companyId: data.companyId, // ← Multi-tenancy: Company ID
           name: name || 'Unknown',
           role: position,

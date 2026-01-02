@@ -167,7 +167,8 @@ export default function EmployeeDirectory() {
     name: '',
     email: '',
     role: '',
-    department: ''
+    department: '',
+    dateOfBirth: ''
   });
 
   // Department options state
@@ -467,7 +468,7 @@ export default function EmployeeDirectory() {
   const handleAddEmployee = async () => {
     try {
       console.log('handleAddEmployee called', { formData, dataFlowService });
-      if (formData.name && formData.role && formData.department && dataFlowService) {
+      if (formData.name && formData.role && formData.department && formData.dateOfBirth && dataFlowService) {
         console.log('Creating employee with data:', formData);
 
         // Auto-generate employee ID
@@ -501,6 +502,7 @@ export default function EmployeeDirectory() {
           email: formData.email || '',
           role: formData.role,
           department: formData.department,
+          dateOfBirth: formData.dateOfBirth,
           companyId: companyId!
         };
 
@@ -531,8 +533,10 @@ export default function EmployeeDirectory() {
           name: formData.name,
           role: formData.role,
           department: formData.department,
+          dateOfBirth: formData.dateOfBirth,
           dataFlowService: !!dataFlowService
         });
+        alert('Please fill in all required fields including Date of Birth.');
       }
     } catch (error) {
       console.error('Error adding employee:', error);
@@ -737,13 +741,31 @@ export default function EmployeeDirectory() {
       console.log('📄 [HR] Creating employee with edited contract');
 
       // Create employee profile
+      const dobDate = pendingEmployeeData.dateOfBirth ? new Date(pendingEmployeeData.dateOfBirth) : null;
+      
+      if (!dobDate || isNaN(dobDate.getTime())) {
+        console.error('❌ Invalid Date of Birth provided:', pendingEmployeeData.dateOfBirth);
+        alert('Invalid Date of Birth. Please ensure a valid date is selected.');
+        return;
+      }
+
+      console.log('📅 [HR] Saving Date of Birth to Firebase:', {
+        employeeId: pendingEmployeeData.employeeId,
+        dateOfBirth: pendingEmployeeData.dateOfBirth,
+        parsedDate: dobDate,
+        isoString: dobDate.toISOString()
+      });
+
       const newProfile = await dataFlowService.updateEmployeeProfile(pendingEmployeeData.employeeId, {
         companyId: pendingEmployeeData.companyId,
         employeeId: pendingEmployeeData.employeeId,
+        // Save DOB in both new structure and legacy field for compatibility
+        dob: dobDate.toISOString().split('T')[0], // Legacy field (YYYY-MM-DD format)
+        dateOfBirth: dobDate.toISOString().split('T')[0], // Legacy dateOfBirth field
         personalInfo: {
           firstName: pendingEmployeeData.firstName,
           lastName: pendingEmployeeData.lastName,
-          dateOfBirth: new Date()
+          dateOfBirth: dobDate // New structure
         },
         contactInfo: {
           personalEmail: pendingEmployeeData.email,
@@ -1573,7 +1595,7 @@ export default function EmployeeDirectory() {
 
       {/* Add Employee Dialog */}
       {showAddDialog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in" style={{ position: 'fixed' }}>
           <div className="card-modern w-full max-w-md m-4 animate-slide-in">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1586,7 +1608,7 @@ export default function EmployeeDirectory() {
                 <button
                   onClick={() => {
                     setShowAddDialog(false);
-                    setFormData({ name: '', email: '', role: '', department: '' });
+                    setFormData({ name: '', email: '', role: '', department: '', dateOfBirth: '' });
                   }}
                   className="p-2 hover:bg-muted/50 rounded-lg transition-colors"
                 >
@@ -1657,13 +1679,28 @@ export default function EmployeeDirectory() {
                     <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Date of Birth *</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                      required
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6 pt-4 border-t border-border">
                 <button
                   onClick={() => {
                     setShowAddDialog(false);
-                    setFormData({ name: '', email: '', role: '', department: '' });
+                    setFormData({ name: '', email: '', role: '', department: '', dateOfBirth: '' });
                   }}
                   className="flex-1 px-4 py-2 border border-input rounded-lg hover:bg-muted/50 transition-colors"
                 >
@@ -1686,7 +1723,7 @@ export default function EmployeeDirectory() {
 
       {/* Contract Editor Dialog */}
       {showContractDialog && (pendingEmployeeData || selectedEmployee) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in" style={{ position: 'fixed' }}>
           <div className="card-modern w-full max-w-4xl m-4 animate-slide-in max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1958,7 +1995,7 @@ export default function EmployeeDirectory() {
 
       {/* Setup Link Dialog */}
       {showSetupLinkDialog && setupLink && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in" style={{ position: 'fixed' }}>
           <div className="card-modern w-full max-w-2xl m-4 animate-slide-in">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -2028,7 +2065,7 @@ export default function EmployeeDirectory() {
 
       {/* Edit Employee Dialog */}
       {showEditDialog && selectedEmployee && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in" style={{ position: 'fixed' }}>
           <div className="card-modern w-full max-w-md m-4 animate-slide-in">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -2140,7 +2177,7 @@ export default function EmployeeDirectory() {
 
       {/* View Employee Dialog */}
       {showViewDialog && selectedViewEmployee && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
           <div className="bg-background rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-border">
               <div className="flex items-center justify-between mb-4">

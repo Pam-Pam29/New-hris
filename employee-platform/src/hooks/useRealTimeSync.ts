@@ -131,16 +131,18 @@ export function useLeaveTypes(companyId?: string) {
     });
 }
 
-export function usePolicies() {
+export function usePolicies(companyId?: string) {
     return useRealTimeSync('policies', {
+        companyId, // ← Add company filter for multi-tenancy
         limit: 50
         // Removed orderBy to avoid index requirements
     });
 }
 
-export function usePerformanceGoals(employeeId?: string) {
+export function usePerformanceGoals(employeeId?: string, companyId?: string) {
     return useRealTimeSync('performanceGoals', {
         employeeId,
+        companyId, // ← Add company filter for multi-tenancy
         limit: 30
         // Removed orderBy to avoid index requirements
     });
@@ -154,17 +156,19 @@ export function useAttendance(employeeId?: string) {
     });
 }
 
-export function usePerformanceMeetings(employeeId?: string) {
+export function usePerformanceMeetings(employeeId?: string, companyId?: string) {
     return useRealTimeSync('performanceMeetings', {
         employeeId,
+        companyId, // ← Add company filter for multi-tenancy
         limit: 50
         // Removed orderBy to avoid index requirements
     });
 }
 
-export function usePerformanceReviews(employeeId?: string) {
+export function usePerformanceReviews(employeeId?: string, companyId?: string) {
     return useRealTimeSync('performanceReviews', {
         employeeId,
+        companyId, // ← Add company filter for multi-tenancy
         limit: 50
         // Removed orderBy to avoid index requirements
     });

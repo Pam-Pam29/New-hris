@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { emailService } from '../../../services/emailService';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -89,6 +90,9 @@ const SettingsPage: React.FC = () => {
     });
     const [loadingNotifications, setLoadingNotifications] = useState(false);
     const [savingNotifications, setSavingNotifications] = useState(false);
+    const [sendingTestEmail, setSendingTestEmail] = useState(false);
+    const [testEmailOutcome, setTestEmailOutcome] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
+
 
     // Security state
     const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -375,6 +379,58 @@ const SettingsPage: React.FC = () => {
             });
         } finally {
             setSavingNotifications(false);
+        }
+    };
+
+    const handleSendTestEmail = async () => {
+        const targetEmail = userProfile.email || '';
+
+        if (!targetEmail) {
+            toast({
+                title: 'No email on profile',
+                description: 'Please update your profile email before sending a test message.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        setSendingTestEmail(true);
+        setTestEmailOutcome(null);
+        try {
+            const success = await emailService.sendTestEmail(targetEmail);
+            if (success) {
+                setTestEmailOutcome({
+                    status: 'success',
+                    message: `Test email sent successfully to ${targetEmail}`
+                });
+                toast({
+                    title: 'Email sent',
+                    description: `We just delivered a test email to ${targetEmail}.`
+                });
+            } else {
+                setTestEmailOutcome({
+                    status: 'error',
+                    message: 'The email service responded without success. Check server logs for details.'
+                });
+                toast({
+                    title: 'Email not sent',
+                    description: 'The email service did not confirm delivery. Please review the logs.',
+                    variant: 'destructive'
+                });
+            }
+        } catch (error: any) {
+            console.error('Error sending test email:', error);
+            setTestEmailOutcome({
+                status: 'error',
+                message: error?.message || 'Failed to send test email.'
+            });
+            toast({
+                title: 'Email failed',
+                description: error?.message || 'Failed to send test email. Please try again.',
+                variant: 'destructive'
+            });
+        } finally {
+            setSendingTestEmail(false);
         }
     };
 
@@ -699,6 +755,51 @@ const SettingsPage: React.FC = () => {
                                         </Button>
                                     </>
                                 )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Mail className="w-5 h-5" />
+                                    Email Delivery Test
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Verify that the configured email service is working by sending a test message to your profile email (
+                                    <span className="font-medium">{userProfile.email || 'not set'}</span>).
+                                </p>
+
+                                {testEmailOutcome && (
+                                    <Alert variant={testEmailOutcome.status === 'success' ? 'default' : 'destructive'}>
+                                        {testEmailOutcome.status === 'success' ? (
+                                            <CheckCircle className="h-4 w-4" />
+                                        ) : (
+                                            <AlertCircle className="h-4 w-4" />
+                                        )}
+                                        <AlertDescription>{testEmailOutcome.message}</AlertDescription>
+                                    </Alert>
+                                )}
+
+                                <Button
+                                    type="button"
+                                    onClick={handleSendTestEmail}
+                                    disabled={sendingTestEmail}
+                                    className="w-full md:w-auto"
+                                >
+                                    {sendingTestEmail ? (
+                                        <>
+                                            <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mail className="w-4 h-4 mr-2" />
+                                            Send Test Email
+                                        </>
+                                    )}
+                                </Button>
                             </CardContent>
                         </Card>
 

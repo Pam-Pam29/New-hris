@@ -48,9 +48,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     if (expiresAt > new Date()) {
                         console.log('✅ [Auth] Found valid session, loading employee:', sessionData.employeeId);
 
+                        // Get company context from URL to verify we're loading the right employee
+                        const urlPath = window.location.pathname;
+                        const companySlugMatch = urlPath.match(/\/employee\/([^\/]+)/);
+                        const companySlug = companySlugMatch ? companySlugMatch[1] : null;
+                        
                         // Load employee data
                         const employeeRef = doc(db, 'employees', sessionData.employeeId);
                         const employeeDoc = await getDoc(employeeRef);
+
+                        if (employeeDoc.exists()) {
+                            const employeeData = employeeDoc.data();
+                            
+                            // Verify company context matches
+                            if (companySlug) {
+                                // Get company ID from slug
+                                const companiesRef = collection(db, 'companies');
+                                const companyQuery = query(companiesRef, where('slug', '==', companySlug));
+                                const companySnapshot = await getDocs(companyQuery);
+                                
+                                if (!companySnapshot.empty) {
+                                    const companyId = companySnapshot.docs[0].id;
+                                    
+                                    // Check if employee belongs to this company
+                                    if (employeeData.companyId !== companyId) {
+                                        console.warn(`⚠️ [Auth] Session employee (${sessionData.employeeId}) doesn't match company context (${companySlug}). Clearing session.`);
+                                        localStorage.removeItem('employeeSession');
+                                        setLoading(false);
+                                        return;
+                                    }
+                                }
+                            }
+                            
+                            // If companyId in session doesn't match employee's companyId, clear session
+                            if (sessionData.companyId && employeeData.companyId !== sessionData.companyId) {
+                                console.warn(`⚠️ [Auth] Session company mismatch. Clearing session.`);
+                                localStorage.removeItem('employeeSession');
+                                setLoading(false);
+                                return;
+                            }
+                        }
 
                         if (employeeDoc.exists()) {
                             const data = employeeDoc.data();
@@ -63,7 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                                 lastName: data.personalInfo?.lastName || '',
                                 role: data.workInfo?.position || '',
                                 department: data.workInfo?.department || '',
-                                onboardingStatus: 'completed', // TEMPORARILY SET TO COMPLETED FOR TESTING
+                                onboardingStatus: data.onboardingStatus || data.onboardingProgress?.isComplete ? 'completed' : (data.onboardingProgress?.currentStep ? 'in_progress' : 'not_started'),
                                 profileCompleteness: data.profileStatus?.completeness || 0
                             });
                             console.log('✅ [Auth] Employee loaded from session');
@@ -103,14 +140,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 console.log('✅ [Auth] Firebase Auth successful:', userCredential.user.uid);
 
                 // Find employee by Firebase UID or email
+                // IMPORTANT: Support same email across multiple companies
                 const employeesRef = collection(db, 'employees');
+                
+                // First, try to find by Firebase UID (most reliable)
                 let q = query(employeesRef, where('auth.firebaseUid', '==', userCredential.user.uid));
                 let snapshot = await getDocs(q);
 
-                // If not found by UID, try by email
+                // If multiple records found (same email, different companies), filter by companyId if available
+                if (snapshot.size > 1) {
+                    console.log(`ℹ️ [Auth] Found ${snapshot.size} employee records for this email (multi-company). Filtering by company context...`);
+                    
+                    // Try to get company context from URL or localStorage
+                    const urlPath = window.location.pathname;
+                    const companySlugMatch = urlPath.match(/\/employee\/([^\/]+)/);
+                    const companySlug = companySlugMatch ? companySlugMatch[1] : null;
+                    
+                    // If we have company context, prefer that company's employee record
+                    if (companySlug) {
+                        // Try to find company by slug and filter employees
+                        const companiesRef = collection(db, 'companies');
+                        const companyQuery = query(companiesRef, where('slug', '==', companySlug));
+                        const companySnapshot = await getDocs(companyQuery);
+                        
+                        if (!companySnapshot.empty) {
+                            const companyId = companySnapshot.docs[0].id;
+                            const filteredDocs = snapshot.docs.filter(doc => doc.data().companyId === companyId);
+                            if (filteredDocs.length > 0) {
+                                snapshot = { docs: filteredDocs, empty: false, size: filteredDocs.length } as any;
+                                console.log(`✅ [Auth] Found employee record for company: ${companyId}`);
+                            }
+                        }
+                    }
+                }
+
+                // If still not found by UID, try by email (but this might return multiple companies)
                 if (snapshot.empty) {
                     q = query(employeesRef, where('contactInfo.workEmail', '==', email));
                     snapshot = await getDocs(q);
+                    
+                    // If multiple found, try to filter by company context
+                    if (snapshot.size > 1) {
+                        const urlPath = window.location.pathname;
+                        const companySlugMatch = urlPath.match(/\/employee\/([^\/]+)/);
+                        const companySlug = companySlugMatch ? companySlugMatch[1] : null;
+                        
+                        if (companySlug) {
+                            const companiesRef = collection(db, 'companies');
+                            const companyQuery = query(companiesRef, where('slug', '==', companySlug));
+                            const companySnapshot = await getDocs(companyQuery);
+                            
+                            if (!companySnapshot.empty) {
+                                const companyId = companySnapshot.docs[0].id;
+                                const filteredDocs = snapshot.docs.filter(doc => doc.data().companyId === companyId);
+                                if (filteredDocs.length > 0) {
+                                    snapshot = { docs: filteredDocs, empty: false, size: filteredDocs.length } as any;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (snapshot.empty) {
@@ -120,6 +208,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
                 employeeDoc = snapshot.docs[0];
                 employeeData = employeeDoc.data();
+                
+                // Log if this email is used in multiple companies
+                if (snapshot.size > 1) {
+                    console.log(`ℹ️ [Auth] This email is registered in ${snapshot.size} companies. Using record for company: ${employeeData.companyId}`);
+                }
 
                 console.log('✅ [Auth] Employee found:', employeeData.employeeId);
 

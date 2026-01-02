@@ -19,7 +19,17 @@ class VercelEmailService {
 
     constructor() {
         // Use the current deployed HR platform URL for API calls
-        this.baseUrl = window.location.origin;
+        // In local development, use localhost with the dev server port
+        // In production, use the actual origin
+        if (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+            // Local development - use the current origin (Vite dev server)
+            // Note: For API routes to work locally, you need to run `vercel dev` instead of `npm run dev`
+            this.baseUrl = window.location.origin;
+            console.log('🔧 [Email Service] Using local development URL:', this.baseUrl);
+        } else {
+            // Production - use the actual deployed URL
+            this.baseUrl = window.location.origin;
+        }
     }
 
     async sendEmail(emailData: EmailData): Promise<{ success: boolean; error?: string }> {
@@ -53,7 +63,8 @@ class VercelEmailService {
         try {
             console.log('📧 [Vercel HR Email] Sending HR email:', {
                 type: hrEmailData.emailType,
-                to: hrEmailData.recipient.email
+                to: hrEmailData.recipient.email,
+                baseUrl: this.baseUrl
             });
 
             const response = await fetch(`${this.baseUrl}/api/send-hr-email`, {
@@ -64,18 +75,50 @@ class VercelEmailService {
                 body: JSON.stringify(hrEmailData),
             });
 
-            const result = await response.json();
-
-            if (!response.ok) {
-                console.error('❌ [Vercel HR Email] API error:', result);
-                return { success: false, error: result.error || 'Failed to send HR email' };
+            // Handle 404 - API route not found (common in local Vite dev)
+            if (response.status === 404) {
+                console.warn('⚠️ [Vercel HR Email] API route not found (404). This is normal when running `npm run dev`.');
+                console.warn('💡 To test emails locally, run `vercel dev` instead of `npm run dev`');
+                console.log('📧 [Email] Would have sent:', {
+                    type: hrEmailData.emailType,
+                    to: hrEmailData.recipient.email
+                });
+                return { 
+                    success: false, 
+                    error: 'Email API not available in local development. Run `vercel dev` to test emails, or deploy to production.' 
+                };
             }
 
+            // Handle other errors
+            if (!response.ok) {
+                let errorMessage = 'Failed to send HR email';
+                try {
+                    const result = await response.json();
+                    errorMessage = result.error || errorMessage;
+                    console.error('❌ [Vercel HR Email] API error:', result);
+                } catch (e) {
+                    const errorText = await response.text();
+                    console.error('❌ [Vercel HR Email] API error (non-JSON):', errorText);
+                    errorMessage = errorText || errorMessage;
+                }
+                return { success: false, error: errorMessage };
+            }
+
+            const result = await response.json();
             console.log('✅ [Vercel HR Email] HR email sent successfully:', result);
             return { success: true };
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ [Vercel HR Email] Network error:', error);
-            return { success: false, error: 'Network error occurred' };
+            
+            // Provide helpful error message
+            if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+                return { 
+                    success: false, 
+                    error: 'Cannot connect to email API. Make sure you\'re running `vercel dev` for local development, or the API is deployed in production.' 
+                };
+            }
+            
+            return { success: false, error: error.message || 'Network error occurred' };
         }
     }
 

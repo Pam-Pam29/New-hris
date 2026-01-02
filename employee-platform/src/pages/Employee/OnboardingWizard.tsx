@@ -86,26 +86,93 @@ const OnboardingWizard: React.FC = () => {
         try {
             console.log('📄 [Onboarding] Creating default contract for:', employeeId);
 
-            // Import contract service
+            // Import contract service and Firestore
             const { contractService } = await import('./services/contractService');
+            const { doc, getDoc } = await import('firebase/firestore');
+            const { db } = await import('../../config/firebase');
 
             // Check if contract already exists
             const existingContract = await contractService.getEmployeeContract(employeeId);
+            
+            // If contract exists but has default/wrong data, we'll update it below
+            // Only skip if contract exists AND has correct data (not default values)
+            if (existingContract && 
+                existingContract.position !== 'Software Developer' && 
+                existingContract.department !== 'Engineering' &&
+                existingContract.terms.salary !== 500000) {
+                console.log('✅ [Onboarding] Contract already exists with correct data');
+                return;
+            }
+            
             if (existingContract) {
-                console.log('✅ [Onboarding] Contract already exists');
+                console.log('⚠️ [Onboarding] Contract exists but has default/wrong data. Will update with correct employee data.');
+            }
+
+            // Fetch actual employee data to use in contract
+            const employeeRef = doc(db, 'employees', employeeId);
+            const employeeDoc = await getDoc(employeeRef);
+            
+            let position = 'Employee';
+            let department = 'General';
+            let salary = 0;
+            let currency = 'NGN';
+            let hireDate = new Date();
+            let workingHours = '40 hours per week, Monday to Friday';
+            let probationPeriod = 3;
+
+            if (employeeDoc.exists()) {
+                const employeeData = employeeDoc.data();
+                
+                // Get position from workInfo or role
+                position = employeeData.workInfo?.position || 
+                          employeeData.role || 
+                          employeeData.position || 
+                          'Employee';
+                
+                // Get department from workInfo or department field
+                department = employeeData.workInfo?.department || 
+                            employeeData.department || 
+                            'General';
+                
+                // Get salary from workInfo.salary
+                if (employeeData.workInfo?.salary) {
+                    salary = employeeData.workInfo.salary.baseSalary || 
+                            employeeData.workInfo.salary || 
+                            0;
+                    currency = employeeData.workInfo.salary.currency || 'NGN';
+                }
+                
+                // Get hire date
+                if (employeeData.workInfo?.hireDate) {
+                    hireDate = employeeData.workInfo.hireDate.toDate 
+                        ? employeeData.workInfo.hireDate.toDate() 
+                        : new Date(employeeData.workInfo.hireDate);
+                } else if (employeeData.dateStarted) {
+                    hireDate = new Date(employeeData.dateStarted);
+                }
+                
+                // Get working hours and schedule
+                if (employeeData.workInfo?.workSchedule) {
+                    workingHours = employeeData.workInfo.workSchedule;
+                }
+            }
+
+            // Create contract with actual employee data
+            if (!companyId) {
+                console.error('❌ [Onboarding] Company ID is required for contract creation');
                 return;
             }
 
-            // Create default contract
             const defaultContract = {
                 id: employeeId,
                 employeeId: employeeId,
-                position: 'Software Developer', // Default position
-                department: 'Engineering',
-                effectiveDate: new Date(),
+                companyId: companyId, // Ensure companyId is included
+                position: position,
+                department: department,
+                effectiveDate: hireDate,
                 terms: {
-                    salary: 500000, // Default salary in NGN
-                    currency: 'NGN',
+                    salary: salary || 0,
+                    currency: currency,
                     benefits: [
                         'Health Insurance',
                         'Annual Leave (21 days)',
@@ -114,17 +181,45 @@ const OnboardingWizard: React.FC = () => {
                         'Professional Development',
                         'Remote Work Allowance'
                     ],
-                    workingHours: '40 hours per week, Monday to Friday',
-                    probationPeriod: 3
+                    workingHours: workingHours,
+                    probationPeriod: probationPeriod
                 },
                 documentUrl: '', // Will be populated when HR uploads actual contract
-                status: 'pending_review' as const,
+                status: 'draft' as const,
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
 
-            await contractService.createContract(defaultContract);
-            console.log('✅ [Onboarding] Default contract created');
+            // If contract exists with wrong data, update it; otherwise create new
+            if (existingContract) {
+                const { updateDoc, serverTimestamp } = await import('firebase/firestore');
+                const { doc: docFn } = await import('firebase/firestore');
+                const contractRef = docFn(db, 'contracts', employeeId);
+                await updateDoc(contractRef, {
+                    position: position,
+                    department: department,
+                    effectiveDate: hireDate,
+                    'terms.salary': salary || 0,
+                    'terms.currency': currency,
+                    'terms.workingHours': workingHours,
+                    status: 'draft',
+                    updatedAt: serverTimestamp()
+                });
+                console.log('✅ [Onboarding] Contract updated with correct employee data:', {
+                    position,
+                    department,
+                    salary,
+                    currency
+                });
+            } else {
+                await contractService.createContract(defaultContract);
+                console.log('✅ [Onboarding] Default contract created with employee data:', {
+                    position,
+                    department,
+                    salary,
+                    currency
+                });
+            }
 
         } catch (error) {
             console.error('❌ [Onboarding] Error creating default contract:', error);

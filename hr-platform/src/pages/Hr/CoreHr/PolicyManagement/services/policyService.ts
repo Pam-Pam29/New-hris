@@ -6,7 +6,7 @@ import { isFirebaseConfigured } from '../../../../../config/firebase';
 
 export interface IPolicyService {
   // Policy Management
-  getPolicies(): Promise<Policy[]>;
+  getPolicies(companyId?: string): Promise<Policy[]>;
   getPolicyById(id: string): Promise<Policy | null>;
   createPolicy(policy: Omit<Policy, 'id'>): Promise<Policy>;
   updatePolicy(id: string, policy: Partial<Policy>): Promise<Policy>;
@@ -16,7 +16,7 @@ export interface IPolicyService {
   getPoliciesByStatus(status: Policy['status']): Promise<Policy[]>;
 
   // Policy Acknowledgments
-  getPolicyAcknowledgments(): Promise<PolicyAcknowledgment[]>;
+  getPolicyAcknowledgments(companyId?: string): Promise<PolicyAcknowledgment[]>;
   getPolicyAcknowledgmentById(id: string): Promise<PolicyAcknowledgment | null>;
   createPolicyAcknowledgment(acknowledgment: Omit<PolicyAcknowledgment, 'id'>): Promise<PolicyAcknowledgment>;
   updatePolicyAcknowledgment(id: string, acknowledgment: Partial<PolicyAcknowledgment>): Promise<PolicyAcknowledgment>;
@@ -47,9 +47,16 @@ export class FirebasePolicyService implements IPolicyService {
     this.db = db;
   }
   // Policy Management
-  async getPolicies(): Promise<Policy[]> {
+  async getPolicies(companyId?: string): Promise<Policy[]> {
     const policiesRef = collection(this.db, 'policies');
-    const q = query(policiesRef, orderBy('createdDate', 'desc'));
+    let q: any;
+    
+    if (companyId) {
+      q = query(policiesRef, where('companyId', '==', companyId), orderBy('createdDate', 'desc'));
+    } else {
+      q = query(policiesRef, orderBy('createdDate', 'desc'));
+    }
+    
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Policy));
   }
@@ -121,11 +128,18 @@ export class FirebasePolicyService implements IPolicyService {
   }
 
   // Policy Acknowledgments
-  async getPolicyAcknowledgments(): Promise<PolicyAcknowledgment[]> {
+  async getPolicyAcknowledgments(companyId?: string): Promise<PolicyAcknowledgment[]> {
     const acknowledgementsRef = collection(this.db, 'policyAcknowledgments');
-    const snapshot = await getDocs(acknowledgementsRef);
+    
+    let q = query(acknowledgementsRef);
+    if (companyId) {
+      q = query(acknowledgementsRef, where('companyId', '==', companyId));
+      console.log(`🏢 Filtering policy acknowledgments by companyId: ${companyId}`);
+    }
+    
+    const snapshot = await getDocs(q);
     const acks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PolicyAcknowledgment));
-    console.log('📋 Loaded acknowledgments from Firebase:', acks.length, acks);
+    console.log(`📋 Loaded ${acks.length} acknowledgments from Firebase${companyId ? ` for company ${companyId}` : ' (all companies)'}`);
     return acks;
   }
 

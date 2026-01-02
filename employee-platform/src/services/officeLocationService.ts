@@ -4,6 +4,7 @@ import {
     getDoc,
     getDocs,
     query,
+    where,
     limit,
     Firestore
 } from 'firebase/firestore';
@@ -11,6 +12,7 @@ import { getServiceConfig, initializeFirebase } from '../config/firebase';
 
 export interface OfficeLocation {
     id: string;
+    companyId: string;
     name: string;
     address: string;
     latitude: number;
@@ -22,8 +24,8 @@ export interface OfficeLocation {
 }
 
 export interface IOfficeLocationService {
-    getOfficeLocations(): Promise<OfficeLocation[]>;
-    getDefaultOfficeLocation(): Promise<OfficeLocation | null>;
+    getOfficeLocations(companyId?: string): Promise<OfficeLocation[]>;
+    getDefaultOfficeLocation(companyId?: string): Promise<OfficeLocation | null>;
 }
 
 export class FirebaseOfficeLocationService implements IOfficeLocationService {
@@ -33,22 +35,37 @@ export class FirebaseOfficeLocationService implements IOfficeLocationService {
         this.db = db;
     }
 
-    async getOfficeLocations(): Promise<OfficeLocation[]> {
+    async getOfficeLocations(companyId?: string): Promise<OfficeLocation[]> {
         const locationsRef = collection(this.db, 'officeLocations');
-        const snapshot = await getDocs(locationsRef);
+        let q;
+        
+        if (companyId) {
+            q = query(locationsRef, where('companyId', '==', companyId));
+        } else {
+            q = query(locationsRef);
+        }
+        
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as OfficeLocation));
     }
 
-    async getDefaultOfficeLocation(): Promise<OfficeLocation | null> {
+    async getDefaultOfficeLocation(companyId?: string): Promise<OfficeLocation | null> {
         const locationsRef = collection(this.db, 'officeLocations');
-        const q = query(locationsRef, limit(1));
+        let q;
+        
+        if (companyId) {
+            q = query(locationsRef, where('companyId', '==', companyId));
+        } else {
+            q = query(locationsRef);
+        }
+        
         const snapshot = await getDocs(q);
 
         // Find the default office
-        const defaultOffice = snapshot.docs.find(doc => doc.data().isDefault);
+        const defaultOffice = snapshot.docs.find(doc => doc.data().isDefault === true);
         if (defaultOffice) {
             return {
                 id: defaultOffice.id,

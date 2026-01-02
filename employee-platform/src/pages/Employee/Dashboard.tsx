@@ -27,135 +27,6 @@ import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
 
 // Mock data - replace with actual API calls
-const mockDashboardStats: DashboardStats = {
-    totalEmployees: 1,
-    activeEmployees: 1,
-    pendingRequests: 3,
-    upcomingEvents: 2,
-    recentActivities: [
-        {
-            id: '1',
-            type: 'leave_request',
-            title: 'Leave Request Submitted',
-            description: 'Annual leave request for Dec 15-20, 2024',
-            timestamp: new Date('2024-12-10T10:30:00'),
-            status: 'pending',
-            employeeId: 'emp-001'
-        },
-        {
-            id: '2',
-            type: 'time_entry',
-            title: 'Time Entry Updated',
-            description: 'Clock out time adjusted for Dec 9, 2024',
-            timestamp: new Date('2024-12-09T18:45:00'),
-            status: 'completed',
-            employeeId: 'emp-001'
-        },
-        {
-            id: '3',
-            type: 'document_upload',
-            title: 'Document Uploaded',
-            description: 'Tax form W-4 uploaded successfully',
-            timestamp: new Date('2024-12-08T14:20:00'),
-            status: 'completed',
-            employeeId: 'emp-001'
-        }
-    ]
-};
-
-const mockEmployeeProfile: EmployeeProfile = {
-    id: 'emp-001',
-    personalInfo: {
-        firstName: 'John',
-        lastName: 'Doe',
-        dateOfBirth: new Date('1990-05-15'),
-        gender: 'male',
-        nationality: 'US',
-        maritalStatus: 'single',
-        nationalId: '123-45-6789'
-    },
-    contactInfo: {
-        email: 'john.doe@company.com',
-        workEmail: 'john.doe@company.com',
-        phone: '+1 (555) 123-4567',
-        address: {
-            street: '123 Main St',
-            city: 'New York',
-            state: 'NY',
-            postalCode: '10001',
-            country: 'USA'
-        },
-        emergencyContact: {
-            id: 'ec-001',
-            name: 'Jane Doe',
-            relationship: 'Sister',
-            phone: '+1 (555) 987-6543',
-            isPrimary: true
-        }
-    },
-    bankingInfo: {
-        bankName: 'Chase Bank',
-        accountNumber: '****1234',
-        accountType: 'checking'
-    },
-    documents: [],
-    skills: [],
-    emergencyContacts: [],
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-12-10')
-};
-
-const mockLeaveBalances: LeaveBalance[] = [
-    {
-        id: 'lb-001',
-        employeeId: 'emp-001',
-        leaveTypeId: 'lt-001',
-        leaveTypeName: 'Annual Leave',
-        totalEntitlement: 20,
-        used: 8,
-        remaining: 12,
-        pending: 2,
-        accrued: 20,
-        year: 2024
-    },
-    {
-        id: 'lb-002',
-        employeeId: 'emp-001',
-        leaveTypeId: 'lt-002',
-        leaveTypeName: 'Sick Leave',
-        totalEntitlement: 10,
-        used: 2,
-        remaining: 8,
-        pending: 0,
-        accrued: 10,
-        year: 2024
-    }
-];
-
-const mockNotifications: Notification[] = [
-    {
-        id: 'notif-001',
-        employeeId: 'emp-001',
-        type: 'info',
-        title: 'Payroll Update',
-        message: 'Your December 2024 payslip is now available',
-        read: false,
-        createdAt: new Date('2024-12-10T09:00:00'),
-        actionUrl: '/employee/payroll',
-        actionText: 'View Payslip'
-    },
-    {
-        id: 'notif-002',
-        employeeId: 'emp-001',
-        type: 'warning',
-        title: 'Document Expiry',
-        message: 'Your driver\'s license expires in 30 days',
-        read: false,
-        createdAt: new Date('2024-12-09T14:30:00'),
-        actionUrl: '/employee/documents',
-        actionText: 'Update Document'
-    }
-];
 
 // Helper function to calculate profile completeness
 const calculateRealProfileCompleteness = async (profile: any): Promise<number> => {
@@ -192,7 +63,7 @@ export default function EmployeeDashboard() {
         upcomingEvents: 0,
         recentActivities: []
     });
-    const [profile, setProfile] = useState<EmployeeProfile | null>(mockEmployeeProfile); // Start with mock, update from Firebase
+    const [profile, setProfile] = useState<EmployeeProfile | null>(null);
     const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
     const [timeEntriesToday, setTimeEntriesToday] = useState<TimeEntry[]>([]);
     const [recentPayslips, setRecentPayslips] = useState<any[]>([]);
@@ -401,9 +272,9 @@ export default function EmployeeDashboard() {
                         }
                     });
 
-                    // If we still have no balances (no leave types), fallback to mock data
+                    // Get merged balances
                     const mergedBalancesArray = Array.from(balanceMap.values());
-                    const mergedBalances = mergedBalancesArray.length > 0 ? mergedBalancesArray : mockLeaveBalances;
+                    const mergedBalances = mergedBalancesArray;
                     const normalizeTypeKey = (balance: typeof mergedBalances[number]) => {
                         const rawName = balance.leaveTypeName || '';
                         const simplifiedName = rawName
@@ -495,8 +366,8 @@ export default function EmployeeDashboard() {
 
                     console.log('✅ Loaded leave requests:', leaveRequests.length, 'pending:', pendingCount);
                 } catch (err) {
-                    console.error('⚠️ Error loading leave data, using fallback:', err);
-                    setLeaveBalances(mockLeaveBalances);
+                    console.error('⚠️ Error loading leave data:', err);
+                    setLeaveBalances([]);
                 }
 
                 // Load time entries for today
@@ -573,8 +444,8 @@ export default function EmployeeDashboard() {
                 console.log('📋 Total activities:', allActivities.length);
             } catch (err) {
                 console.error('❌ Error loading dashboard data:', err);
-                setError(null); // Don't show error, fallback to mock data
-                setLeaveBalances(mockLeaveBalances);
+                setError('Failed to load dashboard data');
+                setLeaveBalances([]);
                 setLoading(false);
             }
         };

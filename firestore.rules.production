@@ -365,6 +365,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isHROrAdmin();
     }
+
+    // ==========================================
+    // SYSTEM CONFIG - For onboarding setup and platform URLs
+    // ==========================================
+    match /systemConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isHROrAdmin();
+    }
   }
 }
 

@@ -108,15 +108,275 @@ export default function MeetingManagement() {
     const [employees, setEmployees] = useState<Array<{ id: string; name: string; employeeId: string }>>([]);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
 
-    // Real-time sync for meetings, goals, and reviews
-    const { data: allMeetings, loading: meetingsLoading } = usePerformanceMeetings();
-    const { data: allGoals, loading: goalsLoading } = usePerformanceGoals();
-    const { data: allReviews, loading: reviewsLoading } = usePerformanceReviews();
+    // Real-time sync for meetings, goals, and reviews (filtered by company)
+    const { data: allMeetings, loading: meetingsLoading, error: meetingsError } = usePerformanceMeetings(undefined, companyId);
+    const { data: allGoals, loading: goalsLoading, error: goalsError } = usePerformanceGoals(undefined, companyId);
+    const { data: allReviews, loading: reviewsLoading, error: reviewsError } = usePerformanceReviews(undefined, companyId);
     const loading = meetingsLoading || goalsLoading || reviewsLoading;
 
     const meetings = (allMeetings as PerformanceMeeting[]) || [];
     const goals = (allGoals as PerformanceGoal[]) || [];
     const reviews = (allReviews as PerformanceReview[]) || [];
+
+    // Debug logging for meetings and fallback query if real-time sync fails
+    useEffect(() => {
+        if (companyId && !meetingsLoading && meetings.length === 0 && !meetingsError) {
+            console.warn(`⚠️ [PerformanceManagement] No meetings found via real-time sync, trying direct query...`);
+            
+            // Fallback: Direct query if real-time sync returns no data
+            const loadMeetingsDirectly = async () => {
+                try {
+                    const { collection, query, where, getDocs } = await import('firebase/firestore');
+                    const { getFirebaseDb } = await import('../../../../config/firebase');
+                    const db = getFirebaseDb();
+                    
+                    // First, check ALL meetings (without companyId filter) to see if any exist
+                    const allMeetingsQuery = query(collection(db, 'performanceMeetings'));
+                    const allSnapshot = await getDocs(allMeetingsQuery);
+                    const allMeetings = allSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    
+                    console.log(`📊 [PerformanceManagement] Total meetings in collection: ${allMeetings.length}`);
+                    console.log(`📊 [PerformanceManagement] Sample meetings:`, allMeetings.slice(0, 3).map((m: any) => ({
+                        id: m.id,
+                        companyId: m.companyId,
+                        employeeId: m.employeeId,
+                        title: m.title,
+                        createdBy: m.createdBy
+                    })));
+                    
+                    // Check for meetings without companyId
+                    const meetingsWithoutCompanyId = allMeetings.filter((m: any) => !m.companyId);
+                    if (meetingsWithoutCompanyId.length > 0) {
+                        console.warn(`⚠️ [PerformanceManagement] Found ${meetingsWithoutCompanyId.length} meetings without companyId`);
+                        console.warn(`⚠️ [PerformanceManagement] Sample meetings without companyId:`, 
+                            meetingsWithoutCompanyId.slice(0, 3).map((m: any) => ({
+                                id: m.id,
+                                employeeId: m.employeeId,
+                                title: m.title,
+                                createdBy: m.createdBy
+                            }))
+                        );
+                        
+                        // Attempt to backfill companyId for meetings that belong to this company
+                        // (based on employeeId matching employees in this company)
+                        try {
+                            const { getComprehensiveDataFlowService } = await import('../../../../services/comprehensiveDataFlowService');
+                            const dataFlowService = await getComprehensiveDataFlowService();
+                            const companyEmployees = await dataFlowService.getAllEmployees();
+                            const companyEmployeeIds = new Set(companyEmployees.map(emp => emp.employeeId || emp.id));
+                            
+                            let backfilled = 0;
+                            let skipped = 0;
+                            
+                            for (const meeting of meetingsWithoutCompanyId) {
+                                if (meeting.employeeId && companyEmployeeIds.has(meeting.employeeId)) {
+                                    const { doc, updateDoc } = await import('firebase/firestore');
+                                    const { getFirebaseDb } = await import('../../../../config/firebase');
+                                    const db = getFirebaseDb();
+                                    const meetingRef = doc(db, 'performanceMeetings', meeting.id);
+                                    await updateDoc(meetingRef, { companyId });
+                                    backfilled++;
+                                    console.log(`✅ Backfilled companyId for meeting ${meeting.id}`);
+                                } else {
+                                    skipped++;
+                                }
+                            }
+                            
+                            if (backfilled > 0) {
+                                console.log(`✅ Backfilled companyId for ${backfilled} meeting(s)`);
+                                // Reload meetings after backfill
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 1000);
+                            } else if (skipped > 0) {
+                                console.log(`ℹ️  Skipped ${skipped} meeting(s) (belong to other companies or missing employeeId)`);
+                            }
+                        } catch (error) {
+                            console.error('❌ Failed to backfill companyId for meetings:', error);
+                        }
+                    }
+                    
+                    // Check for meetings with correct companyId
+                    const meetingsWithCompanyId = allMeetings.filter((m: any) => m.companyId === companyId);
+                    console.log(`📊 [PerformanceManagement] Meetings with companyId ${companyId}: ${meetingsWithCompanyId.length}`);
+                    
+                    // Also check meetings created by employees
+                    const employeeCreatedMeetings = allMeetings.filter((m: any) => m.createdBy === 'employee');
+                    console.log(`📊 [PerformanceManagement] Employee-created meetings: ${employeeCreatedMeetings.length}`);
+                    if (employeeCreatedMeetings.length > 0) {
+                        console.log(`📊 [PerformanceManagement] Employee-created meetings details:`, 
+                            employeeCreatedMeetings.slice(0, 3).map((m: any) => ({
+                                id: m.id,
+                                companyId: m.companyId,
+                                employeeId: m.employeeId,
+                                title: m.title
+                            }))
+                        );
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ [PerformanceManagement] Failed to load meetings directly:', error);
+                }
+            };
+            
+            loadMeetingsDirectly();
+        }
+    }, [companyId, meetingsLoading, meetings.length, meetingsError]);
+
+    // Debug logging for goals and fallback query if real-time sync fails
+    useEffect(() => {
+        if (companyId && !goalsLoading && goals.length === 0 && !goalsError) {
+            console.warn(`⚠️ [PerformanceManagement] No goals found via real-time sync, trying direct query...`);
+            
+            // Fallback: Direct query if real-time sync returns no data
+            const loadGoalsDirectly = async () => {
+                try {
+                    const { collection, query, where, getDocs, orderBy, getDoc, doc, updateDoc } = await import('firebase/firestore');
+                    const { getFirebaseDb } = await import('../../../../config/firebase');
+                    const db = getFirebaseDb();
+                    
+                    // First, check ALL goals (without companyId filter) to see if any exist
+                    let allGoalsQuery = query(collection(db, 'performanceGoals'));
+                    try {
+                        allGoalsQuery = query(allGoalsQuery, orderBy('createdAt', 'desc'));
+                    } catch (error) {
+                        // Skip ordering if it fails
+                    }
+                    
+                    const allSnapshot = await getDocs(allGoalsQuery);
+                    const allGoals = allSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    
+                    console.log(`📊 [PerformanceManagement] Total goals in collection: ${allGoals.length}`);
+                    
+                    // Check for goals without companyId and attempt to backfill
+                    const goalsWithoutCompanyId = allGoals.filter((g: any) => !g.companyId);
+                    if (goalsWithoutCompanyId.length > 0) {
+                        console.warn(`⚠️ [PerformanceManagement] Found ${goalsWithoutCompanyId.length} goals WITHOUT companyId:`, 
+                            goalsWithoutCompanyId.map((g: any) => ({ id: g.id, title: g.title, employeeId: g.employeeId }))
+                        );
+                        console.warn(`💡 Attempting to backfill companyId: ${companyId} for these goals...`);
+                        
+                        // Attempt to backfill companyId for goals that belong to current company's employees
+                        try {
+                            const { updateDoc } = await import('firebase/firestore');
+                            let backfilled = 0;
+                            let skipped = 0;
+                            
+                            for (const goal of goalsWithoutCompanyId) {
+                                // Check if the goal's employee belongs to this company
+                                const goalEmployeeId = goal.employeeId;
+                                if (goalEmployeeId) {
+                                    try {
+                                        // Get employee to verify companyId
+                                        const employeeDoc = await getDoc(doc(db, 'employees', goalEmployeeId));
+                                        if (employeeDoc.exists()) {
+                                            const employeeData = employeeDoc.data();
+                                            const employeeCompanyId = employeeData.companyId;
+                                            
+                                            // Only update if employee belongs to current company
+                                            if (employeeCompanyId === companyId) {
+                                                await updateDoc(doc(db, 'performanceGoals', goal.id), {
+                                                    companyId: companyId
+                                                });
+                                                backfilled++;
+                                                console.log(`✅ Backfilled companyId for goal: ${goal.id} (${goal.title})`);
+                                            } else {
+                                                skipped++;
+                                                console.log(`⏭️  Skipped goal ${goal.id} - employee belongs to different company: ${employeeCompanyId}`);
+                                            }
+                                        } else {
+                                            skipped++;
+                                            console.log(`⏭️  Skipped goal ${goal.id} - employee not found: ${goalEmployeeId}`);
+                                        }
+                                    } catch (error: any) {
+                                        console.error(`❌ Failed to backfill goal ${goal.id}:`, error.message);
+                                    }
+                                } else {
+                                    skipped++;
+                                    console.log(`⏭️  Skipped goal ${goal.id} - no employeeId`);
+                                }
+                            }
+                            
+                            if (backfilled > 0) {
+                                console.log(`✅ Successfully backfilled companyId for ${backfilled} goal(s)`);
+                                // Reload goals after backfill
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 1000);
+                            } else if (skipped > 0) {
+                                console.log(`ℹ️  Skipped ${skipped} goal(s) (belong to other companies or missing employeeId)`);
+                            }
+                        } catch (error) {
+                            console.error('❌ Failed to backfill companyId for goals:', error);
+                        }
+                    }
+                    
+                    // Now try with companyId filter
+                    let goalsQuery = query(collection(db, 'performanceGoals'));
+                    
+                    // Try with companyId filter
+                    try {
+                        goalsQuery = query(goalsQuery, where('companyId', '==', companyId));
+                    } catch (error) {
+                        console.warn('⚠️ Could not add companyId filter, will filter in memory');
+                    }
+                    
+                    // Add ordering
+                    try {
+                        goalsQuery = query(goalsQuery, orderBy('createdAt', 'desc'));
+                    } catch (error) {
+                        console.warn('⚠️ Could not add orderBy, skipping');
+                    }
+                    
+                    const snapshot = await getDocs(goalsQuery);
+                    let directGoals = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    } as PerformanceGoal));
+                    
+                    // Filter by companyId in memory
+                    const beforeFilter = directGoals.length;
+                    directGoals = directGoals.filter((g: any) => g.companyId === companyId);
+                    
+                    console.log(`📊 [PerformanceManagement] Direct query: ${beforeFilter} total goals, ${directGoals.length} for company ${companyId}`);
+                    
+                    if (directGoals.length > 0) {
+                        console.warn(`⚠️ Found ${directGoals.length} goals via direct query but real-time sync returned 0. This may indicate a sync issue.`);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to load goals directly:', error);
+                }
+            };
+            
+            loadGoalsDirectly();
+        }
+        
+        if (companyId) {
+            console.log(`🎯 [PerformanceManagement] Goals data:`, {
+                total: goals.length,
+                companyId,
+                goalsLoading,
+                goalsError,
+                sampleGoals: goals.slice(0, 2).map(g => ({ 
+                    id: g.id, 
+                    title: g.title, 
+                    companyId: (g as any).companyId,
+                    employeeId: (g as any).employeeId 
+                })),
+                allGoalCompanyIds: goals.map((g: any) => ({ 
+                    id: g.id, 
+                    title: g.title, 
+                    companyId: g.companyId 
+                }))
+            });
+        }
+    }, [goals, companyId, goalsLoading, goalsError]);
 
     // Load employees for selection (filtered by company)
     useEffect(() => {
@@ -1092,32 +1352,48 @@ export default function MeetingManagement() {
 
                 {/* Schedule Meeting Form (HR can schedule for employees) */}
                 {showScheduleForm && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
                             <CardHeader>
                                 <CardTitle>Schedule Performance Meeting</CardTitle>
                                 <CardDescription>Schedule a meeting for an employee</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label htmlFor="employeeId">Employee ID *</Label>
-                                        <Input
-                                            id="employeeId"
-                                            value={formData.employeeId}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, employeeId: e.target.value }))}
-                                            placeholder="e.g., EMP001"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="employeeName">Employee Name *</Label>
-                                        <Input
-                                            id="employeeName"
-                                            value={formData.employeeName}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, employeeName: e.target.value }))}
-                                            placeholder="e.g., John Doe"
-                                        />
-                                    </div>
+                                <div>
+                                    <Label htmlFor="employeeSelect">Employee *</Label>
+                                    <Select
+                                        value={formData.employeeId}
+                                        onValueChange={(value) => {
+                                            const selectedEmployee = employees.find(emp => emp.employeeId === value);
+                                            if (selectedEmployee) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    employeeId: selectedEmployee.employeeId,
+                                                    employeeName: selectedEmployee.name
+                                                }));
+                                            }
+                                        }}
+                                        disabled={loadingEmployees || employees.length === 0}
+                                    >
+                                        <SelectTrigger id="employeeSelect">
+                                            <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees available" : "Select an employee"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {employees.map((employee) => (
+                                                <SelectItem key={employee.employeeId} value={employee.employeeId}>
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <span className="font-medium">{employee.name}</span>
+                                                        <span className="text-xs text-muted-foreground ml-2">({employee.employeeId})</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {formData.employeeId && (
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Selected: {formData.employeeName} ({formData.employeeId})
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1252,7 +1528,7 @@ export default function MeetingManagement() {
 
                 {/* Approval/Rejection Modal */}
                 {showApprovalModal && selectedMeeting && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-md">
                             <CardHeader>
                                 <CardTitle>
@@ -1315,30 +1591,45 @@ export default function MeetingManagement() {
 
                 {/* Performance Review Form */}
                 {showReviewForm && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
                             <CardHeader>
                                 <CardTitle>Write Performance Review</CardTitle>
                                 <CardDescription>Provide feedback and set goals for the employee</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label>Employee ID *</Label>
-                                        <Input
-                                            value={reviewForm.employeeId}
-                                            onChange={(e) => setReviewForm(prev => ({ ...prev, employeeId: e.target.value }))}
-                                            placeholder="e.g., EMP001"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label>Employee Name *</Label>
-                                        <Input
-                                            value={reviewForm.employeeName}
-                                            onChange={(e) => setReviewForm(prev => ({ ...prev, employeeName: e.target.value }))}
-                                            placeholder="e.g., John Doe"
-                                        />
-                                    </div>
+                                <div>
+                                    <Label>Employee *</Label>
+                                    <Select
+                                        value={reviewForm.employeeId}
+                                        onValueChange={(value) => {
+                                            const selectedEmployee = employees.find(emp => emp.employeeId === value);
+                                            if (selectedEmployee) {
+                                                setReviewForm(prev => ({
+                                                    ...prev,
+                                                    employeeId: selectedEmployee.employeeId,
+                                                    employeeName: selectedEmployee.name
+                                                }));
+                                            }
+                                        }}
+                                        disabled={loadingEmployees || employees.length === 0}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees available" : "Select an employee"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {employees.map((employee) => (
+                                                <SelectItem key={employee.employeeId} value={employee.employeeId}>
+                                                    {employee.name} ({employee.employeeId})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {reviewForm.employeeId && reviewForm.employeeName && (
+                                        <p className="text-sm text-muted-foreground mt-1">
+                                            Selected: <strong>{reviewForm.employeeName}</strong> - {reviewForm.employeeId}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1435,7 +1726,7 @@ export default function MeetingManagement() {
 
                 {/* Add Goal for Employee Form */}
                 {showGoalForm && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
                             <CardHeader>
                                 <CardTitle>Set Goal for Employee</CardTitle>
@@ -1633,7 +1924,7 @@ export default function MeetingManagement() {
 
                 {/* View Goal */}
                 {showGoalView && viewingGoal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
                             <CardHeader>
                                 <CardTitle>{viewingGoal.title}</CardTitle>
@@ -1747,7 +2038,7 @@ export default function MeetingManagement() {
 
                 {/* Extension Approval/Rejection Modal */}
                 {showExtensionApproval && selectedExtensionGoal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
                         <Card className="w-full max-w-lg">
                             <CardHeader>
                                 <CardTitle className={extensionAction === 'approve' ? 'text-green-700' : 'text-red-700'}>
